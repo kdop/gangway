@@ -1,0 +1,7 @@
+.idea/
+.claude/settings.local.json
+.mcp.json
+.env
+*.env
+!.env.example
+.secrets
