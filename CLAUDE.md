@@ -13,20 +13,55 @@ next session.
 
 ## Project context
 
-`blueprint.md` says what Gangway is: a way for an AI tool to read files and run commands
-on a remote machine that has no AI of its own. This file says how it is built and why.
+Gangway is just-in-time approval of the commands an AI may run on a host. `blueprint.md`
+says what it is. This file says how it is built and why.
 
 ### Files
 
 | File | Purpose |
 |---|---|
-| `blueprint.md` | The draft spec. Kostas's words; numbered points (`[P1]`, `[R1]`) are the handles |
-| `notes/<yyyy-mm>.md` | The timeline, one file per month. Created with the first note |
+| `README.md` | What Gangway is, in a few lines, and the status |
+| `blueprint.md` | The design: parts, session flow, gate, key, security, open questions |
+| `plan.md` | The steps, in order, each with its check |
+| `notes/<yyyy-mm>.md` | The timeline, one file per month |
 | `.claude/` | franky's voice (`output-styles/`), rules (`rules/`) and skills (`skills/`) |
 
 ### Decisions and why
 
-None settled yet. Add each one here as a dated line with its reason.
+Each line is dated. "Kostas" means he said it. "franky" means franky made the call and
+Kostas can overturn it.
+
+- **No SSH for the AI** (2026-11-19, Kostas). SSH hands over a shell with no say over the commands. That say is the whole point of Gangway.
+- **Not a product** (2026-11-19, Kostas). One user. No sign-up, no web page, no accounts in the first version.
+- **Three parts: cli-tool, controller, skill** (2026-11-19, Kostas). The host has no AI, so something must sit on the host, something must reach it, and the AI must know how to ask.
+- **Host to controller goes over Tailscale; the AI calls the controller's API** (2026-11-19, Kostas). The host is never open to the internet. The AI machine does not have to be on Tailscale.
+- **The cli-tool is written in Go** (2026-11-19, Kostas). `tsnet` is Go only, and Go gives one file to copy to the host with nothing else to install.
+- **Tailscale is built into the cli-tool with `tsnet`** (2026-11-19, franky; Kostas asked for joining to be part of the flow). The host needs no Tailscale install and no root. Source: https://pkg.go.dev/tailscale.com/tsnet ("No root privileges required", "No system daemons to install or manage").
+- **The host joins with an ephemeral, tagged auth key** (2026-11-19, franky). It leaves the network after it goes offline, and the tag limits it to the controller. Source: https://tailscale.com/kb/1085/auth-keys.
+- **Linux hosts only** (2026-11-19, Kostas). Keep it simple.
+- **`login` once, then start with no questions** (2026-11-19, Kostas). The auth key is pasted at `login`, about once a month, and kept in a file in the home folder that only the user can read.
+- **The cli-tool never gives its own key file to the AI; the ban is fixed in code** (2026-11-19, Kostas). A setting could be switched off by mistake.
+- **A command has a time limit and a size limit, and neither is strict** (2026-11-19, Kostas). They stop a hang. A small size limit also pushes the AI to ask for less.
+- **Past a limit the AI is asked whether to go on; the cli-tool does the stopping** (2026-11-19, franky; Kostas leaned to the controller as the place to ask). The command is already approved, so going on is not a safety call, and only the cli-tool holds the running command.
+- **No database in the first version; plain files in the home folder** (2026-11-19, franky; Kostas agreed). Settings and the key in `~/.config/gangway/`, the log in `~/.local/state/gangway/`. Those are the usual Linux places.
+- **Sessions are never stored, on either side** (2026-11-19, Kostas: no resume; franky: memory only on the controller). A controller restart ends every session, which is the safe way to fail.
+- **The controller is a web app: a REST API with a dashboard** (2026-11-19, Kostas).
+- **The controller is written in Go too, not Django, FastAPI, Vue or React** (2026-11-19, franky; Kostas left the choice open and is tired of Django). One language, both sides share the same message types, and it ships as one file. Go's templates with htmx are enough for a page that lists sessions and a log.
+- **Where the controller listens is a setting; the default is localhost** (2026-11-19, Kostas). It is a deployment matter, not a design one.
+- **The controller has no login in the first version, so it must not listen on a public address** (2026-11-19, franky). Localhost and Tailscale are both closed to strangers.
+- **The dashboard does not approve commands** (2026-11-19, franky). The gate stays on the host.
+- **The gate is never in the AI** (2026-11-19, Kostas). The thing being checked cannot be the checker.
+- **The session key lives 30 minutes by default** (2026-11-19, Kostas). Access ends by itself.
+- **The cli-tool grants access to named folders, at a later stage** (2026-11-19, Kostas). The AI should see only what the job needs. Not in the first version.
+- **An allow rule by program name runs with no shell** (2026-11-19, franky). With a shell, `ls; rm -rf x` would pass as `ls`.
+- **Folder grants are hard for file reads only** (2026-11-19, franky). A command can touch any path the user can; holding it inside a folder needs a sandbox, which is left for later.
+- **The gate lives in the cli-tool, on the host** (2026-11-19, franky; Kostas asked cli-tool or controller and accepted this). The host is what gets hurt. A controller that is taken over can then only ask. A yes sent by the controller could be faked.
+- **Approval from the dashboard is later, and switched on per session** (2026-11-19, franky). It is comfort bought with trust in the controller, so it must be a choice.
+- **Approval is `y`/`n` in the cli-tool's terminal** (2026-11-19, franky). That terminal is already open, so the first version needs no other screen.
+- **"Always allow" is second stage** (2026-11-19, Kostas). The first version asks every time. How wide an allow rule reaches (exact command, program, safe list; session or saved) is not settled.
+- **The cli-tool makes the key, and the key is tied to the first AI that uses it** (2026-11-19, franky). A copied key is then of no use to a second caller.
+- **No end-to-end signing of commands** (2026-11-19, franky). With the gate on the host it adds little, and it costs code.
+- **Plain user only, never root** (2026-11-19, franky). It limits the harm of a wrong yes.
 
 ### Docs vs. notes
 
