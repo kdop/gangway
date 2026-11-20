@@ -1,6 +1,6 @@
 # Gangway blueprint
 
-Gangway: just-in-time approval of the commands an AI may run on a host.
+Gangway: remote access for AI, with just-in-time approval of commands.
 
 High level only. Steps and checks are in `plan.md`. Reasons for each decision are in `CLAUDE.md`.
 
@@ -15,8 +15,7 @@ SSH would do that, but SSH hands over a shell. I have no say over what runs in i
 The AI asks. A person at the host says yes or no. Only then does the command run.
 
 - Default is no. Nothing runs without a yes.
-- Access is short. A session ends on Ctrl+C or after 30 minutes.
-- It is a personal tool, not a product. One user: me.
+- Access is short. A session ends on Ctrl+C or when its time is up: 30 minutes unless I set another length.
 - Hosts are Linux only.
 
 ## Parts
@@ -45,7 +44,7 @@ AI tool --(API + session key)--> controller --(Tailscale)--> cli-tool on the hos
 4. The AI asks to run a command or read a file. The controller passes the request to the cli-tool.
 5. The cli-tool shows the request in its terminal. I press `y` (yes) or `n` (no).
 6. On yes, the cli-tool runs it as my plain user and sends back the result. On no, the AI is told it was refused.
-7. The session ends when I press Ctrl+C or when 30 minutes pass. The key is dead after that, and the host drops off my Tailscale network.
+7. The session ends when I press Ctrl+C or when its time is up and I do not extend it. The key is dead after that, and the host drops off my Tailscale network.
 
 Every session is new. No resume.
 
@@ -140,9 +139,17 @@ Sessions are never stored. Nothing is left on disk that could be picked up and u
 ## The session key
 
 - Made by the cli-tool, long and random, easy to copy.
-- Lives 30 minutes by default.
+- Lives as long as the session: 30 minutes by default. See "Session length".
 - Belongs to the first AI that uses it. A second user of the same key is refused.
 - It gives the right to ask, not the right to run. A stolen key gets a stranger a prompt that I refuse.
+
+## Session length
+
+- The default is 30 minutes. It is a setting on the host.
+- I can pick another length when I start a session.
+- When the time is up, the cli-tool asks me in its terminal whether to extend. No answer within a short time means no, and the session ends.
+- There is a maximum, set at admin level. It caps the whole session, extensions included. At the maximum the session ends with no question.
+- Only the person at the host terminal can change the length. The AI and the controller can never make a session longer.
 
 ## Security
 
@@ -150,13 +157,13 @@ This is remote command running by design. The aim is a door that is narrow, in p
 
 | Risk | Answer |
 |---|---|
-| Stolen session key | It only lets someone ask. It dies in 30 minutes. It is tied to the first AI |
+| Stolen session key | It only lets someone ask. It dies with the session. It is tied to the first AI |
 | Controller taken over | It can only ask. The gate on the host still decides |
 | AI asks for something harmful | I see the exact command before it runs and say no |
 | I approve without reading | Not solved by code. Short sessions and a log limit the harm |
 | Tool runs with too much power | Runs as a plain user. Refuses to start as root |
 | Host stays on my network | It joins as an ephemeral, tagged machine. It can reach only the controller and is removed after it goes offline |
-| Left running by mistake | Runs only in an open terminal, never in the background. Ends after 30 minutes |
+| Left running by mistake | Runs only in an open terminal, never in the background. Ends when its time is up unless I extend it at the terminal, and never runs past the maximum |
 
 Every request and its answer is written to a log.
 
@@ -174,4 +181,4 @@ Every request and its answer is written to a log.
 
 ## Open questions
 
-None right now.
+- Where the maximum session length is set. "Admin level" could be the controller, since it sees every session.
