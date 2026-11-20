@@ -23,7 +23,7 @@ says what it is. This file says how it is built and why.
 | `README.md` | What Gangway is, in a few lines, and the status |
 | `blueprint.md` | The design: parts, session flow, gate, key, security, open questions |
 | `plan.md` | The steps, in order, each with its check |
-| `requirements.md` | The hard requirements, one testable sentence each, with IDs that the tests carry |
+| `requirements.md` | The hard requirements, each with its acceptance tests. The IDs are carried by the Go tests |
 | `ux.md` | How the tool looks and feels: prompts, messages, small touches |
 | `notes/<yyyy-mm>.md` | The timeline, one file per month |
 | `.claude/` | Rules (`rules/`, with the voice in `rules/voice.md`) and skills (`skills/`) |
@@ -46,8 +46,9 @@ led to it.
 - **Linux hosts only for now.** Keep it simple.
 - **`login` once, then start with no questions.** The auth key is pasted at `login`, about once a month, and kept in a file in the home folder that only the user can read.
 - **The cli-tool never gives its own key file to the AI; the ban is fixed in code.** A setting could be switched off by mistake.
-- **A command has a time limit and a size limit, and neither is strict.** They stop a hang. A small size limit also pushes the AI to ask for less.
-- **Past a limit the AI is asked whether to go on; the cli-tool does the stopping.** The AI knows why it ran the command, its call must get "still running" in any case because AI tools cut off long calls, and the command is already approved. Only the cli-tool holds the running command.
+- **A command has a time limit and a size limit, and neither is strict.** They stop a hang and a flood. A small size limit also pushes the AI to ask for less.
+- **Past the time limit the AI is asked whether to go on; the cli-tool does the stopping.** The AI knows why it ran the command, its call must get "still running" in any case because AI tools cut off long calls, and the command is already approved. Only the cli-tool holds the running command.
+- **Past the size limit the output is cut, with a note at the end; nobody is asked and the command is not killed.** A command that prints a lot is often an install or a build, and killing it halfway can leave the host broken. A plain cut needs no question and no waiting.
 - **The wait-or-stop question has its own time limit, 60 seconds to start, and no answer kills the command.** Nothing hangs when the AI is gone.
 - **One Ctrl+C cancels what is in front, a running command or a waiting prompt; with nothing in front it ends the session.** The person at the terminal keeps the last word.
 - **Two Ctrl+C close together always end the cli-tool.** An AI that sends request after request could otherwise put a new prompt in front of each press.
@@ -71,11 +72,14 @@ led to it.
 - **The session length can be set: a default on the host, a choice per session, and a maximum at admin level.** 30 minutes does not fit every job.
 - **When the time is up, the cli-tool asks the person at the terminal whether to extend.** No answer means no, the maximum caps the whole session, and the AI and the controller can never make a session longer. Otherwise a forgotten terminal would stay open, and access would no longer end by itself.
 - **The cli-tool grants access to named folders, at a later stage.** The AI should see only what the job needs. Not in the first version.
+- **A command approved by hand runs through a shell.** Debugging needs pipes and redirection, and the user reads and approves the exact line.
 - **An allow rule by program name runs with no shell.** With a shell, `ls; rm -rf x` would pass as `ls`.
 - **Folder grants are hard for file reads only.** A command can touch any path the user can; holding it inside a folder needs a sandbox, which is left for later.
 - **The gate lives in the cli-tool, on the host.** The host is what gets hurt. A controller that is taken over can then only ask. A yes sent by the controller could be faked.
 - **Approval from the dashboard is later, and switched on per session.** It is comfort bought with trust in the controller, so it must be a choice.
 - **Approval is `y`/`n` in the cli-tool's terminal.** That terminal is already open, so the first version needs no other screen.
+- **The answer is one key press, strictly lower-case `y` or `n`; every other key is ignored.** One rule with no special cases.
+- **A request with a control character is refused, except for line breaks and tabs; output shown on the terminal is cleaned the same way.** Cursor codes could paint over the real command or fake a prompt, so the user would approve something they did not read. Line breaks and tabs stay because writing a file of many lines needs them.
 - **"Always allow" is second stage.** The first version asks every time. How wide an allow rule reaches (exact command, program, safe list; session or saved) is not settled.
 - **The cli-tool makes the key, and the key is tied to the first AI that uses it.** A copied key is then of no use to a second caller. The cost, known and accepted: one session cannot be shared between two AI windows.
 - **No end-to-end signing of commands.** With the gate on the host it adds little, and it costs code.

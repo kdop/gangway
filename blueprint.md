@@ -55,14 +55,14 @@ Pairing ties a host to a user. It is done once per host, at `login`. Without it 
 2. The cli-tool asks the controller for a pairing code and shows it: short, used once, dead after a few minutes.
 3. The user signs in to the dashboard and types the code.
 4. The cli-tool shows the account that claimed the host and asks `y`/`n`. Whoever types the code first would otherwise get the host.
-5. On `y`, the controller gives the cli-tool a host token. On `n`, the code is dead and the host stays unpaired.
+5. On `y`, the controller gives the cli-tool a host token. On `n`, or with no answer before the code dies, the code is dead and the host stays unpaired.
 
 After pairing:
 
 - The host token is kept on the host like the auth key: its own file, readable by its owner only, never given to the AI.
 - At every start the cli-tool shows the token to the controller. The controller then knows the user, and the session belongs to that user.
 - The controller keeps only a hash of the token, with the host and the user.
-- The user can remove a host in the dashboard. Its token is dead from then on, and the host must be paired again.
+- The user can remove a host in the dashboard. Its token is dead from then on, a live session of that host ends at once, and the host must be paired again.
 - No password is typed on the host, at any point.
 
 ## The session
@@ -108,6 +108,9 @@ Sources: https://tailscale.com/kb/1244/tsnet, https://pkg.go.dev/tailscale.com/t
 
 - The gate lives in the cli-tool, on the host. The host is what gets hurt, so the host has the last word.
 - Reading a file is a request like any other. It passes the gate too.
+- An approved command runs through a shell, so pipes and redirection work. One line can then hold several commands, and one `y` covers the whole line. The prompt shows the whole line.
+- A request that holds a control character is refused before any prompt. Only line breaks and tabs are let through. Such characters could move the cursor and paint over the real command, so the user would approve something other than what they read.
+- For the same reason, the output shown on the terminal is cleaned of control characters. The AI still gets the output unchanged.
 - In the first version every request is asked, each time. "Always allow" comes in the second stage.
 - The gate is never in the AI, and in the first version never in the controller. If the yes came from the controller, the cli-tool could not tell a real yes from a fake one.
 - Later, as a choice switched on per session: approve from the dashboard. Good for many hosts or a phone. It means trusting the controller. The cli-tool keeps its hard limits either way.
@@ -119,8 +122,8 @@ For safety, so nothing hangs forever. Not meant to be strict.
 Gangway is for an AI to look into a small problem on a host. It is not for moving data. The size limit follows from that.
 
 - **Time.** When a command passes the time limit, the AI is told it is still running and is asked: wait more, or stop?
-- **Size.** When the output passes the size limit, the AI gets the first part and is asked: keep receiving, or stop? A small limit is good: it pushes the AI to ask for less, with `head`, `tail` or a sharper command.
-- Both questions go to the AI through the controller. The AI knows why it ran the command, and its call must get "still running" in any case, because AI tools cut off a call that takes too long. The cli-tool does the stopping, since it holds the running command.
+- **Size.** When the output passes the size limit, the cli-tool stops sending. Nobody is asked. The command is not killed and runs to its end. The AI gets the first part, the exit code, and a note at the end that the output was cut. A small limit is good: it pushes the AI to ask for less, with `head`, `tail` or a sharper command.
+- The time question goes to the AI through the controller. The AI knows why it ran the command, and its call must get "still running" in any case, because AI tools cut off a call that takes too long. The cli-tool does the stopping, since it holds the running command.
 - If the AI hangs up while a command runs, the cli-tool kills the command. Nobody is left to receive the result.
 - The user keeps the last word. One Ctrl+C in the cli-tool's terminal cancels what is in front: it kills the running command, or refuses the request at a waiting prompt. The session lives on. A Ctrl+C with nothing in front ends the session.
 - Two Ctrl+C close together always end the cli-tool, whatever state it is in. An AI that sends request after request cannot keep the user from getting out.
@@ -168,6 +171,7 @@ Settings on the host come in three layers. Each layer can only narrow the one ab
 - The admin layer exists because an approved command runs as the plain user, and the plain user can rewrite `~/.config/gangway/`. A bound kept only there could be changed by one careless `y`. A file owned by root cannot.
 - The cli-tool only reads `/etc/gangway/`. It never runs as root.
 - With no admin file, there are no admin bounds, and the user layer is the top.
+- When the user asks for more than an admin bound allows, the cli-tool starts with the bound and says so. It does not refuse to start.
 
 ## What is stored
 
@@ -181,7 +185,7 @@ On the host:
 | Settings: controller address, session length, time and size limits | `~/.config/gangway/` |
 | Tailscale auth key from `login` | Same folder, own file, readable by its owner only |
 | Host token from pairing | Same folder, own file, readable by its owner only |
-| Log of requests and answers | `~/.local/state/gangway/` |
+| Log of requests, answers and output. A new file is started at a set size, and only the last few are kept | `~/.local/state/gangway/` |
 | Saved allow rules (second stage) | `~/.config/gangway/` |
 
 On the controller:
@@ -216,7 +220,7 @@ Sessions are never stored. Nothing is left on disk that could be picked up and u
 
 - The default is 30 minutes. It is a setting on the host.
 - The user can pick another length when starting a session.
-- When the time is up, the cli-tool asks in its terminal whether to extend. No answer within a short time means no, and the session ends.
+- When the time is up, the cli-tool asks in its terminal whether to extend. On `y` the session gets another stretch of the same length it started with. No answer within a short time means no, and the session ends.
 - There is a maximum, set in the admin layer, `/etc/gangway/`. See "Settings". It caps the whole session, extensions included. At the maximum the session ends with no question.
 - When the time is up, or the maximum is reached, in the middle of something:
   - New requests are refused from that moment.
@@ -242,7 +246,7 @@ This is remote command running by design. The aim is a door that is narrow, in p
 | Someone else learns the pairing code | It works once and dies in minutes. The host shows who claimed it and asks `y`/`n` |
 | Left running by mistake | Runs only in an open terminal, never in the background. Ends when its time is up unless the user extends it at the terminal, and never runs past the maximum |
 
-Every request and its answer is written to a log.
+Every request and its answer is written to a log on the host, with the output that was sent to the AI. Only the user can read the log.
 
 ## Not in the first version
 
