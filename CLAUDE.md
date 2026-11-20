@@ -25,6 +25,7 @@ says what it is. This file says how it is built and why.
 | `plan.md` | The steps, in order, each with its check |
 | `requirements.md` | The hard requirements, each with its acceptance tests. The IDs are carried by the Go tests |
 | `architecture.md` | How the parts are built to meet the requirements: the API, the messages, the pieces |
+| `diagrams.md` | The design as Mermaid diagrams: parts, session, gate, failures, trust, pairing |
 | `ux.md` | How the tool looks and feels: prompts, messages, small touches |
 | `notes/<yyyy-mm>.md` | The timeline, one file per month |
 | `.claude/` | Rules (`rules/`, with the voice in `rules/voice.md`) and skills (`skills/`) |
