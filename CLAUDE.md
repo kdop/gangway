@@ -52,6 +52,8 @@ Kostas can overturn it.
 - **The dashboard does not approve commands** (2026-11-19, Claude). The gate stays on the host.
 - **The gate is never in the AI** (2026-11-19, Kostas). The thing being checked cannot be the checker.
 - **The session key lives 30 minutes by default** (2026-11-19, Kostas). Access ends by itself.
+- **The session length can be set: a default on the host, a choice per session, and a maximum at admin level** (2026-11-20, Kostas). 30 minutes does not fit every job.
+- **When the time is up, the cli-tool asks the person at the terminal whether to extend** (2026-11-20, Kostas). Claude's limits on top: no answer means no, the maximum caps the whole session, and the AI and the controller can never make a session longer. Otherwise a forgotten terminal would stay open, and access would no longer end by itself.
 - **The cli-tool grants access to named folders, at a later stage** (2026-11-19, Kostas). The AI should see only what the job needs. Not in the first version.
 - **An allow rule by program name runs with no shell** (2026-11-19, Claude). With a shell, `ls; rm -rf x` would pass as `ls`.
 - **Folder grants are hard for file reads only** (2026-11-19, Claude). A command can touch any path the user can; holding it inside a folder needs a sandbox, which is left for later.
