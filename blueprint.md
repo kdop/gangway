@@ -16,7 +16,6 @@ The AI asks. A person at the host says yes or no. Only then does the command run
 
 - Default is no. Nothing runs without a yes.
 - Access is short. A session ends on Ctrl+C or when its time is up: 30 minutes unless I set another length.
-- It is a personal tool, not a product. One user: me.
 - Hosts are Linux only.
 
 ## Parts
