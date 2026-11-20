@@ -13,7 +13,7 @@ next session.
 
 ## Project context
 
-Gangway is just-in-time approval of the commands an AI may run on a host. `blueprint.md`
+Gangway is remote access to a host for an AI, with just-in-time approval of every command. `blueprint.md`
 says what it is. This file says how it is built and why.
 
 ### Files

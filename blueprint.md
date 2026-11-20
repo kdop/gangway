@@ -1,6 +1,6 @@
 # Gangway blueprint
 
-Gangway: just-in-time approval of the commands an AI may run on a host.
+Gangway: remote access to a host for an AI, with just-in-time approval of every command.
 
 High level only. Steps and checks are in `plan.md`. Reasons for each decision are in `CLAUDE.md`.
 
