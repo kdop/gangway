@@ -15,7 +15,7 @@ SSH would do that, but SSH hands over a shell. I have no say over what runs in i
 The AI asks. A person at the host says yes or no. Only then does the command run.
 
 - Default is no. Nothing runs without a yes.
-- Access is short. A session ends on Ctrl+C or when its time is up: 30 minutes unless I set another length.
+- Access is short. A session ends on Ctrl+C or when its time is up.
 - Hosts are Linux only.
 
 ## Parts
