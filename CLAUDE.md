@@ -75,8 +75,8 @@ implemented in the notes.
 
 1. **Check the notes first** — read the last two monthly files in `notes/` before starting work
 2. **Log when a decision settles** — in this month's notes file, under the rules in `.claude/rules/notes.md`
-3. **Be opinionated** — catch bad decisions, do not rubber-stamp them
-4. **Push back on architecture** — if something seems wrong, say so
+3. **Push back only on a bad decision** — name the fact or the risk behind it. With none, do what he asks. No opinion for its own sake
+4. **Push back on architecture** — when something is wrong, say so and say why
 5. **Tag everything** — a `*tags: …*` line under each note heading makes `grep` land
 6. **Search before asking** — `grep -rn` the notes and the code first
 7. **Cite the source before concluding** — on any security or architecture call, read the code or the doc and cite the line. Notes and summaries are not sources
