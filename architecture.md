@@ -2,7 +2,7 @@
 
 How the parts are built to meet `requirements.md`. The design in words is in `blueprint.md`.
 
-This file is written one part at a time. Done so far: the API, and the connection between the controller and the cli-tool. Still to write: the pieces inside each program, and the integration tests for each part.
+It has three parts: the API, the connection between the controller and the cli-tool, and the pieces inside each program. Each part ends with its integration tests.
 
 ## The API
 
@@ -94,6 +94,7 @@ The call stays open while the request waits in line, while the prompt waits, and
 | `protected_file` | The path is the auth key file or the host token file. No prompt was shown | `KEY-08` |
 | `time_up` | The session's time is up | `LEN-06`, `LEN-07` |
 | `host_away` | The connection to the host is lost for the moment. Ask again shortly | `SES-10` |
+| `session_ended` | The session ended while the request was open | `KEY-03` |
 
 **Ended.** The command ran and is over, or the file was read.
 
@@ -168,6 +169,37 @@ These are not answers to a request. The call itself is turned away.
 
 A 401 says nothing about which of its causes it was. A guesser learns nothing from it.
 
+### Integration tests for the API
+
+These run the real controller. The test plays both other sides: it calls the API as the AI, and it sits on the connection as the cli-tool, sending and reading messages by hand. "The host" below means that hand-played cli-tool.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| API-01 | The host has started a session | `hello` with the key | 200, with a caller token and the session's state |
+| API-02 | State after API-01 | A second `hello` with the same key | 401 |
+| API-03 | State after API-01 | Any call with the key and no caller token, or a wrong one | 401 |
+| API-04 | State after API-01 | `GET /v1/session` | The host's name, the limits and the length are the ones the host gave in `session_start` |
+| API-05 | State after API-01 | The host sends `time_up`, then `extended`. `GET /v1/session` after each | First `time_up` is true. Then it is false and `seconds_left` is the new value |
+| API-06 | State after API-01 | `POST /v1/requests` with a command | The host gets one `request` with that command, letter for letter, and an `id` |
+| API-07 | A request is open | The host answers `refused`, once with each reason | The call ends with `refused` and that same reason |
+| API-08 | A request is open | The host sends `started`, two pieces of `output`, then `ended` with exit code 0 | The call ends with `ended`, `exit`, code 0. `output` is the two pieces joined in order |
+| API-09 | A request is open | The host sends `ended` with `cut` and `bytes_replaced` both true | Both are true in the answer |
+| API-10 | A request is open | The host sends `started`, one `output`, then `still_running` | The call ends with `running`, the request's `id`, the output so far and the answer time |
+| API-11 | State after API-10 | `wait` with that `id`. The host then sends one more `output` and `ended` | The host gets `wait`. The call ends with `ended` and only the new output |
+| API-12 | State after API-10 | `stop` with that `id`. The host sends `ended` with `killed_by_ai` | The host gets `stop`. The call ends with `ended`, `killed_by_ai` |
+| API-13 | State after API-10 | The host sends `ended` by itself. Then `wait` arrives | The call ends at once with `ended`, `exit` |
+| API-14 | State after API-01 | `wait` and `stop` with a made-up `id`, and with the `id` of another session's command | 404 each time. No host gets a message |
+| API-15 | A request is open, not yet started | The AI closes the call | The host gets `cancel` with that `id` |
+| API-16 | A request is open and started | The AI closes the call | The host gets `cancel` with that `id` |
+| API-17 | State after API-10, no call open | Wait a while | The host gets no `cancel` |
+| API-18 | State after API-01 | Calls with no key, with a wrong key, and with the key of an ended session | 401 each time, with the same body. No host gets a message |
+| API-19 | State after API-01 | One more wrong key than `WRONG_KEY_LIMIT` from one address, then the right key | 429 for the right key. After `WRONG_KEY_BLOCK` it is let in again |
+| API-20 | State after API-01 | `POST /v1/requests` with a file read. The host sends `ended` with `read` | The host gets a `request` of kind `read`. The call ends with `ended`, `read`, and the file as `output` |
+| API-21 | Two requests are open at once | The host answers the second one first | Each call gets its own answer |
+| API-22 | State after API-01 | The host's connection is cut. `POST /v1/requests`. Then the host sends `session_back` with the right hash, and the call is made again | First `refused` with `host_away`. Then the request reaches the host |
+| API-23 | A request is open | Calls to made-up paths such as `/v1/requests/{id}/approve` and `/v1/session/extend` | 404. The host gets no message |
+| API-24 | A request is open | The host sends `session_end` | The call ends with `refused` and the reason `session_ended`. The key is refused from then on |
+
 ## The connection between the controller and the cli-tool
 
 The cli-tool opens one connection to the controller at start and keeps it open for the whole session. Every request, answer and piece of output travels on it.
@@ -226,7 +258,7 @@ Each of them asks or narrows. No message type exists that approves a request, ex
 | cli-tool | `ended` | `id`, `how`, `exit_code`, `cut`, `bytes_replaced` | "It is over, and this is how" |
 
 - Every request ends with exactly one `refused` or one `ended`. Nothing is left hanging.
-- On `cancel`, a request that waits is removed (`GATE-12`), and a command that runs is killed (`LIM-07`).
+- On `cancel`, a request that waits is removed (`GATE-12`), and a command that runs is killed (`LIM-07`). The cli-tool closes the request with `refused` and the reason `ai_gone`, or with `ended` and `killed_ai_gone`. No AI ever sees these two: they are for the dashboard and the log.
 - After `still_running`, the cli-tool itself counts the answer time. With no `wait` and no `stop` in time, it kills the command (`LIM-03`). It does not wait for the controller to say so.
 - Output is sent in pieces as it comes, not in one block at the end. The dashboard can then show it live (`CTL-07`), and a `running` answer can carry the output so far.
 - The cli-tool cleans nothing in what it sends. Cleaning is only for its own terminal (`SHOW-03`).
@@ -266,3 +298,140 @@ Pairing happens before a host has a token, so it cannot use this connection. It 
 - The limits keep counting while the connection is away. A command that reaches its time limit gets no answer, so it is killed (`LIM-03`).
 - Nothing is read from disk to carry on. The cli-tool is the same running program, with the key still in its memory. A cli-tool that was closed cannot come back (`SES-03`, `SES-06`).
 - When `RECONNECT_WINDOW` passes with no `session_back`, the controller drops the session and the cli-tool ends it (`SES-09`).
+
+### Integration tests for the connection
+
+These run the real cli-tool, with its keyboard, screen and clock in the test's hands. The test plays the controller: it takes the connection and sends and reads messages by hand.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| CON-01 | The cli-tool is started | Read what it sends first | It shows its host token and sends `session_start` with a hash, the host's name, the length and the limits. The hash is the hash of the key in the paste line |
+| CON-02 | A whole session, with requests | Search everything the cli-tool sent | The session key itself is nowhere in it |
+| CON-03 | The cli-tool is started | The controller closes the connection and sends no `session_ok` | The cli-tool says it was refused and ends. No paste line is printed |
+| CON-04 | Live session | Send a `request`. The test presses `y` | In this order: `started`, the `output` pieces, one `ended` with `exit`. Nothing after it for that `id` |
+| CON-05 | Live session | Send a `request`. The test presses `n` | One `refused` with `user`. No `started` |
+| CON-06 | Live session | Send a `request` that holds a carriage return | One `refused` with `control_character`. The screen shows no prompt |
+| CON-07 | Live session | Send one more `request` than `MAX_WAITING_REQUESTS`, with no key pressed | The last one gets `refused` with `line_full` at once. The others still wait |
+| CON-08 | Live session | Send a `request` to read the auth key file | One `refused` with `protected_file`. The screen shows no prompt |
+| CON-09 | An approved command that runs long | Wait `COMMAND_TIME_LIMIT`. Send `wait`. Wait again. Send `stop` | `still_running`, then `still_running` again, then `ended` with `killed_by_ai` |
+| CON-10 | State after the first `still_running` | Send nothing for `QUESTION_WAIT` | `ended` with `killed_no_answer`, without being asked |
+| CON-11 | A prompt waits | Send `cancel` for it | The prompt is gone from the screen. One `refused` with `ai_gone`. A `y` now does nothing |
+| CON-12 | A command runs | Send `cancel` for it | The command is killed. One `ended` with `killed_ai_gone` |
+| CON-13 | A prompt waits | Send a message of a made-up type, `approve`, for that `id` | The prompt still waits. Nothing ran. The log holds the odd message |
+| CON-14 | Live session | Send a `request` with an extra field, `"approved": true` | A prompt is shown all the same |
+| CON-15 | Live session | Send a message of a made-up type, `extend` | The session's end time has not moved |
+| CON-16 | Live session | Send `wait`, `stop` and `cancel` with an `id` that does not exist | Nothing changes. The log holds them |
+| CON-17 | Live session | Let the session's time run out. Send a `request`. The test presses `y` at the question to extend | `time_up`. Then `refused` with `time_up` for the request. Then `extended` with the seconds left |
+| CON-18 | A command runs | Send `session_end` | The command is stopped. The cli-tool says why and ends |
+| CON-19 | Live session, nothing in front | The test presses Ctrl+C | The cli-tool sends `session_end` and closes the connection |
+| CON-20 | A command runs | Cut the connection. Let the command end. Take the new connection | The cli-tool dials again and sends `session_back` with the same hash. After `session_ok` it sends the held `output` and `ended`, in order |
+| CON-21 | Live session | Cut the connection and take no new one for `RECONNECT_WINDOW` | The cli-tool ends the session. It sends no `session_back` after that |
+| CON-22 | Live session | Keep the connection open but send nothing, not even "still here", for `LINK_TIMEOUT` | The cli-tool treats the connection as lost and dials again |
+| CON-23 | An approved command prints a colour code | Compare the `output` message with the screen | The message holds the code as it was. The screen does not |
+| CON-24 | An approved command prints far more than `OUTPUT_SIZE_LIMIT`, then leaves a mark | Add up the `output` pieces | Their total is the limit plus the note. `ended` has `cut` true. The mark is there |
+
+## The pieces
+
+Each program is made of a few pieces. A piece has one job, and the table names the requirements it carries. The names are the names the folders in the code will have.
+
+### The cli-tool
+
+| Piece | Job | Requirements |
+|---|---|---|
+| `start` | Checks that it is not root and has a terminal. Picks between `login` and a session | `HOST-01`, `HOST-02`, `HOST-04` |
+| `settings` | Reads the three layers and lets each only narrow the one above. Says so when it cuts a value | `SET-01` to `SET-04`, `LIM-06` |
+| `secrets` | Keeps the auth key file and the host token file, readable by the owner only. Knows which paths are never read out | `HOST-05`, `PAIR-06`, `KEY-08` |
+| `network` | Joins Tailscale from inside the program, and leaves it at the end | `HOST-03`, `HOST-06`, `SES-08` |
+| `connection` | Holds the connection to the controller. Notices when it is lost, connects again, and holds what could not be sent | `SES-04`, `SES-09`, `SES-10`, `SES-11` |
+| `session` | Makes the key and the paste line. Runs the session's clock: time up, the question to extend, the maximum | `KEY-01`, `KEY-04`, `SES-02`, `SES-03`, `SES-12`, `LEN-01` to `LEN-09` |
+| `line` | Holds the requests that wait, in order, up to the limit | `GATE-06`, `GATE-13` |
+| `checks` | Refuses a request before any prompt: control characters, protected files | `GATE-10`, `KEY-08` |
+| `gate` | Shows one request and takes the `y` or `n`. Nothing else can say yes | `GATE-01` to `GATE-05`, `GATE-07`, `GATE-12`, `LIM-09` |
+| `runner` | Runs an approved command through the shell as the plain user, or reads a file. Counts the time, cuts the output, kills when told | `GATE-08`, `GATE-09`, `GATE-11`, `LIM-01` to `LIM-05`, `LIM-07`, `LIM-08`, `SES-05` |
+| `terminal` | The only piece that writes to the screen and reads keys. Cleans what it shows. Tells one Ctrl+C from two | `SHOW-01` to `SHOW-03`, `GATE-03`, `GATE-04`, `LIM-10` |
+| `log` | Writes each request, answer and output to the log, and starts a new file at the size limit | `LOG-01` to `LOG-05` |
+| `pairing` | The exchange at `login`: the code, the `y`/`n`, the host token | `PAIR-02` to `PAIR-05`, `PAIR-10` |
+
+How a request goes through them:
+
+1. `connection` gets a `request` message and hands it to `checks`.
+2. `checks` refuses it, or passes it to `line`.
+3. `line` gives it to `gate` when nothing else is in front.
+4. `gate` asks through `terminal`. On `n` it answers `refused`.
+5. On `y`, `runner` runs it. `terminal` shows the output and `connection` sends it.
+6. `log` writes down each of these steps.
+
+`session` can stop this at any point: when the time is up, it tells `line` and `gate` to refuse.
+
+### The controller
+
+| Piece | Job | Requirements |
+|---|---|---|
+| `start` | Reads where to listen. Refuses a public address when no login is set up | `CTL-01`, `CTL-02` |
+| `api` | The five calls. Checks the key and the caller token, blocks an address after too many wrong keys, and insists on HTTPS off localhost | `KEY-02`, `KEY-05`, `KEY-06`, `KEY-07`, `SES-01` |
+| `sessions` | The live sessions, in memory only: the key's hash, the caller token, the user, the host, the state. Drops a session when it ends or does not come back in time | `SES-06`, `SES-07`, `SES-09`, `SES-11`, `KEY-03`, `PAIR-09` |
+| `hostdoor` | Takes the connections from the cli-tools, over Tailscale only, and checks the host token | `CTL-10`, `PAIR-01` |
+| `relay` | Ties an open API call to its request on the host and passes messages both ways. Turns a hung-up call into a `cancel` | `GATE-12`, `LIM-07`, `SES-10` |
+| `hosts` | The paired hosts, kept in a small file with a hash of each token. Makes and checks pairing codes | `PAIR-02`, `PAIR-03`, `PAIR-07`, `PAIR-08`, `PAIR-10` |
+| `login` | The sign-in with Google and the list of allowed accounts. Stores no password | `CTL-03`, `CTL-04`, `CTL-05` |
+| `dashboard` | The pages: sessions, requests and answers as they happen, the end button, removing a host. A user sees only their own. No page can approve | `CTL-06` to `CTL-09`, `PAIR-11` |
+
+The controller runs no command and holds no session key. It passes requests one way and answers the other.
+
+### The skill
+
+One folder, `skill/`, with the text that teaches the AI:
+
+- how to read the paste line and make the `hello` call,
+- the five calls and what each answer means,
+- to give each call a time limit of ten minutes,
+- to ask for less: plain forms such as `top -b -n 1`, and `head`, `tail` or `grep` on large output,
+- to use the written form of a code, such as `\033`, never the raw character.
+
+### What a test can replace
+
+A test must be able to press keys, read the screen, move time forward and fake a network failure, all without a person and without waiting. So five things sit behind a narrow opening, and a test swaps in its own:
+
+| Replaceable part | In real use | In a test |
+|---|---|---|
+| The keyboard | Key presses in the terminal | Keys the test sends |
+| The screen | The terminal | A buffer the test reads |
+| The clock | The system's time | A clock the test moves forward |
+| The process starter | Starts a real command | Real commands in a scratch folder, or a fake that records what it was asked |
+| The network | Tailscale and the websocket | A connection inside the test that it can cut and restore |
+
+On the controller, two more: the clock, and the login provider, which a test replaces with a fake Google.
+
+Nothing else is replaceable. The gate, the checks, the line, the session and the relay run as the real code in every test.
+
+### The messages in code
+
+The message types of the connection are written down in this file, and this file is the contract. While both programs are Go, they share one piece of code for those types, so the two sides cannot drift apart. If the controller ever moves to another language, this file stays the contract.
+
+### How the pieces are put together
+
+Five patterns hold the pieces together. They are named here so the code follows them on purpose.
+
+- **One loop owns the state.** In the cli-tool, a single loop takes every event in turn: a key press, a message from the controller, a timer that runs out, the end of a command. No two events are handled at once. "A key pressed early does not count" and "one request at a time" then hold by construction.
+- **State machines.** The `gate`, the `session`, the `connection` and each request have named states, and only named events move them. Their tables are written just before each piece is built.
+- **Replaceable edges.** The keyboard, the screen, the clock, the process starter and the network are handed to the code from outside. The core never reaches for the real ones itself.
+- **A chain of steps.** A request passes `checks`, `line`, `gate` and `runner` in that order. Each step can refuse, and a refused request never reaches the next step.
+- **A relay matched by ID.** The controller ties each open API call to its request on the host by the request's `id`, and passes messages both ways without acting on what they say.
+
+### Integration tests for the pieces
+
+These check that one piece hands over to the next as laid out above. They run inside one program, with the edges in the test's hands.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| PIE-01 | cli-tool, live session | A request that `checks` refuses | It never reaches `line` or `gate`: the line is no longer, and no prompt was drawn |
+| PIE-02 | cli-tool, command A runs, request B waits | A ends | `gate` gets B only now, not while A ran |
+| PIE-03 | cli-tool, live session | Three requests: one refused by `checks`, one answered `n`, one answered `y` | `log` holds every step of each: the request, the answer, the output, the end |
+| PIE-04 | cli-tool, an approved command prints a cursor code | Follow the output | It reaches the screen only through `terminal`, cleaned. It reaches `connection` as it was |
+| PIE-05 | cli-tool, a prompt waits and two requests wait behind it | The `session` clock runs out | `gate` removes the prompt and `line` empties. All three get `refused` with `time_up` |
+| PIE-06 | cli-tool, live session | A `y` key press and a `request` are put into the loop, once in each order | Key first: the prompt waits. Request first: the command runs |
+| PIE-07 | cli-tool, `SESSION_MAX` below the length asked for | Start a session | `settings` hands the cut value to `session`, and `terminal` shows the message |
+| PIE-08 | cli-tool, the key file kept in another folder by a setting | A request to read that file | `checks` still refuses it: it asks `secrets` for the paths, and does not carry a list of its own |
+| PIE-09 | controller | A host connects and sends `session_start` | `api` accepts the key only after `sessions` holds the session, and refuses it again once the session is dropped |
+| PIE-10 | controller, two hosts with live sessions | The end button for one session | `hostdoor` sends `session_end` to that host only |
+| PIE-11 | controller, users A and B signed in | A's `dashboard` asks to end B's session | `sessions` refuses. Nothing is sent to any host |
