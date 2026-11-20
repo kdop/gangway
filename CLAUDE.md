@@ -24,6 +24,7 @@ says what it is. This file says how it is built and why.
 | `blueprint.md` | The design: parts, session flow, gate, key, security, open questions |
 | `plan.md` | The steps, in order, each with its check |
 | `requirements.md` | The hard requirements, each with its acceptance tests. The IDs are carried by the Go tests |
+| `architecture.md` | How the parts are built to meet the requirements: the API, the messages, the pieces |
 | `ux.md` | How the tool looks and feels: prompts, messages, small touches |
 | `notes/<yyyy-mm>.md` | The timeline, one file per month |
 | `.claude/` | Rules (`rules/`, with the voice in `rules/voice.md`) and skills (`skills/`) |
@@ -59,6 +60,7 @@ led to it.
 - **No Python; tests are plain Go tests.** One language for the whole project.
 - **No database in the first version; plain files in the home folder.** Settings and the key in `~/.config/gangway/`, the log in `~/.local/state/gangway/`. Those are the usual Linux places.
 - **Sessions are never stored, on either side.** A controller restart ends every session, which is the safe way to fail.
+- **A lost connection does not end the session at once: the cli-tool connects again by itself within a short time.** A network failure is not the user's doing, and the hosts being debugged are often the ones with poor networks. Nothing is read from disk for it, so an ended session still cannot come back.
 - **The controller is a web app: a REST API with a dashboard.**
 - **The controller is written in Go too, not Django, FastAPI, Vue or React.** One language, both sides share the same message types, and it ships as one file. Go's templates with htmx are enough for a page that lists sessions and a log. This is a choice, not a must, and can still change.
 - **Where the controller listens is a setting; the default is localhost.** It is a deployment matter, not a design one.

@@ -71,6 +71,8 @@ A session is one stretch of access to one host. It starts when the user starts t
 
 One session has one host, one session key and one open connection to the controller.
 
+A quiet session is not ended for being quiet. It lives until its time is up, whether the AI asks for much or for nothing.
+
 1. The user starts the cli-tool on the host. It joins the Tailscale network by itself and connects to the controller. It shows the controller the host token it got at pairing, so the controller knows which user this host belongs to.
 2. The cli-tool makes a session key: a long random secret that works for this session only. It then prints one line of text with the skill's name, the controller's address and that key. The exact form is in `ux.md`. That line is all the AI needs to send requests to this host.
 3. The user pastes the line to the AI. The skill knows what to do with it. Nothing is pasted to the controller: the cli-tool has already sent it the key over their connection.
@@ -79,7 +81,7 @@ One session has one host, one session key and one open connection to the control
 6. On yes, the cli-tool runs it as the plain user and sends back the result. On no, the AI is told it was refused.
 7. The session ends on Ctrl+C, or when its time is up and the user does not extend it. The key is dead after that, and the host drops off the Tailscale network.
 
-Every session is new. No resume.
+Every session is new. A session that has ended is never resumed, and nothing of it is kept on disk. A lost connection is a different matter: the cli-tool, still running, connects again by itself within a short time and the session carries on.
 
 ## The controller
 

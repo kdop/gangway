@@ -27,7 +27,7 @@ flowchart LR
 
   ai -- "request with session key" --> api
   cli -- "dials out over Tailscale" --> api
-  api -. "request, down the open link" .-> cli
+  api -. "request, down the open connection" .-> cli
   cli --> gate
   gate -- "y" --> cmd
   me -- "y or n in the terminal" --> gate
@@ -50,7 +50,7 @@ sequenceDiagram
   C->>S: host token from pairing
   S->>S: find the user this host belongs to
   C->>C: make the session key
-  C->>S: tell the controller the key
+  C->>S: send a hash of the key
   C-->>K: paste line: API address and key
   K->>A: paste the line
 
@@ -107,13 +107,13 @@ stateDiagram-v2
   Extending --> Idle: y, the session gets more time
   Extending --> Ended: n, or no answer in time
 
-  Idle --> Ended: Ctrl+C, the link is lost, or the maximum is reached
+  Idle --> Ended: Ctrl+C, the connection stays lost, or the maximum is reached
   Asking --> Idle: Ctrl+C, the request is refused
   Asking --> Extending: the time is up, the request is refused
-  Asking --> Ended: the link is lost or the maximum is reached, nothing runs
+  Asking --> Ended: the connection stays lost or the maximum is reached, nothing runs
   Running --> Idle: Ctrl+C, the command is killed, the AI is told
   Running --> Extending: the time is up, after the command ends
-  Running --> Ended: the link is lost, the command is stopped
+  Running --> Ended: the connection stays lost, the command is stopped
   Running --> Ended: the maximum is reached, after the command ends
 
   Ended --> [*]
@@ -125,6 +125,7 @@ stateDiagram-v2
 - Extending is the question "extend?" when the session's time is up. Only the user at the terminal can answer it.
 - When the time is up or the maximum is reached, a running command is not killed. It may finish, but it gets no more "wait more", so it is killed at its next time limit. New requests are refused from that moment.
 - Two Ctrl+C close together lead to Ended from any state. The diagram leaves those arrows out to stay readable.
+- "The connection stays lost" means it did not come back within the reconnect window. A shorter loss changes no state.
 - Ended is final. There is no resume.
 
 ## 4. When things go wrong
@@ -145,7 +146,7 @@ sequenceDiagram
   Note over C: nothing reaches the host
 ```
 
-### 4b. The host drops while a prompt waits
+### 4b. The connection is lost while a prompt waits
 
 ```mermaid
 sequenceDiagram
@@ -157,10 +158,19 @@ sequenceDiagram
   A->>S: run a command, with the key
   S->>C: the request
   C-->>K: show the exact request
-  C--xS: the link is lost
-  S->>S: end the session, forget the key
-  S->>A: refused: the session ended
-  Note over C: the cli-tool ends, nothing runs
+  C--xS: the connection is lost
+  Note over C: the prompt stays, the cli-tool tries to connect again
+  Note over S: new requests are refused with host_away
+
+  alt the connection comes back in time
+    C->>S: I am back, with host token and key hash
+    S->>C: taken back
+    Note over C,S: the same session carries on
+  else it stays away past the reconnect window
+    S->>S: end the session, forget the key
+    S->>A: refused: the session ended
+    Note over C: the cli-tool ends the session
+  end
 ```
 
 ### 4c. The AI hangs up while a prompt waits
@@ -253,10 +263,3 @@ sequenceDiagram
 
 - An account that is not on the list is refused at sign-in and never reaches the code.
 - A used code or an old code is refused.
-
-## For the reviewer
-
-Two points the diagrams had to assume. Each one is open.
-
-1. **The link.** The diagrams show one open link from the cli-tool to the controller, with requests pushed down it. They assume a websocket.
-2. **The key on the controller.** Diagram 2 has the cli-tool tell the controller the key. The controller could keep only a hash of it, so a memory dump of the controller does not give a usable key.

@@ -184,13 +184,15 @@ The cli-tool's terminal must show the output that is sent back and how the comma
 
 ### SHOW-03
 
-Output shown on the cli-tool's terminal must hold no control character other than a line break or a tab. The AI must still get the output unchanged. Step 1.
+Output shown on the cli-tool's terminal must hold no control character other than a line break or a tab. The AI must still get the output unchanged, except that bytes that are not text are replaced by a mark, and the answer says so. Step 1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
 | SHOW-03.1 | Live session | An approved command prints a cursor code and a colour code | Those codes never reach the terminal. The AI gets the output byte for byte |
 | SHOW-03.2 | Live session | An approved command prints line breaks and tabs | The terminal shows them as they are |
 | SHOW-03.3 | Live session | An approved file read returns a file that holds an Escape | No raw Escape reaches the terminal. The AI gets the file unchanged |
+| SHOW-03.4 | Live session | An approved command prints bytes that are not text, such as the start of a picture file | The AI gets text in which each such byte is replaced by a mark. The answer says that bytes were replaced. The text around them is unchanged |
+| SHOW-03.5 | Live session | An approved command prints the same bytes through `base64` | The AI gets the coded text unchanged. The answer does not say that bytes were replaced |
 
 ## SES: the session
 
@@ -223,21 +225,22 @@ A session that has ended must never accept a request again. A new start must mak
 
 ### SES-04
 
-When the connection between the cli-tool and the controller is lost, the session must end and its key must die. Step 3.
+When the connection between the cli-tool and the controller is lost, the cli-tool must try to connect again for `RECONNECT_WINDOW`. After it connects again in that time, the session must carry on with the same key. Step 3.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
-| SES-04.1 | Live session | The connection is cut | The cli-tool ends the session and says why. The controller refuses the key |
-| SES-04.2 | State after SES-04.1 | The network comes back | The old session does not come back. The key is still refused |
+| SES-04.1 | Live session | The connection is cut, and comes back before `RECONNECT_WINDOW` has passed | The cli-tool connects again by itself. The terminal says the connection was lost and is back. The same key is accepted |
+| SES-04.2 | State after SES-04.1 | The AI sends a request with the same key and caller token | A prompt is shown |
+| SES-04.3 | Live session | The connection is cut and comes back three times, each time within `RECONNECT_WINDOW` | The session carries on each time |
 
 ### SES-05
 
-When a session ends by Ctrl+C or a lost connection, a running command must be stopped. Step 3.
+When a session ends by Ctrl+C, or because the connection did not come back in time, a running command must be stopped. Step 3.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
 | SES-05.1 | A command runs | The user presses Ctrl+C twice within `DOUBLE_CTRL_C_WINDOW` | The command is stopped. The cli-tool ends |
-| SES-05.2 | A command runs | The connection is cut | The command is stopped. The session ends |
+| SES-05.2 | A command runs | The connection is cut and stays away past `RECONNECT_WINDOW` | The command is stopped. The session ends |
 
 ### SES-06
 
@@ -264,6 +267,45 @@ When a session ends, the host must leave the Tailscale network. Step 2.
 | Test | Start | Action | Expect |
 |---|---|---|---|
 | SES-08.1 | Live session | The session ends | The cli-tool has closed its Tailscale connection. The host no longer answers on the network |
+
+### SES-09
+
+When the connection has not come back within `RECONNECT_WINDOW`, the session must end and its key must die. Step 3.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| SES-09.1 | Live session | The connection is cut and stays away past `RECONNECT_WINDOW` | The cli-tool ends the session and says why. The controller refuses the key |
+| SES-09.2 | State after SES-09.1 | The network comes back | The old session does not come back. The key is still refused |
+
+### SES-10
+
+While the connection is lost, a new request must be refused with the reason `host_away`, and what is already on the host must carry on. Step 3.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| SES-10.1 | The connection is lost, within `RECONNECT_WINDOW` | The AI sends a request | Refused with `host_away`. Nothing reaches the host |
+| SES-10.2 | A prompt waits. The connection is lost | The user presses `y`. The command ends. The connection comes back | The command ran. The AI gets its result after the connection is back |
+| SES-10.3 | A command runs. The connection is lost | The command ends by itself. The connection comes back | The command was not killed. The AI gets its result after the connection is back |
+| SES-10.4 | A command runs. The connection is lost | The command reaches `COMMAND_TIME_LIMIT`, and no answer can come for `QUESTION_WAIT` | The command is killed, as with any unanswered question |
+
+### SES-11
+
+The controller must take a connection back into a session only when it shows the host token of that host and the hash of that session's key. Step 3.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| SES-11.1 | The connection is lost, within `RECONNECT_WINDOW` | A cli-tool connects with the right host token and a wrong key hash | Refused. The session is not handed to it |
+| SES-11.2 | The same | A cli-tool connects with the right key hash and another host's token | Refused |
+| SES-11.3 | The same | The real cli-tool connects with both | Taken back. The session carries on |
+
+### SES-12
+
+A session must never end because it is quiet. With no request at all, it must stay live until its time is up. Step 3.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| SES-12.1 | Live session. The AI has never called | Wait until just before the session's time is up | The session is live. The key is accepted |
+| SES-12.2 | Live session. The AI sent one request long ago | Wait until just before the session's time is up, then send a request | A prompt is shown |
 
 ## KEY: the session key and the API
 
@@ -871,6 +913,8 @@ A name in upper case is a setting. The requirements use the name, never the numb
 | `OUTPUT_SIZE_LIMIT` | 100 KB | How much output of one command is sent. The rest is cut | LIM-05 |
 | `DOUBLE_CTRL_C_WINDOW` | 2 seconds | Two Ctrl+C within this time end the cli-tool | LIM-10 |
 | `PAIRING_CODE_LIFE` | 5 minutes | How long a pairing code works | PAIR-03, PAIR-10 |
+| `LINK_TIMEOUT` | 30 seconds | How long the connection may be silent before it counts as lost | SES-04 |
+| `RECONNECT_WINDOW` | 2 minutes | How long the cli-tool tries to connect again before the session ends | SES-04, SES-09 |
 | `LOG_FILE_SIZE` | 10 MB | How big one log file may get before a new one is started | LOG-05 |
 | `LOG_FILES_KEPT` | 5 | How many old log files are kept | LOG-05 |
 
