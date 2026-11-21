@@ -313,8 +313,11 @@ func (got answer) refused(t *testing.T, reason string) {
 	}
 }
 
-// prompts counts the prompts shown so far.
-func (w *world) prompts() int { return strings.Count(w.screen.text(), question) }
+// prompts counts the prompts shown so far: the lines that start with the
+// question.
+func (w *world) prompts() int {
+	return strings.Count("\n"+w.screen.text(), "\n"+question)
+}
 
 // prompt waits until n prompts were shown, and until a key counts.
 func (w *world) prompt(n int) {
