@@ -782,3 +782,234 @@ The pieces are the real ones. The test holds the edges: the keyboard, the screen
 | UNIT-START-02 | `HOST-02` | The input is not a terminal. Again with the output | Check | An error each time that says a terminal is needed |
 | UNIT-START-03 | `HOST-01`, `HOST-02` | A plain user, both are terminals | Check | No error |
 | UNIT-START-04 | `HOST-01` | The user is root and there is no terminal | Check | The error is the one about root |
+
+## `sessions` (controller)
+
+`sessions` holds the live sessions, in memory only.
+
+### What it holds
+
+For each live session: the hash of its key, the host's name, the limits the host gave, and the session's `relay`. It never holds a key.
+
+### What it can be asked
+
+| Ask | Does | Gives back |
+|---|---|---|
+| `add`, with a session | Makes the session live | Yes, or no with the reason |
+| `find`, with a key | Hashes the key and looks the hash up | The session, or nothing |
+| `remove`, with a session | Takes the session out | |
+
+### Rules the code must keep
+
+- **Only a hash is held.** `add` takes the hash the host sent. `find` hashes the key an AI shows and compares. No function takes a key and keeps it. (`SES-06`)
+- **A hash has one form.** 64 characters, the digits and `a` to `f` only. Anything else is refused, so an empty or short hash can never match a key.
+- **One live session for one hash.** `add` refuses a hash that a live session already has. A second cli-tool could otherwise take over the requests of the first. (`KEY-09`)
+- **A key must start with `gw_`.** `find` gives nothing for any other key and does not hash it.
+- **Removed means dead at once.** After `remove`, `find` gives nothing for that key. (`KEY-03`)
+- **Removing an old session does not harm a new one.** `remove` takes out only the very session it was given, not another session that came later with the same hash.
+- **Nothing is written to disk.** A new store is empty. (`SES-06`, `SES-07`)
+
+### Unit tests
+
+| Test | Requirement | Start | Action | Expect |
+|---|---|---|---|---|
+| UNIT-SESSIONS-01 | `KEY-02` | An empty store | `add` a session with the hash of key K. `find` with K | The session |
+| UNIT-SESSIONS-02 | `KEY-02`, `SES-01` | A store with the session of key K | `find` with: no key, a made-up key, K with one letter cut off, K with one letter added, K without `gw_`, the hash itself. Then a key with no `gw_` whose hash a session has | Nothing, each time |
+| UNIT-SESSIONS-03 | `KEY-03`, `SES-03` | A store with the session of key K | `remove` it. `find` with K | Nothing |
+| UNIT-SESSIONS-04 | `KEY-09` | A store with the session of key K | `add` a second session with the same hash | Refused. `find` with K still gives the first |
+| UNIT-SESSIONS-05 | `KEY-09` | An empty store | `add` with a hash that is empty, too short, too long, in capitals, or not hex | Refused each time. The store is still empty |
+| UNIT-SESSIONS-06 | `KEY-03` | Session A was removed. Session B was added with the same hash | `remove` A once more | `find` still gives B |
+| UNIT-SESSIONS-07 | `SES-07` | | Make a new store | It holds no session |
+| UNIT-SESSIONS-08 | `SES-06` | A store with one session | Look at every field of the session | The key is in none of them |
+
+## `relay` (controller)
+
+The `relay` ties an open API call to its request on the host. One `relay` serves one session, so a call can only ever touch the requests of its own session.
+
+### What it holds
+
+For each request it still follows: its state, whether the command has started, the output that came since the last answer, and the open call, if there is one.
+
+### States of a request
+
+| State | Meaning |
+|---|---|
+| `Open` | A call is open and waits for an answer |
+| `Asked` | The call was answered with "still running". No call is open. The AI owes a `wait` or a `stop` |
+| `Done` | The command ended while no call was open. The result is kept for the next call |
+
+A request that is none of these is not held: it was answered and forgotten.
+
+```mermaid
+stateDiagram-v2
+  [*] --> Open: a new request
+  Open --> [*]: refused, ended, the AI hangs up, or the session ends
+  Open --> Asked: still_running
+  Asked --> Open: wait or stop
+  Asked --> Done: ended
+  Asked --> [*]: the session ends
+  Done --> [*]: wait or stop, or the session ends
+```
+
+### Events
+
+| Event | Comes from |
+|---|---|
+| `ask` | `api`: a new request |
+| `wait`, `stop` | `api`: a call on the `id` of a request |
+| `hang up` | `api`: the AI closed its call before the answer |
+| `started`, `output`, `still_running`, `refused`, `ended` | `hostdoor`: a message from the host |
+| `end` | `hostdoor`: the session is over |
+
+### The table
+
+An empty "Does" means the event is dropped.
+
+| State | Event | Does | Next |
+|---|---|---|---|
+| not held | `ask` | Makes a new `id`. Sends `request` to the host | `Open` |
+| not held | `wait`, `stop` | Tells `api` there is no such command | not held |
+| not held | any message from the host | | not held |
+| `Open` | `started` | Notes that the command runs | `Open` |
+| `Open` | `output` | Keeps the text | `Open` |
+| `Open` | `still_running` | Answers the call with `running` and the output kept so far | `Asked` |
+| `Open` | `refused` | Answers the call with `refused` and the host's reason | not held |
+| `Open` | `ended` | Answers the call with `ended`, the way it ended, and the output kept | not held |
+| `Open` | `hang up`, by the call that is open | Sends `cancel` to the host | not held |
+| `Open` | `hang up`, by an older call | | `Open` |
+| `Open` | `wait`, `stop` | Tells `api` there is no such command | `Open` |
+| `Open` | `end` | Answers the call with `refused` and `session_ended` | not held |
+| `Asked` | `wait` | Sends `wait` to the host. Opens the new call | `Open` |
+| `Asked` | `stop` | Sends `stop` to the host. Opens the new call | `Open` |
+| `Asked` | `output` | Keeps the text | `Asked` |
+| `Asked` | `ended`, `refused` | Keeps the result | `Done` |
+| `Asked` | `still_running`, `hang up` | | `Asked` |
+| `Asked` | `end` | | not held |
+| `Done` | `wait`, `stop` | Answers the new call at once with the kept result. Sends nothing to the host | not held |
+| `Done` | any message from the host | | `Done` |
+| `Done` | `end` | | not held |
+
+After `end`, an `ask` is answered at once with `refused` and `session_ended`, and nothing is sent.
+
+### Rules the code must keep
+
+- **The relay never judges a request.** It makes no message that approves, and it never changes a command: the host gets the command letter for letter. (`GATE-05`, `GATE-07`)
+- **One call for one request.** While a call is open on a request, a `wait` or `stop` on it is turned away. To stop a command before its time limit, the AI hangs up.
+- **Every call gets one answer.** A call ends with exactly one of `refused`, `ended` or `running`, or the AI hangs up first.
+- **Output is given once.** An answer holds the output that came since the last answer, and that output is then forgotten.
+- **Only an open call can cancel.** After a `running` answer no call is open, so nothing is cancelled. A call that already has its answer cancels nothing either.
+- **A host answers only its own requests.** A message with an `id` the relay does not hold is dropped.
+- **The `id` is made here.** `r_` and 16 random hex characters. A host or an AI never picks one.
+- **Sending never blocks.** The relay hands each message to `hostdoor` and goes on.
+
+### Unit tests
+
+Start: a relay whose messages to the host are gathered in a list.
+
+| Test | Requirement | Start | Action | Expect |
+|---|---|---|---|---|
+| UNIT-RELAY-01 | `GATE-05` | A new relay | `ask` with a command of two lines with a pipe | One `request` was sent, with a new `id`, the kind `command`, and the command letter for letter |
+| UNIT-RELAY-02 | `GATE-02` | A request is `Open` | `refused` from the host with the reason `user` | The call gets `refused` with `user`. The request is no longer held |
+| UNIT-RELAY-03 | `GATE-01` | A request is `Open` | `started`, two pieces of `output`, then `ended` with `exit` and code 0 | The call gets `ended`, `exit`, code 0, and both pieces joined in order |
+| UNIT-RELAY-04 | `SHOW-03` | A request is `Open` | `ended` with `cut` and `bytes_replaced` | Both are true in the answer |
+| UNIT-RELAY-05 | `LIM-01` | A request is `Open` | `started`, one `output`, `still_running` | The call gets `running`, the `id` and the output so far. The request is `Asked` |
+| UNIT-RELAY-06 | `LIM-02` | A request is `Asked` | `wait`. Then one more `output` and `ended` | `wait` was sent to the host. The new call gets `ended` with the new output only |
+| UNIT-RELAY-07 | `LIM-02` | A request is `Asked` | `stop`. Then `ended` with `killed_by_ai` | `stop` was sent. The new call gets `ended` with `killed_by_ai` |
+| UNIT-RELAY-08 | `LIM-04` | A request is `Asked` | `output`, then `ended` with `exit`. Then more messages from the host about it. Then `wait` | The call gets `ended` with `exit` and the first output at once: the later messages changed nothing. Nothing was sent to the host. A second `wait` finds no such command |
+| UNIT-RELAY-09 | `GATE-12` | A request is `Open`, not started | `hang up` | `cancel` was sent with that `id`. A later `ended` from the host is dropped |
+| UNIT-RELAY-10 | `LIM-07` | A request is `Open` and started | `hang up` | `cancel` was sent with that `id` |
+| UNIT-RELAY-11 | `LIM-03` | A request is `Asked` | `hang up` by the call that got the `running` answer | Nothing was sent. The request is still `Asked` |
+| UNIT-RELAY-12 | `LIM-02` | A request is `Open` | `wait` and `stop` on its `id`. Then the same on a made-up `id` | No such command, each time. Nothing was sent |
+| UNIT-RELAY-13 | `GATE-06` | Two requests are `Open` | The host answers the second, then the first | Each call gets its own answer |
+| UNIT-RELAY-14 | `KEY-03` | One request is `Open`, one is `Asked`, one is `Done` | `end` | The open call gets `refused` with `session_ended`. Nothing is held. A new `ask` gets `refused` with `session_ended` and sends nothing |
+| UNIT-RELAY-15 | `GATE-07` | A request is `Open` | Messages from the host with a made-up `id`, and with made-up types such as `approve` | Nothing changes. The call still waits |
+| UNIT-RELAY-16 | `GATE-06` | One request `Open` and not started, one `Open` and started, one `Asked`, one `Done` | Ask for the counts | One waits. One of the two that run is named |
+| UNIT-RELAY-17 | `GATE-01` | A new relay | Many goroutines `ask` at once, and the host answers each | Every `id` differs. Every call gets the answer for its own request |
+
+## `hostdoor` (controller)
+
+`hostdoor` takes the connections from the cli-tools. One connection carries one session, from `session_start` to the end.
+
+### Rules the code must keep
+
+- **First `session_start`, or nothing.** The first message must be `session_start` with a key hash and the limits, and it must come within ten seconds. Anything else closes the connection and makes no session.
+- **`session_ok` only after the session is live.** The host gets `session_ok` once `sessions` has taken the session. A hash that `sessions` refuses closes the connection. (`KEY-09`)
+- **The end of the connection is the end of the session.** A lost connection, a `session_end` from the host, a message that is not JSON, or a message that is too large: each ends the session at once. The key dies first, then every open call is answered. (`KEY-03`, `SES-03`)
+- **A host can only answer and end.** The door passes `refused`, `started`, `output`, `still_running` and `ended` to the session's own `relay`, and takes `session_end`. Every other type is dropped.
+- **A slow host is cut off.** Messages to a host wait in a short queue. When the queue is full, the connection is closed and the session ends.
+- **No web page.** A connection that a browser opens from another site is refused.
+- **Shutting down tells the hosts.** Each host gets `session_end` with `controller_stopped`.
+
+The MVP has no Tailscale and no host token. Any program that can reach the listener can start a session, so the listener stays on this machine (`CTL-01`).
+
+### Unit tests
+
+Start: a door behind a test server, and a websocket client in the test that plays the cli-tool.
+
+| Test | Requirement | Start | Action | Expect |
+|---|---|---|---|---|
+| UNIT-HOSTDOOR-01 | `SES-01` | A door | Connect. Send `session_start` with the hash of key K | `session_ok` comes back. `sessions` finds the session with K, with the host's name and limits |
+| UNIT-HOSTDOOR-02 | `SES-01` | A door | Connect. Send, as the first message: `started`. Then on new connections: an `output` that carries a key hash and limits, text that is not JSON, `session_start` with no limits, and `session_start` with no key hash | Each connection is closed. No session is live |
+| UNIT-HOSTDOOR-03 | `KEY-09` | A live session with the hash of K | A second connection sends `session_start` with the same hash | It is closed with no `session_ok`. The first session still works |
+| UNIT-HOSTDOOR-04 | `KEY-03`, `SES-03` | A live session, with one call open on its relay | The client drops the connection | The call gets `refused` with `session_ended`. `sessions` no longer finds K |
+| UNIT-HOSTDOOR-05 | `KEY-03` | A live session, with one call open | The client sends `session_end` | The same as above. The connection is closed |
+| UNIT-HOSTDOOR-06 | `GATE-01` | A live session, with one call open | The client sends `started`, `output`, `ended` for that `id` | The call gets `ended` with that output |
+| UNIT-HOSTDOOR-07 | `GATE-07` | A live session, with one call open | The client sends messages of the types `approve`, `request` and `session_ok` | The call still waits. The session is still live |
+| UNIT-HOSTDOOR-08 | `SES-01` | A door with a short start time | Connect and send nothing | The connection is closed. No session is live |
+| UNIT-HOSTDOOR-09 | `KEY-03` | A live session, the queue set to two messages | The client reads nothing. The relay sends many requests | The connection is closed and the session is no longer live |
+| UNIT-HOSTDOOR-10 | `SES-07` | Two live sessions | Shut the door down | Each client gets `session_end` with `controller_stopped`. No session is live |
+| UNIT-HOSTDOOR-11 | `CTL-01` | A door | Connect with the `Origin` of another web site | Refused. No session is live |
+| UNIT-HOSTDOOR-12 | `KEY-03` | A live session | The client sends one message larger than the largest allowed | The connection is closed and the session is no longer live |
+
+## `api` (controller)
+
+`api` is what the AI calls. The calls and their answers are laid out in `architecture.md`.
+
+### Rules the code must keep
+
+- **No key, no entry.** Every call needs the key of a live session in `Authorization: Bearer`. Without it the answer is 401, always with the same body, and nothing else happens. (`KEY-02`, `SES-01`)
+- **Five calls and no more.** Every other path or way of calling gets 404 or 405. No call approves, extends or changes a setting. (`GATE-07`)
+- **Only the command goes on.** From the body of a new request the API takes the kind and the command. Any other field is left behind, so the host never sees it. (`GATE-07`)
+- **A body it does not know is turned away.** A body that is not JSON, has no command, is too large, or has a kind other than `command` gets 400, and nothing reaches the host. (`CTL-11`)
+- **A call stays open** until the `relay` has an answer. When the AI closes it first, the `relay` is told. (`GATE-12`, `LIM-07`)
+- **`hello` and `session` only read.** In the MVP both give the same body: the host's name, the limits, and the counts of requests. There is no caller token yet.
+
+### Unit tests
+
+Start: the API over a store with one live session of key K. The test plays the host by reading what the session's relay sends.
+
+| Test | Requirement | Start | Action | Expect |
+|---|---|---|---|---|
+| UNIT-API-01 | `KEY-02`, `SES-01` | A live session | Each of the five calls with: no header, a made-up key, K with one letter cut off, K with no `Bearer`, K in a query string | 401 each time, with the same body. Nothing was sent to the host |
+| UNIT-API-02 | `KEY-03` | A live session | The session is removed. Each of the five calls with K | 401 each time |
+| UNIT-API-03 | `GATE-07` | A live session | Calls with K to `/v1/requests/x/approve`, `/v1/session/extend`, `/v1/settings`, `/` and `GET /v1/requests` | 404 or 405. Nothing was sent to the host |
+| UNIT-API-04 | `CTL-11` | A live session | `POST /v1/requests` with: text that is not JSON, an empty body, no command, an empty command, the kind `read`, a made-up kind, a body larger than the limit | 400 each time. Nothing was sent to the host |
+| UNIT-API-05 | `GATE-07`, `GATE-05` | A live session | `POST /v1/requests` with a command and the extra fields `"approved": true` and `"id": "mine"` | The host gets one `request` with the command letter for letter, an `id` of the controller's own, and no other field |
+| UNIT-API-06 | `GATE-02` | A request is open | The host answers `refused` with `user` | 200, with `state` `refused` and `reason` `user`, and no other field |
+| UNIT-API-07 | `GATE-01` | A request is open | The host sends `output` and `ended` with `exit` and code 0 | 200, with `state` `ended`, `how` `exit`, `exit_code` 0, the output, and `cut` and `bytes_replaced` false |
+| UNIT-API-08 | `LIM-01` | A request is open | The host sends `still_running` | 200, with `state` `running`, the `id`, the output so far and `answer_within_seconds` as the host's limit |
+| UNIT-API-09 | `LIM-02` | State after UNIT-API-08 | `wait` on the `id`, and the host sends `ended`. Then on a second request, `stop` | The host got `wait`, then `stop`. Each call ends with `ended` |
+| UNIT-API-10 | `LIM-02` | A live session | `wait` and `stop` on a made-up `id` | 404 each time. Nothing was sent to the host |
+| UNIT-API-11 | `GATE-12`, `LIM-07` | A request is open | The AI closes the call | The host gets `cancel` with the `id` |
+| UNIT-API-12 | `GATE-06` | A live session with limits from the host. One request waits, one runs | `hello`, then `GET /v1/session` | Both give the same body: the host's name, the limits, one waiting, the largest line, and the `id` that runs. No caller token |
+| UNIT-API-13 | `LIM-08` | A request is open | The host sends `ended` with `killed_by_user` and no exit code | The answer has no `exit_code` field |
+
+## `start` (controller)
+
+`start` checks the address, puts the pieces together and runs them.
+
+### Rules the code must keep
+
+- **Localhost with no setting.** With no `-listen` option the controller listens on `127.0.0.1:8642`. (`CTL-01`)
+- **This machine only, for now.** No login is built, so `start` refuses every address that another machine could reach: only `127.0.0.1`, `::1`, any other loopback address and `localhost` pass. An address with no host, such as `:8642`, means every address and is refused. It prints the reason and does not start. (`CTL-02`)
+- **One listener, two doors.** The API and the door for the cli-tools share the address. The path `/host/v1` goes to `hostdoor`, everything else to `api`.
+
+### Unit tests
+
+| Test | Requirement | Start | Action | Expect |
+|---|---|---|---|---|
+| UNIT-CTLSTART-01 | `CTL-01` | | Check the address used with no setting | It passes, and it is a loopback address |
+| UNIT-CTLSTART-02 | `CTL-01` | | Check `127.0.0.1:1`, `127.9.9.9:1`, `[::1]:1`, `localhost:1` | Each passes |
+| UNIT-CTLSTART-03 | `CTL-02` | | Check `:8642`, `0.0.0.0:8642`, `[::]:8642`, `192.168.1.5:8642`, `100.64.0.1:8642`, `8.8.8.8:80`, `example.com:80`, `8642`, the empty address | Each is refused |
+| UNIT-CTLSTART-04 | `CTL-02` | | Run the program with `-listen 0.0.0.0:0` | It prints the reason, gives an exit code that is not 0, and listens on nothing |
+| UNIT-CTLSTART-05 | `CTL-01` | The handler of the whole controller | A call to `/v1/session` with no key. A websocket to `/host/v1`. A websocket to other paths, such as `/` and `/host/v1/more` | 401 from the API. The websocket is taken by the door at `/host/v1` and at no other path |
