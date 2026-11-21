@@ -27,11 +27,11 @@ Where a test says the user presses a key at a prompt, `PROMPT_MIN_SHOW` has pass
 
 ## The MVP
 
-The MVP is set in `plan.md`. It delivers these 38 requirements:
+The MVP is set in `plan.md`. It delivers these 39 requirements:
 
 | Group | Requirements |
 |---|---|
-| GATE | 01, 02, 03, 04, 05, 06, 07, 08, 10, 11, 12, 13, 14 |
+| GATE | 01, 02, 03, 04, 05, 06, 07, 08, 10, 11, 12, 13, 14, 15 |
 | SHOW | 01, 02, 03 |
 | SES | 01, 02, 03, 05, 06, 07 |
 | KEY | 01, 02, 03, 04 |
@@ -192,6 +192,16 @@ A key pressed within `PROMPT_MIN_SHOW` after a prompt is shown must not answer i
 | GATE-14.3 | A prompt waits for A. B waits behind it | The AI hangs up on A. The user presses `y` at once | The prompt for B waits. B has not run |
 | GATE-14.4 | A prompt waits for A. B waits behind it | The user presses `n` twice, at once | A is refused. The prompt for B waits |
 | GATE-14.5 | Live session | The AI asks for a command. The user presses Ctrl+C before `PROMPT_MIN_SHOW` has passed | The request is refused. Ctrl+C is not held back |
+
+### GATE-15
+
+One `y` must run its request once, and never a second time. Step 1.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| GATE-15.1 | Live session | The AI asks for a command that adds one line to a file. The user presses `y` | The file holds one line |
+| GATE-15.2 | Live session | The same request. The user presses `y` many times | The file holds one line |
+| GATE-15.3 | Live session | The AI asks for the same command twice. The user presses `y` at the first prompt only | The file holds one line. The second prompt waits |
 
 ## SHOW: nothing is hidden
 
