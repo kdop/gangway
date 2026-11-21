@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"os"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -115,6 +116,7 @@ func wantRefused(t *testing.T, w *world, want ...refusal) {
 	}
 }
 
+// UNIT-GATE-01. Requirement: GATE-01, GATE-05.
 func TestUNITGATE01_ReadyShowsThePrompt(t *testing.T) {
 	w := free(reqA)
 	w.g.Ready()
@@ -125,6 +127,7 @@ func TestUNITGATE01_ReadyShowsThePrompt(t *testing.T) {
 	wantRuns(t, w, 0)
 }
 
+// UNIT-GATE-02. Requirement: GATE-01, GATE-05.
 func TestUNITGATE02_YApproves(t *testing.T) {
 	w := asking()
 	w.g.Key(key("y"))
@@ -140,6 +143,7 @@ func TestUNITGATE02_YApproves(t *testing.T) {
 	wantRefused(t, w)
 }
 
+// UNIT-GATE-03. Requirement: GATE-02.
 func TestUNITGATE03_NRefuses(t *testing.T) {
 	w := asking()
 	w.g.Key(key("n"))
@@ -148,6 +152,7 @@ func TestUNITGATE03_NRefuses(t *testing.T) {
 	wantRuns(t, w, 0)
 }
 
+// UNIT-GATE-04. Requirement: GATE-03.
 func TestUNITGATE04_OtherKeysAreIgnored(t *testing.T) {
 	w := asking()
 	for _, k := range []string{"Y", "N", "\r", "\n", " ", "\x1b", "\x1b[A", "x", "yes", "ye", "ny", ""} {
@@ -159,6 +164,7 @@ func TestUNITGATE04_OtherKeysAreIgnored(t *testing.T) {
 	}
 }
 
+// UNIT-GATE-05. Requirement: LIM-09.
 func TestUNITGATE05_CtrlCRefuses(t *testing.T) {
 	w := asking()
 	w.g.CtrlC()
@@ -167,6 +173,7 @@ func TestUNITGATE05_CtrlCRefuses(t *testing.T) {
 	wantRuns(t, w, 0)
 }
 
+// UNIT-GATE-06. Requirement: GATE-12.
 func TestUNITGATE06_CancelOfTheFrontRefuses(t *testing.T) {
 	w := asking()
 	w.g.Cancel("a")
@@ -175,6 +182,7 @@ func TestUNITGATE06_CancelOfTheFrontRefuses(t *testing.T) {
 	wantRuns(t, w, 0)
 }
 
+// UNIT-GATE-07. Requirement: GATE-12.
 func TestUNITGATE07_CancelOfAnotherIsNotTheGates(t *testing.T) {
 	w := asking()
 	w.g.Cancel("b")
@@ -188,6 +196,7 @@ func TestUNITGATE07_CancelOfAnotherIsNotTheGates(t *testing.T) {
 	}
 }
 
+// UNIT-GATE-08. Requirement: GATE-01.
 func TestUNITGATE08_EndWhileAsking(t *testing.T) {
 	w := asking()
 	w.g.End()
@@ -196,6 +205,7 @@ func TestUNITGATE08_EndWhileAsking(t *testing.T) {
 	wantRuns(t, w, 0)
 }
 
+// UNIT-GATE-09. Requirement: GATE-04.
 func TestUNITGATE09_EarlyKeyInFreeIsNotKept(t *testing.T) {
 	w := free()
 	w.g.Key(key("y"))
@@ -206,6 +216,7 @@ func TestUNITGATE09_EarlyKeyInFreeIsNotKept(t *testing.T) {
 	wantRuns(t, w, 0)
 }
 
+// UNIT-GATE-10. Requirement: GATE-04.
 func TestUNITGATE10_KeyInBusyIsNotKept(t *testing.T) {
 	w := busy(reqB)
 	w.g.Key(key("y"))
@@ -218,6 +229,7 @@ func TestUNITGATE10_KeyInBusyIsNotKept(t *testing.T) {
 	wantRuns(t, w, 1)
 }
 
+// UNIT-GATE-11. Requirement: GATE-06.
 func TestUNITGATE11_ReadyInBusyShowsNoPrompt(t *testing.T) {
 	w := busy(reqB)
 	w.g.Ready()
@@ -230,6 +242,7 @@ func TestUNITGATE11_ReadyInBusyShowsNoPrompt(t *testing.T) {
 	}
 }
 
+// UNIT-GATE-12. Requirement: GATE-02, GATE-06, GATE-14.
 func TestUNITGATE12_NTwiceRefusesOnlyTheFirst(t *testing.T) {
 	w := asking(reqB)
 	w.g.Key(key("n"))
@@ -241,6 +254,7 @@ func TestUNITGATE12_NTwiceRefusesOnlyTheFirst(t *testing.T) {
 	}
 }
 
+// UNIT-GATE-13. Requirement: GATE-06.
 func TestUNITGATE13_DoneWithAnEmptyLine(t *testing.T) {
 	w := busy()
 	w.g.Done()
@@ -266,6 +280,7 @@ var events = []struct {
 	{"end", func(w *world) { w.g.End() }},
 }
 
+// UNIT-GATE-14. Requirement: SES-03.
 func TestUNITGATE14_EndedIsFinal(t *testing.T) {
 	for _, e := range events {
 		w := ended()
@@ -278,6 +293,7 @@ func TestUNITGATE14_EndedIsFinal(t *testing.T) {
 	}
 }
 
+// UNIT-GATE-15. Requirement: GATE-01, GATE-07.
 func TestUNITGATE15_OnlyYInAskingReachesTheRunner(t *testing.T) {
 	states := []struct {
 		name  string
@@ -304,6 +320,7 @@ func TestUNITGATE15_OnlyYInAskingReachesTheRunner(t *testing.T) {
 	}
 }
 
+// UNIT-GATE-16. Requirement: GATE-01, GATE-05, GATE-07.
 func TestUNITGATE16_RandomWalk(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
 	w := free()
@@ -378,6 +395,7 @@ func TestUNITGATE16_RandomWalk(t *testing.T) {
 	}
 }
 
+// UNIT-GATE-17. Requirement: GATE-15.
 func TestUNITGATE17_AnApprovalWorksOnce(t *testing.T) {
 	w := asking()
 	w.g.Key(key("y"))
@@ -397,6 +415,7 @@ func TestUNITGATE17_AnApprovalWorksOnce(t *testing.T) {
 	}
 }
 
+// UNIT-GATE-18. Requirement: GATE-14.
 func TestUNITGATE18_AFreshPromptTakesNoKey(t *testing.T) {
 	w := free(reqA)
 	w.g.Ready()
@@ -410,6 +429,7 @@ func TestUNITGATE18_AFreshPromptTakesNoKey(t *testing.T) {
 	}
 }
 
+// UNIT-GATE-19. Requirement: GATE-14.
 func TestUNITGATE19_AfterTheWaitYApproves(t *testing.T) {
 	w := free(reqA)
 	w.g.Ready()
@@ -420,6 +440,7 @@ func TestUNITGATE19_AfterTheWaitYApproves(t *testing.T) {
 	wantRuns(t, w, 1)
 }
 
+// UNIT-GATE-20. Requirement: GATE-14, LIM-09.
 func TestUNITGATE20_CtrlCIsNotHeldBack(t *testing.T) {
 	w := free(reqA)
 	w.g.Ready()
@@ -428,6 +449,7 @@ func TestUNITGATE20_CtrlCIsNotHeldBack(t *testing.T) {
 	wantRefused(t, w, refusal{"a", ReasonUser})
 }
 
+// UNIT-GATE-21. Requirement: GATE-12, GATE-14.
 func TestUNITGATE21_YAfterACancelDoesNotAnswerTheNext(t *testing.T) {
 	w := asking(reqB)
 	w.g.Cancel("a")
@@ -439,24 +461,41 @@ func TestUNITGATE21_YAfterACancelDoesNotAnswerTheNext(t *testing.T) {
 	wantRuns(t, w, 0)
 }
 
-// Every UNIT-GATE test of design.md must have a Go test in this file.
-func TestEveryDesignTestHasAGoTest(t *testing.T) {
-	design, err := os.ReadFile("../../../design.md")
-	if err != nil {
-		t.Fatal(err)
+// Every UNIT-GATE test of design.md must have a Go test in this file, with
+// the same requirements in the comment above it. Every requirement named
+// must be in requirements.md.
+func TestDesignAndGoTestsMatch(t *testing.T) {
+	read := func(path string) string {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
 	}
-	code, err := os.ReadFile("gate_test.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ids := regexp.MustCompile(`(?m)^\| UNIT-GATE-(\d+) `).FindAllSubmatch(design, -1)
-	if len(ids) == 0 {
+	design := read("../../../design.md")
+	requirements := read("../../../requirements.md")
+	code := read("gate_test.go")
+
+	rows := regexp.MustCompile(`(?m)^\| UNIT-GATE-(\d+) \| ([^|]*) \|`).FindAllStringSubmatch(design, -1)
+	if len(rows) == 0 {
 		t.Fatal("found no UNIT-GATE test in design.md")
 	}
-	for _, m := range ids {
-		name := "func TestUNITGATE" + string(m[1]) + "_"
-		if !regexp.MustCompile(regexp.QuoteMeta(name)).Match(code) {
-			t.Errorf("UNIT-GATE-%s has no Go test", m[1])
+	for _, row := range rows {
+		num, reqs := row[1], strings.ReplaceAll(row[2], "`", "")
+		if reqs == "" {
+			t.Errorf("UNIT-GATE-%s names no requirement in design.md", num)
 		}
+		for _, id := range strings.Split(reqs, ", ") {
+			if !strings.Contains(requirements, "\n### "+id+"\n") {
+				t.Errorf("UNIT-GATE-%s names %s, which is not in requirements.md", num, id)
+			}
+		}
+		want := "// UNIT-GATE-" + num + ". Requirement: " + reqs + ".\nfunc TestUNITGATE" + num + "_"
+		if !strings.Contains(code, want) {
+			t.Errorf("UNIT-GATE-%s: no Go test with the comment %q", num, "// UNIT-GATE-"+num+". Requirement: "+reqs+".")
+		}
+	}
+	if n := len(regexp.MustCompile(`(?m)^func TestUNITGATE\d+_`).FindAllString(code, -1)); n != len(rows) {
+		t.Errorf("%d Go tests carry a UNIT-GATE number, design.md has %d", n, len(rows))
 	}
 }
