@@ -4,7 +4,7 @@ Small steps. Each step is delivered alone, tried by Kostas, then the next one st
 
 Rule for all steps: the gate exists before the first command runs. No step ships a way to run something without a yes.
 
-## Before any code
+## Before the first step
 
 Nothing blocks step 1. The language is Go, for the cli-tool and the controller. Where the controller listens is a setting; the default is localhost.
 

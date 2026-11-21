@@ -20,7 +20,7 @@ says what it is. This file says how it is built and why.
 
 | File | Purpose |
 |---|---|
-| `README.md` | What Gangway is, in a few lines, and the status |
+| `README.md` | What Gangway is, in a few lines, the status, the folders, and how to run the tests |
 | `blueprint.md` | The design: parts, session flow, gate, key, security, open questions |
 | `plan.md` | The steps, in order, each with its check |
 | `requirements.md` | The hard requirements, each with its acceptance tests. The IDs are carried by the Go tests |
