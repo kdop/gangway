@@ -27,22 +27,22 @@ Where a test says the user presses a key at a prompt, `PROMPT_MIN_SHOW` has pass
 
 ## The MVP
 
-The MVP is set in `plan.md`. It delivers these 40 requirements:
+The MVP is set in `plan.md`. It delivers these 45 requirements:
 
 | Group | Requirements |
 |---|---|
-| GATE | 01, 02, 03, 04, 05, 06, 07, 08, 10, 11, 12, 13, 14, 15, 16 |
+| GATE | 01, 02, 03, 04, 05, 06, 07, 08, 10, 11, 12, 13, 14, 15, 16, 17, 18 |
 | SHOW | 01, 02, 03 |
 | SES | 01, 02, 03, 05, 06, 07 |
 | KEY | 01, 02, 03, 04 |
-| LIM | 01, 02, 03, 04, 06, 07, 08, 09, 10 |
+| LIM | 01, 02, 03, 04, 06, 07, 08, 09, 10, 11, 12, 13 |
 | HOST | 01, 02 |
 | CTL | 01 |
 
 Two of them are delivered in part:
 
 - `SES-05`: there is no reconnect in the MVP, so a lost connection ends the session at once and stops the running command.
-- `LIM-06`: `COMMAND_TIME_LIMIT` and `QUESTION_WAIT` only. `OUTPUT_SIZE_LIMIT` comes with the size cut.
+- `LIM-06`: `COMMAND_TIME_LIMIT`, `QUESTION_WAIT` and `KILL_WAIT` only. `OUTPUT_SIZE_LIMIT` comes with the size cut.
 
 ## GATE: approval
 
@@ -160,6 +160,7 @@ An approved command must run through the shell named by `COMMAND_SHELL`, so that
 | GATE-11.2 | Live session | The AI asks for a command that writes its output to a file with `>`. The user presses `y` | The file exists and holds that output |
 | GATE-11.3 | Live session | The AI asks for two commands joined by `;`. The user presses `y` once | Both run, under that one approval. The prompt showed the whole line |
 | GATE-11.4 | Live session | The AI asks for two commands joined by `;`. The user presses `n` | Neither runs |
+| GATE-11.5 | Live session, `COMMAND_SHELL` names a file that is not there | The AI asks for a command. The user presses `y` | Nothing runs. The AI is told the command could not be started, and why |
 
 ### GATE-12
 
@@ -213,6 +214,23 @@ A request that holds an invisible character, or a character that changes the rea
 | GATE-16.2 | Live session | The AI asks for a command that holds a zero-width space inside a word | Refused the same way |
 | GATE-16.3 | Live session | The AI asks for a command with Greek letters, accents and a plain emoji | The prompt is shown as usual |
 | GATE-16.4 | Live session | The AI asks for a command that holds such a character | The terminal shows that a request was refused. The character itself never reaches the terminal |
+
+### GATE-17
+
+An approved command must get no keyboard input: when it reads its input, it must find the end at once. Step 1.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| GATE-17.1 | Live session | The AI asks for `cat` with no file. The user presses `y` | The command ends at once, with no output. It does not wait |
+| GATE-17.2 | A command runs that reads its input | The user types letters at the terminal | The command gets none of them |
+
+### GATE-18
+
+An approved command must run with `PAGER` set to `cat` and `TERM` set to `dumb`. Step 1.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| GATE-18.1 | Live session | The AI asks for a command that prints `PAGER` and `TERM`. The user presses `y` | The output is `cat` and `dumb` |
 
 ## SHOW: nothing is hidden
 
@@ -621,6 +639,33 @@ Two Ctrl+C within `DOUBLE_CTRL_C_WINDOW` must end the cli-tool from any state. S
 | LIM-10.3 | A prompt waits | The user presses Ctrl+C. The AI sends a new request at once. The user presses Ctrl+C again, within `DOUBLE_CTRL_C_WINDOW` | The cli-tool ends. The new request has not run |
 | LIM-10.4 | A prompt waits. A second request waits behind it | The user presses Ctrl+C twice, further apart than `DOUBLE_CTRL_C_WINDOW` | Each press refuses one request. The cli-tool does not end |
 
+### LIM-11
+
+When a command is killed, every program it started must be killed with it. Step 6.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| LIM-11.1 | A command runs that is two long programs joined by a pipe | The user presses Ctrl+C once | Both programs are gone |
+| LIM-11.2 | A command runs that started a long program in the background and waits for it | The AI answers "stop" | That program is gone too |
+
+### LIM-12
+
+A command must count as over when its shell ends. A program it left running in the background must not be killed. Step 6.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| LIM-12.1 | Live session | The AI asks for a command that starts a long program in the background, with its output sent to a file, and then ends. The user presses `y` | The AI gets the result at once. The program still runs |
+| LIM-12.2 | State after LIM-12.1 | The AI sends a new request | A prompt is shown |
+
+### LIM-13
+
+A command that is killed must first be asked to stop. If it still runs after `KILL_WAIT`, it must be killed by force. Step 6.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| LIM-13.1 | A command runs that writes a mark to a file when it is asked to stop | The user presses Ctrl+C once | The mark is there. The command is gone |
+| LIM-13.2 | A command runs that does not stop when asked | The user presses Ctrl+C once. `KILL_WAIT` passes | The command is gone |
+
 ## HOST: the cli-tool on the host
 
 ### HOST-01
@@ -965,6 +1010,7 @@ A name in upper case is a setting. The requirements use the name, never the numb
 | `COMMAND_SHELL` | `/bin/sh` | The shell that runs an approved command | GATE-11 |
 | `COMMAND_TIME_LIMIT` | 60 seconds | How long a command runs before the AI is asked to wait or stop | LIM-01, LIM-02 |
 | `QUESTION_WAIT` | 60 seconds | How long the wait-or-stop question waits for the AI | LIM-03 |
+| `KILL_WAIT` | 2 seconds | How long a command that was asked to stop may still run before it is killed by force | LIM-13 |
 | `OUTPUT_SIZE_LIMIT` | 100 KB | How much output of one command is sent. The rest is cut | LIM-05 |
 | `DOUBLE_CTRL_C_WINDOW` | 2 seconds | Two Ctrl+C within this time end the cli-tool | LIM-10 |
 | `PAIRING_CODE_LIFE` | 5 minutes | How long a pairing code works | PAIR-03, PAIR-10 |

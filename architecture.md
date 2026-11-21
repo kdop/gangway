@@ -117,6 +117,7 @@ The call stays open while the request waits in line, while the prompt waits, and
 | `killed_no_answer` | The AI gave no answer to "wait or stop" in time | `LIM-03` |
 | `killed_time_up` | The session's time was up and the command reached its time limit | `LEN-08` |
 | `read` | A file read. `output` is the file | `GATE-09` |
+| `start_failed` | The command could not be started. `output` says why. Nothing ran | `GATE-11` |
 
 - `output` holds what the command wrote, normal and error output together, in the order it came.
 - When `cut` is true, the output passed the size limit. `output` then holds the first part and ends with a note that says so (`LIM-05`).
@@ -258,7 +259,7 @@ Each of them asks or narrows. No message type exists that approves a request, ex
 | cli-tool | `ended` | `id`, `how`, `exit_code`, `cut`, `bytes_replaced` | "It is over, and this is how" |
 
 - Every request ends with exactly one `refused` or one `ended`. Nothing is left hanging.
-- On `cancel`, a request that waits is removed (`GATE-12`), and a command that runs is killed (`LIM-07`). The cli-tool closes the request with `refused` and the reason `ai_gone`, or with `ended` and `killed_ai_gone`. No AI ever sees these two: they are for the dashboard and the log.
+- On `cancel`, a request that waits is removed (`GATE-12`), and a command that runs is killed (`LIM-07`). The cli-tool closes the request with `refused` and the reason `ai_gone`, or with `ended` and `killed_ai_gone`. A command killed because the session ended closes with `killed_session_ended`. No AI ever sees these three: they are for the dashboard and the log.
 - After `still_running`, the cli-tool itself counts the answer time. With no `wait` and no `stop` in time, it kills the command (`LIM-03`). It does not wait for the controller to say so.
 - Output is sent in pieces as it comes, not in one block at the end. The dashboard can then show it live (`CTL-07`), and a `running` answer can carry the output so far.
 - The cli-tool cleans nothing in what it sends. Cleaning is only for its own terminal (`SHOW-03`).
@@ -347,7 +348,7 @@ Each program is made of a few pieces. A piece has one job, and the table names t
 | `line` | Holds the requests that wait, in order, up to the limit | `GATE-06`, `GATE-13` |
 | `checks` | Refuses a request before any prompt: control characters, invisible characters, protected files | `GATE-10`, `GATE-16`, `KEY-08` |
 | `gate` | Shows one request and takes the `y` or `n`. Nothing else can say yes | `GATE-01` to `GATE-05`, `GATE-07`, `GATE-12`, `GATE-14`, `GATE-15`, `LIM-09` |
-| `runner` | Runs an approved command through the shell as the plain user, or reads a file. Counts the time, cuts the output, kills when told | `GATE-08`, `GATE-09`, `GATE-11`, `LIM-01` to `LIM-05`, `LIM-07`, `LIM-08`, `SES-05` |
+| `runner` | Runs an approved command through the shell as the plain user, or reads a file. Counts the time, cuts the output, kills when told | `GATE-08`, `GATE-09`, `GATE-11`, `GATE-15`, `GATE-17`, `GATE-18`, `LIM-01` to `LIM-05`, `LIM-07`, `LIM-08`, `LIM-11` to `LIM-13`, `SES-05`, `SHOW-03` |
 | `terminal` | The only piece that writes to the screen and reads keys. Cleans what it shows. Tells one Ctrl+C from two | `SHOW-01` to `SHOW-03`, `GATE-03`, `GATE-04`, `LIM-10` |
 | `log` | Writes each request, answer and output to the log, and starts a new file at the size limit | `LOG-01` to `LOG-05` |
 | `pairing` | The exchange at `login`: the code, the `y`/`n`, the host token | `PAIR-02` to `PAIR-05`, `PAIR-10` |
