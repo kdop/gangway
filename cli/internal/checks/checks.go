@@ -3,6 +3,7 @@
 package checks
 
 import (
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/kdop/gangway/cli/internal/request"
@@ -19,7 +20,7 @@ func Check(req request.Request) (reason string, ok bool) {
 		return ReasonControlCharacter, false
 	}
 	for _, r := range req.Command {
-		if isControl(r) {
+		if isControl(r) || isHidden(r) {
 			return ReasonControlCharacter, false
 		}
 	}
@@ -36,4 +37,10 @@ func isControl(r rune) bool {
 		return true
 	}
 	return false
+}
+
+// isHidden tells whether the character is invisible or changes the reading
+// order: the Unicode format class, and the line and paragraph separators.
+func isHidden(r rune) bool {
+	return unicode.In(r, unicode.Cf, unicode.Zl, unicode.Zp)
 }

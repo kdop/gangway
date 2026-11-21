@@ -146,14 +146,21 @@ A request is refused with the reason `control_character` when its text holds any
 | Delete | Code 127 |
 | A control character of the second set | Codes 128 to 159 |
 | Bytes that are not text | Anything that is not valid UTF-8 |
+| A character that changes the reading order | The marks that turn text right to left or back, such as codes 8234 to 8238 and 8294 to 8297 |
+| An invisible character | The zero-width space and joiners, the soft hyphen, the byte order mark, the invisible tag characters, and the line and paragraph separators (8232, 8233) |
+
+In Unicode terms the last two rows are the whole "format" class, plus the two separators. The code refuses the class, not a list of its own, so a new character of that class is refused too.
 
 Everything else passes: letters of any language, signs, spaces, line breaks and tabs.
+
+The cost: an emoji built from joined parts, such as a family, holds an invisible joiner and is refused. A plain emoji passes.
 
 ### Rules the code must keep
 
 - **The whole text is read.** One bad character anywhere refuses the request: at the start, in the middle or at the end.
 - **The carriage return is refused.** It moves the cursor to the start of the line, so text after it can cover the text before it.
 - **The second set is refused too.** Some terminals read code 155 as the start of a cursor code, the same as Escape followed by `[`.
+- **What the prompt shows must be what runs.** A mark that turns the reading order around makes the screen show the characters in another order than the shell gets them. An invisible character makes two different commands look the same. (`GATE-16`)
 - **The text is never changed.** `checks` says yes or no. It does not clean a request and pass it on, because the user must approve what the AI sent, not a repaired form of it.
 - **The refused text never reaches the screen.** `checks` gives back the reason only.
 
@@ -170,9 +177,13 @@ File reads and the protected files are not in the MVP. They add a second check h
 | UNIT-CHECKS-05 | `GATE-10` | | In turn, a command that holds each code from 128 to 159 | Each is refused |
 | UNIT-CHECKS-06 | `GATE-10` | | Commands that hold the written forms `\033[31m`, `\n`, `\r` and `\x1b`, made of visible characters only | Each passes |
 | UNIT-CHECKS-07 | `GATE-10` | | A command that holds bytes that are not valid UTF-8 | Refused |
-| UNIT-CHECKS-08 | `GATE-10` | | Commands with Greek letters, accents, an emoji and a non-breaking space | Each passes |
+| UNIT-CHECKS-08 | `GATE-10`, `GATE-16` | | Commands with Greek letters, accents, an emoji and a non-breaking space | Each passes |
 | UNIT-CHECKS-09 | `GATE-10` | | An Escape as the first character, in the middle, and as the last character | Each is refused |
 | UNIT-CHECKS-10 | `GATE-10` | | A carriage return followed by a line break | Refused |
+| UNIT-CHECKS-11 | `GATE-16` | | In turn, a command that holds each mark that changes the reading order | Each is refused with `control_character` |
+| UNIT-CHECKS-12 | `GATE-16` | | In turn, a command that holds a zero-width space, a zero-width joiner, a soft hyphen, a byte order mark and an invisible tag character | Each is refused |
+| UNIT-CHECKS-13 | `GATE-16` | | A command that holds a line separator, and one that holds a paragraph separator | Each is refused |
+| UNIT-CHECKS-14 | `GATE-16` | | A command with an emoji built from joined parts | Refused |
 
 ## `line`
 

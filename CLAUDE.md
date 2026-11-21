@@ -84,6 +84,7 @@ led to it.
 - **Approval is `y`/`n` in the cli-tool's terminal.** That terminal is already open, so the first version needs no other screen.
 - **The answer is one key press, strictly lower-case `y` or `n`; every other key is ignored.** One rule with no special cases.
 - **A key does not count in the first half second a prompt is on screen.** A new prompt can replace an old one just as the user presses `y`, and the key would approve a request nobody read. Ctrl+C is not held back, because it can only refuse.
+- **A request with an invisible character, or one that changes the reading order, is refused too.** The prompt would show a command that differs from the one that runs. No real command needs them. The cost: an emoji built from joined parts is refused, because the joiner is invisible.
 - **A request with a control character is refused, except for line breaks and tabs; output shown on the terminal is cleaned the same way.** Cursor codes could paint over the real command or fake a prompt, so the user would approve something they did not read. Line breaks and tabs stay because writing a file of many lines needs them.
 - **"Always allow" is second stage.** The first version asks every time. How wide an allow rule reaches (exact command, program, safe list; session or saved) is not settled.
 - **The cli-tool makes the key, and the key is tied to the first AI that uses it.** A copied key is then of no use to a second caller. The cost, known and accepted: one session cannot be shared between two AI windows.

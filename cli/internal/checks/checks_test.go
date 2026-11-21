@@ -69,7 +69,7 @@ func TestUNITCHECKS07_BytesThatAreNotTextAreRefused(t *testing.T) {
 	}
 }
 
-// UNIT-CHECKS-08. Requirement: GATE-10.
+// UNIT-CHECKS-08. Requirement: GATE-10, GATE-16.
 func TestUNITCHECKS08_OtherLanguagesPass(t *testing.T) {
 	for _, c := range []string{"echo καλημέρα", "echo café", "echo 👍", "echo a b", "echo 日本語"} {
 		wantPass(t, c)
@@ -86,6 +86,31 @@ func TestUNITCHECKS09_TheWholeTextIsRead(t *testing.T) {
 // UNIT-CHECKS-10. Requirement: GATE-10.
 func TestUNITCHECKS10_CarriageReturnWithALineBreakIsRefused(t *testing.T) {
 	wantRefused(t, "echo a\r\necho b")
+}
+
+// UNIT-CHECKS-11. Requirement: GATE-16.
+func TestUNITCHECKS11_ReadingOrderMarksAreRefused(t *testing.T) {
+	for _, r := range []rune{0x061c, 0x200e, 0x200f, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069} {
+		wantRefused(t, fmt.Sprintf("echo a%cb", r))
+	}
+}
+
+// UNIT-CHECKS-12. Requirement: GATE-16.
+func TestUNITCHECKS12_InvisibleCharactersAreRefused(t *testing.T) {
+	for _, r := range []rune{0x200b, 0x200c, 0x200d, 0x2060, 0x00ad, 0xfeff, 0xe0041} {
+		wantRefused(t, fmt.Sprintf("echo a%cb", r))
+	}
+}
+
+// UNIT-CHECKS-13. Requirement: GATE-16.
+func TestUNITCHECKS13_SeparatorsAreRefused(t *testing.T) {
+	wantRefused(t, "echo a\u2028b")
+	wantRefused(t, "echo a\u2029b")
+}
+
+// UNIT-CHECKS-14. Requirement: GATE-16.
+func TestUNITCHECKS14_AJoinedEmojiIsRefused(t *testing.T) {
+	wantRefused(t, "echo \U0001F468\u200d\U0001F469\u200d\U0001F467")
 }
 
 func TestDesignAndGoTestsMatch(t *testing.T) {

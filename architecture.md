@@ -89,7 +89,7 @@ The call stays open while the request waits in line, while the prompt waits, and
 | Reason | Meaning | Requirement |
 |---|---|---|
 | `user` | The user pressed `n` or Ctrl+C at the prompt | `GATE-02`, `LIM-09` |
-| `control_character` | The request holds a control character. No prompt was shown | `GATE-10` |
+| `control_character` | The request holds a control character, an invisible character, or one that changes the reading order. No prompt was shown | `GATE-10`, `GATE-16` |
 | `line_full` | Too many requests already wait. No prompt was shown | `GATE-13` |
 | `protected_file` | The path is the auth key file or the host token file. No prompt was shown | `KEY-08` |
 | `time_up` | The session's time is up | `LEN-06`, `LEN-07` |
@@ -345,7 +345,7 @@ Each program is made of a few pieces. A piece has one job, and the table names t
 | `connection` | Holds the connection to the controller. Notices when it is lost, connects again, and holds what could not be sent | `SES-04`, `SES-09`, `SES-10`, `SES-11` |
 | `session` | Makes the key and the paste line. Runs the session's clock: time up, the question to extend, the maximum | `KEY-01`, `KEY-04`, `SES-02`, `SES-03`, `SES-12`, `LEN-01` to `LEN-09` |
 | `line` | Holds the requests that wait, in order, up to the limit | `GATE-06`, `GATE-13` |
-| `checks` | Refuses a request before any prompt: control characters, protected files | `GATE-10`, `KEY-08` |
+| `checks` | Refuses a request before any prompt: control characters, invisible characters, protected files | `GATE-10`, `GATE-16`, `KEY-08` |
 | `gate` | Shows one request and takes the `y` or `n`. Nothing else can say yes | `GATE-01` to `GATE-05`, `GATE-07`, `GATE-12`, `GATE-14`, `GATE-15`, `LIM-09` |
 | `runner` | Runs an approved command through the shell as the plain user, or reads a file. Counts the time, cuts the output, kills when told | `GATE-08`, `GATE-09`, `GATE-11`, `LIM-01` to `LIM-05`, `LIM-07`, `LIM-08`, `SES-05` |
 | `terminal` | The only piece that writes to the screen and reads keys. Cleans what it shows. Tells one Ctrl+C from two | `SHOW-01` to `SHOW-03`, `GATE-03`, `GATE-04`, `LIM-10` |
