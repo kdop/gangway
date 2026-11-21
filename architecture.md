@@ -166,7 +166,8 @@ These are not answers to a request. The call itself is turned away.
 | HTTP status | Meaning | Requirement |
 |---|---|---|
 | 401 | No key, a wrong key, a key whose session has ended, or a missing or wrong caller token | `KEY-02`, `KEY-03`, `KEY-05`, `SES-01` |
-| 404 | The `id` in `wait` or `stop` is not a running command of this session | |
+| 400 | The body of a new request cannot be read: it is not JSON, has no command, or has a kind the controller does not know | `CTL-11` |
+| 404 | The `id` in `wait` or `stop` is not a command that waits for that answer, or the path is not one of the five calls | |
 | 429 | Too many wrong keys came from this address. It is blocked for a while | `KEY-07` |
 
 A 401 says nothing about which of its causes it was. A guesser learns nothing from it.
@@ -371,8 +372,8 @@ How a request goes through them:
 | Piece | Job | Requirements |
 |---|---|---|
 | `start` | Reads where to listen. Refuses a public address when no login is set up | `CTL-01`, `CTL-02` |
-| `api` | The five calls. Checks the key and the caller token, blocks an address after too many wrong keys, and insists on HTTPS off localhost | `KEY-02`, `KEY-05`, `KEY-06`, `KEY-07`, `SES-01` |
-| `sessions` | The live sessions, in memory only: the key's hash, the caller token, the user, the host, the state. Drops a session when it ends or does not come back in time | `SES-06`, `SES-07`, `SES-09`, `SES-11`, `KEY-03`, `PAIR-09` |
+| `api` | The five calls. Checks the key and the caller token, blocks an address after too many wrong keys, and insists on HTTPS off localhost | `KEY-02`, `KEY-05`, `KEY-06`, `KEY-07`, `SES-01`, `CTL-11` |
+| `sessions` | The live sessions, in memory only: the key's hash, the caller token, the user, the host, the state. Drops a session when it ends or does not come back in time | `SES-06`, `SES-07`, `SES-09`, `SES-11`, `KEY-03`, `KEY-09`, `PAIR-09` |
 | `hostdoor` | Takes the connections from the cli-tools, over Tailscale only, and checks the host token | `CTL-10`, `PAIR-01` |
 | `relay` | Ties an open API call to its request on the host and passes messages both ways. Turns a hung-up call into a `cancel` | `GATE-12`, `LIM-07`, `SES-10` |
 | `hosts` | The paired hosts, kept in a small file with a hash of each token. Makes and checks pairing codes | `PAIR-02`, `PAIR-03`, `PAIR-07`, `PAIR-08`, `PAIR-10` |
