@@ -616,3 +616,61 @@ Each test runs the real `connection` against a controller inside the test: a sma
 | UNIT-CONNECTION-17 | `LIM-10` | Live, a controller that reads nothing, the limit of waiting bytes set low | Send output until the limit is passed | Every send comes back at once. Then one lost event, which says the controller does not take what is sent |
 | UNIT-CONNECTION-18 | `SES-05` | Live | The controller sends a message larger than 1 MB | One lost event |
 | UNIT-CONNECTION-19 | `LIM-10` | Live, a controller that reads nothing. Once with nothing waiting to be sent, once with far more than the network takes | Close. While it is under way, the controller sends a `request` | The close comes back within its short wait both times. The loop gets no request event and no lost event |
+
+## `settings`
+
+`settings` gives every other piece its values. It holds no state: it reads once, at start.
+
+### Where the values come from
+
+1. The starting values, fixed in the code. They are the ones in the "Settings" table of `requirements.md`.
+2. The user's file, `~/.config/gangway/settings`, if it is there. A value in it takes the place of the starting value. If `XDG_CONFIG_HOME` is set, the file is `gangway/settings` under that folder.
+
+The admin file in `/etc/gangway/` and the start options are not in the MVP.
+
+### The file
+
+```
+# Lines that start with # are notes.
+COMMAND_TIME_LIMIT = 90s
+MAX_WAITING_REQUESTS = 10
+```
+
+- One setting on a line: the name, `=`, the value. Spaces around them do not count. Empty lines are skipped.
+- A time is a number with a unit: `500ms`, `90s`, `2m`.
+
+### The settings of the MVP
+
+| Name | Kind | Must be |
+|---|---|---|
+| `CONTROLLER_ADDRESS` | Address | `http://` or `https://` and a host |
+| `COMMAND_SHELL` | Path | A full path, from `/` |
+| `COMMAND_TIME_LIMIT` | Time | More than zero |
+| `QUESTION_WAIT` | Time | More than zero |
+| `KILL_WAIT` | Time | More than zero |
+| `PROMPT_MIN_SHOW` | Time | Zero or more |
+| `DOUBLE_CTRL_C_WINDOW` | Time | More than zero |
+| `MAX_WAITING_REQUESTS` | Number | One or more |
+
+### Rules the code must keep
+
+- **A file with a mistake stops the start.** An unknown name, a name set twice, a line with no `=`, or a value that does not fit is an error that names the line. The cli-tool does not start on a guess: a mistyped name would otherwise leave a limit at a value the user did not mean.
+- **All or nothing.** When the file has a mistake, no value from it is used.
+- **The file is only read.** `settings` never writes it and never makes it.
+
+### Unit tests
+
+| Test | Requirement | Start | Action | Expect |
+|---|---|---|---|---|
+| UNIT-SETTINGS-01 | `LIM-06` | No file | Read | Every value is the starting value from the "Settings" table of `requirements.md`. The test reads that table and compares |
+| UNIT-SETTINGS-02 | `LIM-06` | A file that sets every setting to another value | Read | Every value is the one from the file |
+| UNIT-SETTINGS-03 | `LIM-06` | A file with notes, empty lines, and spaces around names and values | Read | The values are read. The rest is skipped |
+| UNIT-SETTINGS-04 | `LIM-06` | A file with one good line and one unknown name | Read | An error that names the line and the name. No value from the file is used |
+| UNIT-SETTINGS-05 | `LIM-06` | In turn, a file with: a time with no unit, a time of zero, a time below zero, a word in place of a number | Read | An error each time, with the line |
+| UNIT-SETTINGS-06 | `GATE-11` | A file where `COMMAND_SHELL` is `sh`, with no folder | Read | An error |
+| UNIT-SETTINGS-07 | `LIM-06` | A file that sets one name twice | Read | An error that names the second line |
+| UNIT-SETTINGS-08 | `LIM-06` | A file with a line that has no `=` | Read | An error |
+| UNIT-SETTINGS-09 | `LIM-06` | `XDG_CONFIG_HOME` set, then not set | Ask where the file is | `gangway/settings` under that folder, then under `.config` in the home folder |
+| UNIT-SETTINGS-10 | `GATE-13` | A file where `MAX_WAITING_REQUESTS` is 0 | Read | An error |
+| UNIT-SETTINGS-11 | `GATE-14` | A file where `PROMPT_MIN_SHOW` is `0s` | Read | No error. The value is zero |
+| UNIT-SETTINGS-12 | `LIM-06` | A file where `CONTROLLER_ADDRESS` has no `http://` in front | Read | An error |
