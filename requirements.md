@@ -27,17 +27,17 @@ Where a test says the user presses a key at a prompt, `PROMPT_MIN_SHOW` has pass
 
 ## The MVP
 
-The MVP is set in `plan.md`. It delivers these 48 requirements:
+The MVP is set in `plan.md`. It delivers these 51 requirements:
 
 | Group | Requirements |
 |---|---|
 | GATE | 01, 02, 03, 04, 05, 06, 07, 08, 10, 11, 12, 13, 14, 15, 16, 17, 18 |
 | SHOW | 01, 02, 03, 04, 05 |
 | SES | 01, 02, 03, 05, 06, 07 |
-| KEY | 01, 02, 03, 04 |
+| KEY | 01, 02, 03, 04, 09 |
 | LIM | 01, 02, 03, 04, 06, 07, 08, 09, 10, 11, 12, 13 |
 | HOST | 01, 02, 07 |
-| CTL | 01 |
+| CTL | 01, 02, 11 |
 
 Two of them are delivered in part:
 

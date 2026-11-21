@@ -119,6 +119,7 @@ The call stays open while the request waits in line, while the prompt waits, and
 | `killed_time_up` | The session's time was up and the command reached its time limit | `LEN-08` |
 | `read` | A file read. `output` is the file | `GATE-09` |
 | `start_failed` | The command could not be started. `output` says why. Nothing ran | `GATE-11` |
+| `killed_session_ended` | The session ended while the command ran | `SES-05` |
 
 - `output` holds what the command wrote, normal and error output together, in the order it came.
 - When `cut` is true, the output passed the size limit. `output` then holds the first part and ends with a note that says so (`LIM-05`).
@@ -261,7 +262,7 @@ Each of them asks or narrows. No message type exists that approves a request, ex
 | cli-tool | `ended` | `id`, `how`, `exit_code`, `cut`, `bytes_replaced` | "It is over, and this is how" |
 
 - Every request ends with exactly one `refused` or one `ended`. Nothing is left hanging.
-- On `cancel`, a request that waits is removed (`GATE-12`), and a command that runs is killed (`LIM-07`). The cli-tool closes the request with `refused` and the reason `ai_gone`, or with `ended` and `killed_ai_gone`. A command killed because the session ended closes with `killed_session_ended`. No AI ever sees these three: they are for the dashboard and the log.
+- On `cancel`, a request that waits is removed (`GATE-12`), and a command that runs is killed (`LIM-07`). The cli-tool closes the request with `refused` and the reason `ai_gone`, or with `ended` and `killed_ai_gone`. A command killed because the session ended closes with `killed_session_ended`. No AI ever sees `ai_gone` or `killed_ai_gone`: its call is gone. An AI whose call is still open when the session ends can see `killed_session_ended`.
 - After `still_running`, the cli-tool itself counts the answer time. With no `wait` and no `stop` in time, it kills the command (`LIM-03`). It does not wait for the controller to say so.
 - Output is sent in pieces as it comes, not in one block at the end. The dashboard can then show it live (`CTL-07`), and a `running` answer can carry the output so far.
 - The cli-tool cleans nothing in what it sends. Cleaning is only for its own terminal (`SHOW-03`).
