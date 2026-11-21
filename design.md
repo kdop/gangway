@@ -248,7 +248,7 @@ The `runner` runs one approved command, sends what it writes, asks "wait or stop
 |---|---|
 | The starter | Start the command through the shell. Ask the program to stop. Kill it by force |
 | The timers | Call back after a time |
-| `terminal` | Show the output, and show how the command ended |
+| `terminal` | Show the output, and show how the command was killed, if it was |
 | `connection` | Send `output`, `still_running` and `ended` |
 | `gate` | Take the next request: `done` |
 
@@ -460,8 +460,8 @@ Tests 01 to 10 are for the keys, 11 to 23 for the screen, with a buffer in place
 | UNIT-TERMINAL-11 | `SHOW-01`, `GATE-05` | | A prompt for a command | The screen shows the exact command after `  > `, then the question. The cursor stays on the question's line |
 | UNIT-TERMINAL-12 | `GATE-05` | | A prompt for a command of three lines with a tab | Three lines, each after `  > `, with the tab as it is |
 | UNIT-TERMINAL-13 | `SHOW-01` | A prompt on screen | The answer: yes, no, and "the AI left" | `y`, `n`, and a line that says the AI hung up and nothing ran. Each ends its line |
-| UNIT-TERMINAL-14 | `SHOW-02` | | Output of two lines, then the end with exit code 0. Again with exit code 3 | Both lines, then a line with the exit code |
-| UNIT-TERMINAL-15 | `SHOW-02` | | The end, for each way a command can end | A line for each. No two are the same |
+| UNIT-TERMINAL-14 | `SHOW-02` | | Output of two lines, then the end with exit code 0. Again with exit code 3 | Both lines, and no line about the end |
+| UNIT-TERMINAL-15 | `SHOW-02` | | The end, for each way a command can end | Nothing for a command that ended by itself. A line for each other way. No two are the same |
 | UNIT-TERMINAL-16 | `SHOW-03` | | Output with an Escape, a colour code, a carriage return, a bell, a backspace, a zero byte, code 127 and code 155 | None of them is written. A mark stands in each place. Line breaks and tabs are written |
 | UNIT-TERMINAL-17 | `SHOW-05` | | Output with a character that turns the reading order around, and a zero-width space | Neither is written. A mark stands in each place |
 | UNIT-TERMINAL-18 | `SHOW-04` | | Output of many lines in one piece. A line that comes in two pieces. Output that copies a prompt | Every line starts with `  | `, once. No line starts with the words of a prompt |
@@ -738,7 +738,7 @@ The pieces are the real ones. The test holds the edges: the keyboard, the screen
 
 | Test | Requirement | Start | Action | Expect |
 |---|---|---|---|---|
-| UNIT-LOOP-01 | `GATE-01`, `SHOW-01` | Live | A request, `y`, output, the command ends | `started`, `output`, `ended` are sent in that order. The screen shows the prompt, the `y`, the output and the exit code, and nothing else |
+| UNIT-LOOP-01 | `GATE-01`, `SHOW-01` | Live | A request, `y`, output, the command ends | `started`, `output`, `ended` are sent in that order. The screen shows the prompt, the `y` and the output, and nothing else |
 | UNIT-LOOP-02 | `GATE-13`, `SHOW-01` | Live, limit 2 | Three requests | The third gets `refused` with `line_full`. The screen says why, and the first prompt is again the last thing on it |
 | UNIT-LOOP-03 | `LIM-09` | A prompt waits, a second request behind it | Ctrl+C | The first is refused with `user`. The second prompt shows. The session is live |
 | UNIT-LOOP-04 | `LIM-08` | A command runs | Ctrl+C, then the command ends | The command was asked to stop. `ended` with `killed_by_user`. The session is live and a new request gets a prompt |

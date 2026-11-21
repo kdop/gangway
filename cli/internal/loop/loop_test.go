@@ -220,7 +220,7 @@ func TestUNITLOOP01_OneRequestFromStartToEnd(t *testing.T) {
 	w.l.Exited(0)
 	w.wantSent(t, "started a", "output a a\n", "ended a exit 0")
 	w.wantStarts(t, "echo a")
-	want := "\nAI asks to run:\n  > echo a\nRun it? y/n y\n  | a\nDone. Exit code 0.\n"
+	want := "\nAI asks to run:\n  > echo a\nRun it? y/n y\n  | a\n"
 	if w.screen.String() != want {
 		t.Fatalf("the screen shows %q, want %q", w.screen.String(), want)
 	}

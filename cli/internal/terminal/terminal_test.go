@@ -192,20 +192,24 @@ func TestUNITTERMINAL13_TheAnswer(t *testing.T) {
 }
 
 // UNIT-TERMINAL-14. Requirement: SHOW-02.
-func TestUNITTERMINAL14_OutputAndTheExitCode(t *testing.T) {
+func TestUNITTERMINAL14_OutputAndNoLineAboutTheEnd(t *testing.T) {
 	for _, code := range []int{0, 3} {
 		w := newWorld()
 		w.t.Output("one\ntwo\n")
 		w.t.Ended(reqA, runner.Result{How: messages.HowExit, ExitCode: code})
-		w.wantScreen(t, fmt.Sprintf("  | one\n  | two\nDone. Exit code %d.\n", code))
+		w.wantScreen(t, "  | one\n  | two\n")
 	}
 }
 
 // UNIT-TERMINAL-15. Requirement: SHOW-02.
 func TestUNITTERMINAL15_EveryWayACommandEnds(t *testing.T) {
+	w := newWorld()
+	w.t.Ended(reqA, runner.Result{How: messages.HowExit})
+	w.wantScreen(t, "")
+
 	seen := map[string]string{}
 	for _, how := range []string{
-		messages.HowExit, messages.HowKilledByUser, messages.HowKilledByAI, messages.HowKilledNoAnswer,
+		messages.HowKilledByUser, messages.HowKilledByAI, messages.HowKilledNoAnswer,
 		messages.HowKilledAIGone, messages.HowKilledSessionEnded, messages.HowStartFailed,
 	} {
 		w := newWorld()
@@ -255,7 +259,7 @@ func TestUNITTERMINAL19_TheCliToolStartsOnANewLine(t *testing.T) {
 	w := newWorld()
 	w.t.Output("no line break")
 	w.t.Ended(reqA, runner.Result{How: messages.HowExit})
-	w.wantScreen(t, "  | no line break\nDone. Exit code 0.\n")
+	w.wantScreen(t, "  | no line break\n")
 
 	w = newWorld()
 	w.t.Output("Run it? y/n ")

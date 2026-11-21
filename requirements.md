@@ -246,12 +246,12 @@ The cli-tool's terminal must show each request and the answer given to it. Step 
 
 ### SHOW-02
 
-The cli-tool's terminal must show the output that is sent back and how the command ended. Step 1.
+The cli-tool's terminal must show the output that is sent back. When a command is killed or cannot be started, the terminal must say so, and why. A command that ends by itself gets no line about its end, whatever its exit code. Step 1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
-| SHOW-02.1 | Live session | An approved command prints two lines and ends with exit code 0 | The terminal shows both lines and exit code 0 |
-| SHOW-02.2 | Live session | An approved command fails with exit code 3 | The terminal shows its output and exit code 3 |
+| SHOW-02.1 | Live session | An approved command prints two lines and ends with exit code 0 | The terminal shows both lines, and no line about the end |
+| SHOW-02.2 | Live session | An approved command fails with exit code 3 | The terminal shows its output, and no line about the end. The AI gets exit code 3 |
 | SHOW-02.3 | A command runs | The command is killed: once by Ctrl+C, once at a time limit | Each time the terminal shows that it was killed, and why |
 
 ### SHOW-03

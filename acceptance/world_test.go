@@ -462,3 +462,10 @@ func beside(t *testing.T) {
 		t.Parallel()
 	}
 }
+
+// screenEnds waits until the last thing on the screen is this text.
+func (w *world) screenEnds(text string) {
+	w.t.Helper()
+	w.until(fmt.Sprintf("the screen ends with %q", text), func() bool { return strings.HasSuffix(w.screen.text(), text) })
+	w.stays(fmt.Sprintf("the screen ends with %q", text), func() bool { return strings.HasSuffix(w.screen.text(), text) })
+}

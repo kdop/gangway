@@ -28,18 +28,16 @@ AI asks to run:
 Run it? y/n y
   | 2026-11-21 ERROR disk full
   | 2026-11-21 ERROR disk full
-Done. Exit code 0.
 ```
 
 - `  > ` starts each line of the command the AI asked for.
 - `  | ` starts each line the command wrote.
 - A character that could move the cursor, or that cannot be seen, is shown as `�`.
 
-How a command ended:
+How a command ended. A command that ended by itself gets no line: its output is the last thing shown.
 
 | Line | When |
 |---|---|
-| `Done. Exit code 0.` | It ended by itself |
 | `Killed: you pressed Ctrl+C.` | |
 | `Killed: the AI said stop.` | |
 | `Killed: the time limit passed and the AI gave no answer.` | |
