@@ -226,3 +226,157 @@ The `gate` asks `next`. The rest is asked by the loop: `add` for a request that 
 | UNIT-LINE-08 | `GATE-12` | A line with A, B | `remove` an `id` that is not there | No. `next` still gives A, then B |
 | UNIT-LINE-09 | `SES-03` | A line with A, B, C | `empty` | A, B, C in that order. `next` gives nothing |
 | UNIT-LINE-10 | `GATE-13` | Limit 1, a prompt on screen | `add` | It does not fit |
+
+## `runner`
+
+The `runner` runs one approved command, sends what it writes, asks "wait or stop" at the time limit, and kills it when told. It is in two halves:
+
+- **The state machine.** It decides. It never touches a real program, so a test can drive it with no waiting.
+- **The starter.** It starts a real program and can kill it. It decides nothing.
+
+### What it holds
+
+- Its state.
+- The request that runs, and the handle of its program.
+- How the command will be said to have ended, once a kill is sent.
+- Whether any byte of the output was replaced.
+- The number of the timer it waits for.
+
+### What it talks to
+
+| Piece | The `runner` asks it to |
+|---|---|
+| The starter | Start the command through the shell. Ask the program to stop. Kill it by force |
+| The timers | Call back after a time |
+| `terminal` | Show the output, and show how the command ended |
+| `connection` | Send `output`, `still_running` and `ended` |
+| `gate` | Take the next request: `done` |
+
+### States
+
+| State | Meaning |
+|---|---|
+| `Idle` | Nothing runs |
+| `Running` | A command runs and its time limit counts |
+| `Asked` | The time limit passed. The AI was asked to wait or stop, and the answer time counts |
+| `Stopping` | The command was told to stop and has not ended yet |
+
+```mermaid
+stateDiagram-v2
+  [*] --> Idle
+  Idle --> Running: an approval
+  Running --> Idle: the command ends
+  Running --> Asked: the time limit passes
+  Asked --> Running: wait
+  Asked --> Idle: the command ends
+  Running --> Stopping: stop, Ctrl+C, cancel, or the session ends
+  Asked --> Stopping: stop, no answer in time, Ctrl+C, cancel, or the session ends
+  Stopping --> Stopping: still there after KILL_WAIT, killed by force
+  Stopping --> Idle: the command ends
+```
+
+### Events
+
+| Event | Comes from |
+|---|---|
+| `run` | `gate`: an approval |
+| `output` | The starter: the command wrote something |
+| `exited` | The starter: the shell ended, with its exit code |
+| `timer` | The timers: a time has passed. It carries the number it was started with |
+| `wait`, `stop` | `connection`: the AI's answer |
+| `ctrl_c` | `terminal`: one Ctrl+C |
+| `cancel` | `connection`: the AI hung up on the request with this `id` |
+| `end` | `session`: the session ends |
+
+### The table
+
+An empty "Does" means the event is dropped. "Kill" means: ask the program to stop, note how the command ended, and start a timer of `KILL_WAIT`.
+
+| State | Event | Does | Next |
+|---|---|---|---|
+| `Idle` | `run`, the approval works | Starts the command through `COMMAND_SHELL`. Starts a timer of `COMMAND_TIME_LIMIT` | `Running` |
+| `Idle` | `run`, the approval works, the start fails | Sends `ended` with `start_failed` and the reason as output. Tells `gate` `done` | `Idle` |
+| `Idle` | `run`, the approval does not work | | `Idle` |
+| `Idle` | any other | | `Idle` |
+| `Running` | `run` | | `Running` |
+| `Running` | `output` | Shows it. Sends `output` | `Running` |
+| `Running` | `exited` | Sends `ended` with `exit` and the exit code. Tells `gate` `done` | `Idle` |
+| `Running` | `timer`, the one it waits for | Sends `still_running`. Starts a timer of `QUESTION_WAIT` | `Asked` |
+| `Running` | `wait` | | `Running` |
+| `Running` | `stop` | Kill, `killed_by_ai` | `Stopping` |
+| `Running` | `ctrl_c` | Kill, `killed_by_user` | `Stopping` |
+| `Running` | `cancel`, its own `id` | Kill, `killed_ai_gone` | `Stopping` |
+| `Running` | `cancel`, another `id` | | `Running` |
+| `Running` | `end` | Kill, `killed_session_ended` | `Stopping` |
+| `Asked` | `run` | | `Asked` |
+| `Asked` | `output` | Shows it. Sends `output` | `Asked` |
+| `Asked` | `exited` | Sends `ended` with `exit` and the exit code. Tells `gate` `done` | `Idle` |
+| `Asked` | `wait` | Starts a timer of `COMMAND_TIME_LIMIT` | `Running` |
+| `Asked` | `stop` | Kill, `killed_by_ai` | `Stopping` |
+| `Asked` | `timer`, the one it waits for | Kill, `killed_no_answer` | `Stopping` |
+| `Asked` | `ctrl_c` | Kill, `killed_by_user` | `Stopping` |
+| `Asked` | `cancel`, its own `id` | Kill, `killed_ai_gone` | `Stopping` |
+| `Asked` | `cancel`, another `id` | | `Asked` |
+| `Asked` | `end` | Kill, `killed_session_ended` | `Stopping` |
+| `Stopping` | `output` | Shows it. Sends `output` | `Stopping` |
+| `Stopping` | `exited` | Kills by force what is left of the command. Sends `ended` with the noted way. Tells `gate` `done` | `Idle` |
+| `Stopping` | `timer`, the one it waits for | Kills the program by force | `Stopping` |
+| `Stopping` | any other | | `Stopping` |
+| any | `timer`, another number | | the same |
+
+### Rules the code must keep
+
+- **Nothing runs without an approval that works.** The `runner` takes the request out of the approval, and from nowhere else. A used approval gives nothing. (`GATE-01`, `GATE-15`)
+- **One command at a time.** A `run` outside `Idle` is dropped. (`GATE-06`)
+- **Every command that starts gets one `ended`, and the `gate` one `done`.** Never two, never none.
+- **The first reason to kill wins.** Once a kill is sent, a later `stop` or Ctrl+C does not change how the command is said to have ended.
+- **A timer that is no longer waited for does nothing.** Each timer carries a number. The `runner` raises the number each time it starts one, and drops a `timer` event with an old number. No timer is ever cancelled.
+- **The AI gets text.** Output that is not valid UTF-8 has each bad stretch replaced by the mark `�`, and `ended` then says `bytes_replaced`. A character that arrives split over two pieces is put together first and is not replaced. Nothing else in the output is changed: cleaning is for the screen only, and the `terminal` does it. (`SHOW-03`)
+
+### The starter
+
+- **Through the shell.** It runs `COMMAND_SHELL` with `-c` and the command as one argument, as the user who started the cli-tool. (`GATE-08`, `GATE-11`)
+- **No keyboard.** The command's input is empty. (`GATE-17`)
+- **Plain surroundings.** `PAGER=cat` and `TERM=dumb` are added to what the cli-tool itself was started with. (`GATE-18`)
+- **Both outputs, one stream.** Normal and error output go into the same pipe, so their order is kept.
+- **A group of its own.** The command starts in a new process group. A kill goes to the whole group, so every program the command started gets it. (`LIM-11`)
+- **Asking, then force.** "Ask to stop" is the signal `TERM`. "Kill by force" is the signal `KILL`. (`LIM-13`)
+- **Over when the shell ends.** The exit code is the shell's. A shell ended by a signal gives 128 plus the signal's number, as shells do. A program left in the background is not killed and is not waited for. Half a second after the shell ends, the starter stops reading the output, so such a program must write to a file. (`LIM-12`)
+
+### Unit tests
+
+Tests 01 to 20 run the state machine with a fake starter, fake timers and a fake `terminal`, `connection` and `gate`. Tests 21 to 31 run the real starter with real commands in a scratch folder.
+
+| Test | Requirement | Start | Action | Expect |
+|---|---|---|---|---|
+| UNIT-RUNNER-01 | `GATE-01`, `GATE-11` | `Idle` | `run` with a fresh approval | `Running`. The starter got `COMMAND_SHELL` and the exact command. A timer of `COMMAND_TIME_LIMIT` was started |
+| UNIT-RUNNER-02 | `GATE-15` | `Idle` | `run` with a used approval, and with no approval | `Idle`. Nothing was started or sent |
+| UNIT-RUNNER-03 | `GATE-06` | `Running` | `run` with a second fresh approval | Nothing more was started. The second approval is still unused |
+| UNIT-RUNNER-04 | `SHOW-02` | `Running` | `output` twice | The screen and the connection each got both pieces, in order |
+| UNIT-RUNNER-05 | `LIM-01` | `Running` | `exited` with code 3 | `Idle`. `ended` with `exit` and 3. `gate` got `done` once. No `still_running` |
+| UNIT-RUNNER-06 | `LIM-01` | `Running` | The `timer` | `Asked`. `still_running` was sent. A timer of `QUESTION_WAIT` was started. Nothing was killed |
+| UNIT-RUNNER-07 | `LIM-02` | `Asked` | `wait`, then the new `timer` | `Running` after `wait`, with a new timer of `COMMAND_TIME_LIMIT`. Then `Asked` and a second `still_running` |
+| UNIT-RUNNER-08 | `LIM-02` | `Asked` | `stop`, then `exited` | The program was asked to stop. Then `ended` with `killed_by_ai`, and `Idle` |
+| UNIT-RUNNER-09 | `LIM-03` | `Asked` | The `timer`, then `exited` | The program was asked to stop. Then `ended` with `killed_no_answer` |
+| UNIT-RUNNER-10 | `LIM-04` | `Asked` | `exited` with code 0 | `Idle`. `ended` with `exit` and 0. Nothing was killed |
+| UNIT-RUNNER-11 | `LIM-08` | `Running` | `ctrl_c`, then `exited` | The program was asked to stop. `ended` with `killed_by_user`. `Idle`, and `gate` got `done` |
+| UNIT-RUNNER-12 | `LIM-07` | `Running` | `cancel` for another `id`, then `cancel` for its own, then `exited` | The first does nothing. The second asks the program to stop. `ended` with `killed_ai_gone` |
+| UNIT-RUNNER-13 | `SES-05` | `Running`, and again `Asked` | `end`, then `exited` | The program was asked to stop. `ended` with `killed_session_ended` |
+| UNIT-RUNNER-14 | `LIM-02`, `LIM-03` | `Asked` | `wait`, then the old `timer` of the question. Then `exited`, then every old `timer` | The old timer kills nothing. After the end, no timer does anything |
+| UNIT-RUNNER-15 | `LIM-13` | `Stopping` after `ctrl_c` | The `timer` of `KILL_WAIT` | The program was killed by force. Still `Stopping` until `exited` |
+| UNIT-RUNNER-16 | `LIM-08` | `Stopping` after `ctrl_c` | `stop`, `cancel`, `end`, `ctrl_c`, then `exited` | The program was asked to stop once only. `ended` with `killed_by_user` |
+| UNIT-RUNNER-17 | `LIM-02` | `Stopping` | `output`, then `exited` | The output was shown and sent before `ended` |
+| UNIT-RUNNER-18 | `SHOW-03` | `Running` | `output` with a bad byte. `output` with a Greek letter split over two pieces. `output` that ends in half a letter, then `exited` | The bad byte and the half letter each came as the mark. The split letter came whole. `ended` says `bytes_replaced`. A run with clean output does not say it |
+| UNIT-RUNNER-19 | `GATE-11` | `Idle`, a starter that fails | `run` with a fresh approval | `Idle`. `ended` with `start_failed`, and the reason was sent as output. `gate` got `done` |
+| UNIT-RUNNER-20 | `GATE-01`, `LIM-02` | `Idle`, and `Running` | In `Idle`: every event but `run`. In `Running`: `stop` | In `Idle` nothing was started, killed or sent. In `Running`, `stop` asks the program to stop, and `ended` says `killed_by_ai` |
+| UNIT-RUNNER-21 | `GATE-11` | The real starter | Two commands joined by a pipe | The output of the second, fed by the first. Exit code 0 |
+| UNIT-RUNNER-22 | `GATE-11` | The real starter | A command that writes to a file with `>`, then `;`, then a second command | The file holds the text. The second command ran too |
+| UNIT-RUNNER-23 | `GATE-08` | The real starter | A command that prints the user's number | The number of the user who runs the test |
+| UNIT-RUNNER-24 | `GATE-01` | The real starter | `exit 7` | Exit code 7 |
+| UNIT-RUNNER-25 | `SHOW-02` | The real starter | A command that writes to normal output, then error output, then normal output | All three, in that order |
+| UNIT-RUNNER-26 | `GATE-17` | The real starter | `cat` with no file | It ends at once with no output and exit code 0 |
+| UNIT-RUNNER-27 | `GATE-18` | The real starter | A command that prints `PAGER` and `TERM` | `cat` and `dumb` |
+| UNIT-RUNNER-28 | `LIM-11` | The real starter, a command that starts a long program in the background, prints its number and waits | Ask it to stop | The shell ends, and the background program is gone |
+| UNIT-RUNNER-29 | `LIM-13` | The real starter, a command that does not stop when asked | Ask it to stop. Then kill by force | It still runs after the asking. It is gone after the force |
+| UNIT-RUNNER-30 | `LIM-12` | The real starter | A command that starts a long program in the background with its output to a file, prints its number, and ends. Then the same with the output not sent to a file | Both times the exit comes in under two seconds and the program still runs. The test then kills it |
+| UNIT-RUNNER-31 | `GATE-11` | The real starter, a shell that is not there | Start a command | An error. No exit is reported |

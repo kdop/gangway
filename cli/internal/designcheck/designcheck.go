@@ -10,11 +10,11 @@ import (
 )
 
 // Match fails the test unless every unit test of design.md whose ID starts
-// with prefix, such as "UNIT-GATE", has a Go test in testFile with the same
+// with prefix, such as "UNIT-GATE", has a Go test in one of testFiles with the same
 // requirements in the comment above it, and every requirement named is in
 // requirements.md. The test must run in a folder three levels below the
 // root of the repo.
-func Match(t *testing.T, prefix, testFile string) {
+func Match(t *testing.T, prefix string, testFiles ...string) {
 	t.Helper()
 	read := func(path string) string {
 		b, err := os.ReadFile(path)
@@ -25,7 +25,10 @@ func Match(t *testing.T, prefix, testFile string) {
 	}
 	design := read("../../../design.md")
 	requirements := read("../../../requirements.md")
-	code := read(testFile)
+	code := ""
+	for _, f := range testFiles {
+		code += read(f)
+	}
 	funcPrefix := "Test" + strings.ReplaceAll(prefix, "-", "")
 
 	rows := regexp.MustCompile(`(?m)^\| `+regexp.QuoteMeta(prefix)+`-(\d+) \| ([^|]*) \|`).FindAllStringSubmatch(design, -1)
