@@ -193,7 +193,8 @@ func TestLIM04_1_ACommandThatEndsWhileTheQuestionWaits(t *testing.T) {
 		w := limWorld(t, "QUESTION_WAIT = 10s")
 		first := w.run("echo one; sleep 2; echo two; touch " + w.file("end"))
 		first.asksWaitOrStop(t)
-		w.shows("Done. Exit code 0.")
+		w.until("the command ends by itself", func() bool { return w.exists("end") })
+		time.Sleep(quiet)
 
 		got := w.post("/v1/requests/" + first.ID + "/" + next)
 		got.ran(t, 0)

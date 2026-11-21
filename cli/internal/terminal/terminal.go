@@ -3,7 +3,6 @@
 package terminal
 
 import (
-	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -132,7 +131,10 @@ func (t *Terminal) Output(text string) {
 func (t *Terminal) Ended(req request.Request, result runner.Result) {
 	switch result.How {
 	case messages.HowExit:
-		t.line(fmt.Sprintf("Done. Exit code %d.", result.ExitCode))
+		// No line of its own: the output is the proof that it ran.
+		if t.midLine {
+			t.write("\n")
+		}
 	case messages.HowKilledByUser:
 		t.line("Killed: you pressed Ctrl+C.")
 	case messages.HowKilledByAI:
