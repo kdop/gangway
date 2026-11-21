@@ -308,7 +308,7 @@ func asRoot(t *testing.T) []string {
 			return how
 		}
 	}
-	t.Skip("no way to become root here without a password")
+	skip(t, "no way to become root here without a password")
 	return nil
 }
 
@@ -402,7 +402,7 @@ func TestHOST01_1_RefusesToStartAsRoot(t *testing.T) {
 
 func TestHOST01_2_RefusesToStartWithSudo(t *testing.T) {
 	if exec.Command("sudo", "-n", "true").Run() != nil {
-		t.Skip("sudo asks for a password here")
+		skip(t, "sudo asks for a password here")
 	}
 	rootRefused(t, []string{"sudo", "-n"})
 }

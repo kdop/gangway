@@ -441,3 +441,13 @@ func (w *world) shows(text string) {
 	w.t.Helper()
 	w.until(fmt.Sprintf("the screen shows %q", text), func() bool { return strings.Contains(w.screen.text(), text) })
 }
+
+// skip skips a test that this machine cannot run. On GitHub it fails the
+// test, so that every test runs there.
+func skip(t *testing.T, why string) {
+	t.Helper()
+	if os.Getenv("GITHUB_ACTIONS") == "true" {
+		t.Fatalf("must not be skipped on GitHub: %s", why)
+	}
+	t.Skip(why)
+}

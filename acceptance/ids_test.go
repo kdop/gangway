@@ -10,10 +10,18 @@ import (
 	"testing"
 )
 
-// TestEveryGoTestIsInTheRequirements fails when a Go test here carries an
-// ID that requirements.md does not have. It also lists the tests of the
-// MVP that have no Go test yet.
-func TestEveryGoTestIsInTheRequirements(t *testing.T) {
+// notInTheMVP holds the tests of the MVP's requirements that need a
+// feature the MVP does not have.
+var notInTheMVP = map[string]string{
+	"GATE-10.5": "file reads",
+	"SHOW-03.3": "file reads",
+	"CTL-02.2":  "login",
+}
+
+// TestEveryTestOfTheMVPHasAGoTest fails when a Go test here carries an ID
+// that requirements.md does not have, and when a test of the MVP has no
+// Go test.
+func TestEveryTestOfTheMVPHasAGoTest(t *testing.T) {
 	b, err := os.ReadFile(filepath.Join("..", "requirements.md"))
 	if err != nil {
 		t.Fatal(err)
@@ -38,6 +46,9 @@ func TestEveryGoTestIsInTheRequirements(t *testing.T) {
 				t.Errorf("%s has two Go tests", id)
 			}
 			inGo[id] = true
+			if notInTheMVP[id] != "" {
+				t.Errorf("%s has a Go test now: take it off the list notInTheMVP", id)
+			}
 			if !inFile[id] {
 				t.Errorf("%s has a Go test but is not in requirements.md", id)
 			}
@@ -56,10 +67,12 @@ func TestEveryGoTestIsInTheRequirements(t *testing.T) {
 	}
 	var missing []string
 	for id := range inFile {
-		if mvp[strings.SplitN(id, ".", 2)[0]] && !inGo[id] {
+		if mvp[strings.SplitN(id, ".", 2)[0]] && !inGo[id] && notInTheMVP[id] == "" {
 			missing = append(missing, id)
 		}
 	}
 	sort.Strings(missing)
-	t.Logf("%d tests of the MVP have a Go test, %d have none yet: %s", len(inGo), len(missing), strings.Join(missing, " "))
+	if len(missing) > 0 {
+		t.Errorf("%d tests of the MVP have no Go test: %s", len(missing), strings.Join(missing, " "))
+	}
 }
