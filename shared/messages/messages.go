@@ -55,7 +55,8 @@ const (
 	ReasonControlCharacter = "control_character"
 	ReasonLineFull         = "line_full"
 	ReasonSessionEnded     = "session_ended"
-	ReasonAIGone           = "ai_gone" // never shown to an AI
+	ReasonUnknownKind      = "unknown_kind" // the cli-tool does not know this kind of request
+	ReasonAIGone           = "ai_gone"      // never shown to an AI
 )
 
 // The ways a command ends.
