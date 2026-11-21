@@ -2,6 +2,7 @@ package acceptance
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 	"net/http"
 	"os/exec"
@@ -72,15 +73,118 @@ func TestCTL01_1_WithNoSettingTheControllerAnswersOnLocalhost(t *testing.T) {
 	}
 }
 
-// A call from another machine comes in at an address other than localhost.
-// The test calls that address from this machine.
+// otherAddresses gives every address of this machine that another machine
+// could reach.
+func otherAddresses(t *testing.T) []string {
+	t.Helper()
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var all []string
+	for _, i := range interfaces {
+		addrs, _ := i.Addrs()
+		for _, a := range addrs {
+			ip, ok := a.(*net.IPNet)
+			if !ok || ip.IP.IsLoopback() {
+				continue
+			}
+			if ip.IP.IsLinkLocalUnicast() && ip.IP.To4() == nil {
+				all = append(all, ip.IP.String()+"%"+i.Name)
+				continue
+			}
+			all = append(all, ip.IP.String())
+		}
+	}
+	return all
+}
+
+// otherNetwork makes a second network inside this machine, joined to it
+// by a cable that is not real. It stands in for another machine. It gives
+// the machine's address on that cable, and a way to call an address from
+// the far end. It needs root, so it skips the test where sudo asks for a
+// password.
+func otherNetwork(t *testing.T) (address string, reaches func(port string) bool) {
+	t.Helper()
+	sudo := func(words ...string) error {
+		out, err := exec.Command("sudo", append([]string{"-n"}, words...)...).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("%s: %v: %s", strings.Join(words, " "), err, out)
+		}
+		return nil
+	}
+	if sudo("true") != nil {
+		skip(t, "the second network needs sudo with no password")
+	}
+	const (
+		network = "gwtest"
+		near    = "gwtest0"
+		far     = "gwtest1"
+		here    = "10.199.77.1"
+		there   = "10.199.77.2"
+	)
+	sudo("ip", "netns", "del", network)
+	sudo("ip", "link", "del", near)
+	t.Cleanup(func() {
+		sudo("ip", "netns", "del", network)
+		sudo("ip", "link", "del", near)
+	})
+	inside := []string{"ip", "netns", "exec", network}
+	for _, step := range [][]string{
+		{"ip", "netns", "add", network},
+		{"ip", "link", "add", near, "type", "veth", "peer", "name", far},
+		{"ip", "link", "set", far, "netns", network},
+		{"ip", "addr", "add", here + "/30", "dev", near},
+		{"ip", "link", "set", near, "up"},
+		append(inside, "ip", "addr", "add", there+"/30", "dev", far),
+		append(inside, "ip", "link", "set", far, "up"),
+		append(inside, "ip", "link", "set", "lo", "up"),
+	} {
+		if err := sudo(step...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return here, func(port string) bool {
+		call := "exec 3<>/dev/tcp/" + here + "/" + port
+		return sudo(append(inside, "timeout", "3", "bash", "-c", call)...) == nil
+	}
+}
+
+// The test has no second machine. It checks the same thing two ways: no
+// address of this machine but localhost answers, and a call from a second
+// network inside this machine gets no answer.
 func TestCTL01_2_WithNoSettingTheControllerAnswersNowhereElse(t *testing.T) {
-	other := otherAddress(t)
 	defaultController(t)
-	c, err := net.DialTimeout("tcp", net.JoinHostPort(other, "8642"), 2*time.Second)
-	if err == nil {
-		c.Close()
-		t.Fatalf("the controller answers on %s", other)
+	for _, other := range otherAddresses(t) {
+		c, err := net.DialTimeout("tcp", net.JoinHostPort(other, "8642"), 2*time.Second)
+		if err == nil {
+			c.Close()
+			t.Fatalf("the controller answers on %s", other)
+		}
+	}
+
+	address, reaches := otherNetwork(t)
+	// A server that does answer everywhere shows that the cable works.
+	open, err := net.Listen("tcp", "0.0.0.0:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer open.Close()
+	go func() {
+		for {
+			c, err := open.Accept()
+			if err != nil {
+				return
+			}
+			c.Close()
+		}
+	}()
+	_, port, _ := net.SplitHostPort(open.Addr().String())
+	if !reaches(port) {
+		t.Fatalf("the test is of no use: the second network cannot reach %s at all", address)
+	}
+	if reaches("8642") {
+		t.Fatalf("the controller answers a call from another network, at %s", address)
 	}
 }
 
