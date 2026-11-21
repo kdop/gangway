@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kdop/gangway/cli/internal/designcheck"
 	"github.com/kdop/gangway/cli/internal/request"
+	"github.com/kdop/gangway/shared/designcheck"
 )
 
 const minShow = 500 * time.Millisecond

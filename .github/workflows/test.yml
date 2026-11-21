@@ -9,17 +9,21 @@ permissions:
   contents: read
 
 jobs:
-  cli:
-    name: cli-tool
+  go:
+    name: ${{ matrix.folder }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        folder: [cli, shared]
     defaults:
       run:
-        working-directory: cli
+        working-directory: ${{ matrix.folder }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: cli/go.mod
+          go-version-file: ${{ matrix.folder }}/go.mod
           cache: false
       - name: Format
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }

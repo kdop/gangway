@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kdop/gangway/cli/internal/designcheck"
 	"github.com/kdop/gangway/cli/internal/gate"
 	"github.com/kdop/gangway/cli/internal/request"
+	"github.com/kdop/gangway/shared/designcheck"
 )
 
 // The gate and the runner fit each other.

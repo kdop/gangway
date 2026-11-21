@@ -407,7 +407,18 @@ Nothing else is replaceable. The gate, the checks, the line, the session and the
 
 ### The messages in code
 
-The message types of the connection are written down in this file, and this file is the contract. While both programs are Go, they share one piece of code for those types, so the two sides cannot drift apart. If the controller ever moves to another language, this file stays the contract.
+The message types of the connection are written down in this file, and this file is the contract. While both programs are Go, they share one piece of code for those types, the folder `shared/`, so the two sides cannot drift apart. If the controller ever moves to another language, this file stays the contract.
+
+What the code pins down, on top of the tables above:
+
+| What | Value |
+|---|---|
+| Where the cli-tool opens its websocket on the controller | The path `/host/v1` |
+| Where the controller listens when nothing is set | `127.0.0.1:8642` |
+| The session key | `gw_` and then `SESSION_KEY_BITS` random bits written in hex |
+| The hash of the key that the controller holds | SHA-256 of the whole key, `gw_` included, written in hex |
+| The `id` of a request | Made by the controller |
+| The websocket code | The library `github.com/coder/websocket`, on both sides |
 
 ### How the pieces are put together
 

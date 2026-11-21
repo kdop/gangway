@@ -4,6 +4,7 @@ package designcheck
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -12,8 +13,7 @@ import (
 // Match fails the test unless every unit test of design.md whose ID starts
 // with prefix, such as "UNIT-GATE", has a Go test in one of testFiles with the same
 // requirements in the comment above it, and every requirement named is in
-// requirements.md. The test must run in a folder three levels below the
-// root of the repo.
+// requirements.md.
 func Match(t *testing.T, prefix string, testFiles ...string) {
 	t.Helper()
 	read := func(path string) string {
@@ -23,8 +23,9 @@ func Match(t *testing.T, prefix string, testFiles ...string) {
 		}
 		return string(b)
 	}
-	design := read("../../../design.md")
-	requirements := read("../../../requirements.md")
+	root := repoRoot(t)
+	design := read(filepath.Join(root, "design.md"))
+	requirements := read(filepath.Join(root, "requirements.md"))
 	code := ""
 	for _, f := range testFiles {
 		code += read(f)
@@ -53,5 +54,25 @@ func Match(t *testing.T, prefix string, testFiles ...string) {
 	n := len(regexp.MustCompile(`(?m)^func `+funcPrefix+`\d+_`).FindAllString(code, -1))
 	if n != len(rows) {
 		t.Errorf("%d Go tests carry a %s number, design.md has %d", n, prefix, len(rows))
+	}
+}
+
+// repoRoot walks up from the folder the test runs in to the folder that
+// holds design.md.
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "design.md")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("found no design.md above the test's folder")
+		}
+		dir = parent
 	}
 }

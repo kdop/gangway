@@ -7,11 +7,12 @@ import (
 	"unicode/utf8"
 
 	"github.com/kdop/gangway/cli/internal/request"
+	"github.com/kdop/gangway/shared/messages"
 )
 
 // ReasonControlCharacter is sent with the refusal. It is part of the
 // contract in architecture.md.
-const ReasonControlCharacter = "control_character"
+const ReasonControlCharacter = messages.ReasonControlCharacter
 
 // Check tells whether the request may go on to the line. When it may not,
 // reason says why. The refused text is never part of the reason.
