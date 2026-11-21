@@ -8,6 +8,27 @@ Rule for all steps: the gate exists before the first command runs. No step ships
 
 Nothing blocks step 1. The language is Go, for the cli-tool and the controller. Where the controller listens is a setting; the default is localhost.
 
+## The MVP
+
+The first thing built. It shows the three parts working together on one machine, on localhost, with no Tailscale. It cuts across the steps below; the requirements it delivers are listed in `requirements.md`.
+
+| In | After |
+|---|---|
+| Session key and the paste line | Tailscale and `login` |
+| Prompt answered by one key, `y` or `n` | Session length and the extend question |
+| Command runs through the shell | Key tied to the first AI, and the wrong-key block |
+| Requests with control characters refused, output cleaned | Size cut |
+| Refuses to start as root or without a terminal | Reconnect after a lost connection |
+| Ctrl+C rules | Log file |
+| Time limit, with wait or stop | Dashboard, Google login, pairing |
+| Waiting line, up to `MAX_WAITING_REQUESTS` | File reads |
+| API: `hello`, `requests`, `wait`, `stop` | Admin settings in `/etc/gangway/` |
+| Skill | Install |
+
+In the MVP the session ends on Ctrl+C, when the cli-tool closes, or when the connection is lost.
+
+Done when: in a real Claude Code session, one paste and one `y` runs a command on the machine and the AI gets the output.
+
 ## Steps
 
 | # | Step | Done when |

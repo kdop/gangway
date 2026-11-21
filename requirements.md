@@ -23,6 +23,25 @@ To prove that a command did or did not run, a test asks for a command that leave
 
 Where a test says a time "passes", the test sets that setting to a short value first. No test waits 30 minutes.
 
+## The MVP
+
+The MVP is set in `plan.md`. It delivers these 37 requirements:
+
+| Group | Requirements |
+|---|---|
+| GATE | 01, 02, 03, 04, 05, 06, 07, 08, 10, 11, 12, 13 |
+| SHOW | 01, 02, 03 |
+| SES | 01, 02, 03, 05, 06, 07 |
+| KEY | 01, 02, 03, 04 |
+| LIM | 01, 02, 03, 04, 06, 07, 08, 09, 10 |
+| HOST | 01, 02 |
+| CTL | 01 |
+
+Two of them are delivered in part:
+
+- `SES-05`: there is no reconnect in the MVP, so a lost connection ends the session at once and stops the running command.
+- `LIM-06`: `COMMAND_TIME_LIMIT` and `QUESTION_WAIT` only. `OUTPUT_SIZE_LIMIT` comes with the size cut.
+
 ## GATE: approval
 
 ### GATE-01
