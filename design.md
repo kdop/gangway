@@ -674,3 +674,111 @@ MAX_WAITING_REQUESTS = 10
 | UNIT-SETTINGS-10 | `GATE-13` | A file where `MAX_WAITING_REQUESTS` is 0 | Read | An error |
 | UNIT-SETTINGS-11 | `GATE-14` | A file where `PROMPT_MIN_SHOW` is `0s` | Read | No error. The value is zero |
 | UNIT-SETTINGS-12 | `LIM-06` | A file where `CONTROLLER_ADDRESS` has no `http://` in front | Read | An error |
+
+## `loop`
+
+The `loop` ties the pieces of the cli-tool together. Every event is handed to it, one at a time, and it passes the event to the piece it belongs to. It also ends the session. No two events are ever handled at once.
+
+### What it holds
+
+- The pieces: `terminal`, `line`, `gate`, `runner`, the `session` and the `connection`.
+- Its state, and why the session ended.
+
+### States
+
+| State | Meaning |
+|---|---|
+| `Live` | Requests are taken |
+| `Ending` | The session has ended. A command is still being stopped |
+| `Over` | Nothing is left to do. The program can end |
+
+```mermaid
+stateDiagram-v2
+  [*] --> Live
+  Live --> Over: the session ends, nothing runs
+  Live --> Ending: the session ends, a command runs
+  Ending --> Over: the command is gone
+  Over --> [*]
+```
+
+### Where each event goes
+
+| Event | From | In `Live` it goes to |
+|---|---|---|
+| A request | `connection` | `checks`. Refused there: `refused` is sent and the reason is shown. Else `line`. Full: `refused` with `line_full` is sent and shown. Else the `gate` is told one waits |
+| `wait`, `stop` | `connection` | The `runner`, when the `id` is the one that runs. Else nowhere |
+| `cancel` | `connection` | `line` first: a request found there is removed, and `refused` with `ai_gone` is sent. Else the `gate` and the `runner`, which act only on their own `id` |
+| Bytes from the keyboard | The keyboard | `terminal`, which makes `key`, `ctrl_c` and `quit` of them |
+| `key` | `terminal` | The `gate` |
+| `ctrl_c` | `terminal` | The `gate` when a prompt waits. The `runner` when a command runs. With nothing in front, the session ends |
+| `quit` | `terminal` | The session ends |
+| Output, the end of the shell, a timer | The starter, the timers | The `runner`, in every state |
+| The controller ends the session, or the connection is lost | `connection` | The session ends |
+
+### Ending the session
+
+In this order, once:
+
+1. The `session` is ended, so its key is dead.
+2. The `gate` is ended. A prompt that waits is refused with `session_ended`, and is not shown again.
+3. Every request in the `line` is refused with `session_ended`.
+4. The screen says why the session ends.
+5. The `runner` is told. A command that runs is stopped, by asking and then by force.
+6. When no command runs any more, the `connection` is closed with the reason, and the loop is `Over`.
+
+### Rules the code must keep
+
+- **After the end, nothing is taken.** In `Ending` and `Over`, a request, a `cancel`, a key and a second end do nothing. Only what the stopping command still needs gets through: its output, its end and its timers.
+- **The program does not end while a command runs.** The loop is `Over` only when the `runner` is idle, so no command is left behind by a session that ended. (`SES-05`)
+- **The loop decides nothing about a request.** It only passes it on. The yes comes from the `gate` alone.
+
+### Unit tests
+
+The pieces are the real ones. The test holds the edges: the keyboard, the screen, the clock, the starter, the timers and the connection. The integration tests `PIE-01`, `PIE-02`, `PIE-04`, `PIE-06`, `PIE-12`, `PIE-13` and `PIE-14` of `architecture.md` run in the same way, as Go tests that carry those names.
+
+| Test | Requirement | Start | Action | Expect |
+|---|---|---|---|---|
+| UNIT-LOOP-01 | `GATE-01`, `SHOW-01` | Live | A request, `y`, output, the command ends | `started`, `output`, `ended` are sent in that order. The screen shows the prompt, the `y`, the output and the exit code, and nothing else |
+| UNIT-LOOP-02 | `GATE-13`, `SHOW-01` | Live, limit 2 | Three requests | The third gets `refused` with `line_full`. The screen says why, and the first prompt is again the last thing on it |
+| UNIT-LOOP-03 | `LIM-09` | A prompt waits, a second request behind it | Ctrl+C | The first is refused with `user`. The second prompt shows. The session is live |
+| UNIT-LOOP-04 | `LIM-08` | A command runs | Ctrl+C, then the command ends | The command was asked to stop. `ended` with `killed_by_user`. The session is live and a new request gets a prompt |
+| UNIT-LOOP-05 | `SES-02`, `KEY-03` | Live, nothing in front | Ctrl+C | `Over`. The connection is closed with `user`. The session is ended |
+| UNIT-LOOP-06 | `LIM-10`, `GATE-01` | A prompt waits, a second request behind it | Two Ctrl+C | Both requests are refused. Nothing ran. `Over` |
+| UNIT-LOOP-07 | `LIM-10`, `SES-05` | A command runs, a request waits | Two Ctrl+C, then the command ends | The command was asked to stop once. `Ending` until it is gone, then `Over` and the connection is closed. The waiting request was refused and got no prompt |
+| UNIT-LOOP-08 | `SES-05`, `GATE-01` | A prompt waits. Again with a command that runs | The connection is lost | Nothing runs, and the screen says why. The running command is stopped, and the loop is `Over` when it is gone |
+| UNIT-LOOP-09 | `SES-03` | `Over` | A request, keys, `cancel`, `wait`, `stop`, a second end | Nothing is sent, shown or run |
+| UNIT-LOOP-10 | `LIM-02` | The wait-or-stop question is asked | `stop` and `wait` with another `id`, and with none. Then with the right `id` | The wrong ones do nothing. The right `wait` starts a new time limit. The right `stop` stops the command |
+| UNIT-LOOP-11 | `GATE-12`, `LIM-07` | A command runs, two requests wait | `cancel` for the one in the line, for the one that runs, and for the one at the prompt | Each is closed with `ai_gone`: two with `refused`, the running one with `ended`. Only the first command ever ran. The session is live |
+| UNIT-LOOP-12 | `KEY-04` | Live | Begin | The screen shows the paste line with the address and the key |
+| UNIT-LOOP-13 | `SES-05` | A prompt waits | The controller ends the session | The request is refused with `session_ended`. The prompt is not shown again. The connection is closed with the controller's reason |
+| UNIT-LOOP-14 | `GATE-01`, `GATE-07` | A prompt waits | `wait`, `stop`, timers, output, the end of a shell, and the same request again | Nothing was started. No `started` was sent |
+
+## `start`
+
+`start` is the beginning and the end of the program. It checks, sets up the edges, runs the `loop`, and cleans up.
+
+### In order
+
+1. Refuse to go on as root. Say why. (`HOST-01`)
+2. Refuse to go on when the input or the output is not a terminal. Say why. (`HOST-02`)
+3. Read the settings. A mistake in the file stops here, with the line.
+4. Make the session and its key.
+5. Connect to the controller. On failure, say so and stop.
+6. Set the terminal to raw mode.
+7. Run the loop until it is `Over`.
+8. Put the terminal back. This happens on every way out, also when the program fails. (`HOST-07`)
+
+### Rules the code must keep
+
+- **Nothing is checked later that can be checked first.** The checks of steps 1 and 2 come before the settings are read, before a key is made and before anything is sent.
+- **Everything goes through the loop.** The keyboard, the connection, the starter, the timers and the signals each run on their own, and each hands its events to the loop. They touch no piece themselves.
+- **A signal from outside ends the session.** `TERM` and `HUP` end it the same way two Ctrl+C do, so a running command is stopped and the terminal is put back.
+
+### Unit tests
+
+| Test | Requirement | Start | Action | Expect |
+|---|---|---|---|---|
+| UNIT-START-01 | `HOST-01` | The user is root | Check | An error that says the cli-tool does not run as root |
+| UNIT-START-02 | `HOST-02` | The input is not a terminal. Again with the output | Check | An error each time that says a terminal is needed |
+| UNIT-START-03 | `HOST-01`, `HOST-02` | A plain user, both are terminals | Check | No error |
+| UNIT-START-04 | `HOST-01` | The user is root and there is no terminal | Check | The error is the one about root |

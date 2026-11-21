@@ -206,3 +206,12 @@ func clean(s string) string {
 		return r
 	}, s)
 }
+
+// Forget drops the prompt that waits on screen, when the session ends
+// with no answer to it. A later note then does not show it again.
+func (t *Terminal) Forget() {
+	if t.prompt != nil {
+		t.prompt = nil
+		t.line("")
+	}
+}

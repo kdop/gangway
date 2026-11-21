@@ -344,13 +344,14 @@ Each program is made of a few pieces. A piece has one job, and the table names t
 | `settings` | Reads the three layers and lets each only narrow the one above. Says so when it cuts a value | `SET-01` to `SET-04`, `LIM-06` |
 | `secrets` | Keeps the auth key file and the host token file, readable by the owner only. Knows which paths are never read out | `HOST-05`, `PAIR-06`, `KEY-08` |
 | `network` | Joins Tailscale from inside the program, and leaves it at the end | `HOST-03`, `HOST-06`, `SES-08` |
-| `connection` | Holds the connection to the controller. Notices when it is lost, connects again, and holds what could not be sent | `SES-04`, `SES-09`, `SES-10`, `SES-11` |
+| `connection` | Holds the connection to the controller. Turns answers into messages and messages into events. Notices when it is lost, connects again, and holds what could not be sent | `GATE-07`, `SES-04`, `SES-09`, `SES-10`, `SES-11` |
 | `session` | Makes the key and the paste line. Runs the session's clock: time up, the question to extend, the maximum | `KEY-01`, `KEY-04`, `SES-02`, `SES-03`, `SES-12`, `LEN-01` to `LEN-09` |
 | `line` | Holds the requests that wait, in order, up to the limit | `GATE-06`, `GATE-13` |
 | `checks` | Refuses a request before any prompt: control characters, invisible characters, protected files | `GATE-10`, `GATE-16`, `KEY-08` |
 | `gate` | Shows one request and takes the `y` or `n`. Nothing else can say yes | `GATE-01` to `GATE-05`, `GATE-07`, `GATE-12`, `GATE-14`, `GATE-15`, `LIM-09` |
 | `runner` | Runs an approved command through the shell as the plain user, or reads a file. Counts the time, cuts the output, kills when told | `GATE-08`, `GATE-09`, `GATE-11`, `GATE-15`, `GATE-17`, `GATE-18`, `LIM-01` to `LIM-05`, `LIM-07`, `LIM-08`, `LIM-11` to `LIM-13`, `SES-05`, `SHOW-03` |
 | `terminal` | The only piece that writes to the screen and reads keys. Cleans what it shows. Tells one Ctrl+C from two | `SHOW-01` to `SHOW-05`, `GATE-03`, `GATE-04`, `GATE-05`, `KEY-04`, `LIM-09`, `LIM-10`, `HOST-02`, `HOST-07` |
+| `loop` | Takes every event in turn and passes it to the piece it belongs to. Ends the session, and waits until no command runs | `SES-02`, `SES-05`, `LIM-08`, `LIM-09` |
 | `log` | Writes each request, answer and output to the log, and starts a new file at the size limit | `LOG-01` to `LOG-05` |
 | `pairing` | The exchange at `login`: the code, the `y`/`n`, the host token | `PAIR-02` to `PAIR-05`, `PAIR-10` |
 
