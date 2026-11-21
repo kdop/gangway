@@ -34,7 +34,7 @@ func TestGATE01_3_LostConnectionNoRun(t *testing.T) {
 	w := newWorld(t)
 	w.ask("touch " + w.file("ran"))
 	w.prompt(1)
-	w.ctl.Process.Kill()
+	w.stopController()
 	<-w.cliDone
 	w.press("y")
 	w.notRun("ran")
