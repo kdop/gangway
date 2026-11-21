@@ -19,6 +19,7 @@ The design is written down in three levels, each with its tests: the requirement
 | `cli/` | The cli-tool, which runs on the host and holds the gate. Go |
 | `controller/` | The controller, which the AI calls. Go |
 | `shared/` | The Go code both programs use |
+| `acceptance/` | The acceptance tests of `requirements.md`. They start both real programs. Go |
 | `skill/` | The skill that teaches the AI how to ask |
 
 ## Run the tests

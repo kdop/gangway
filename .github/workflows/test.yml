@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        folder: [cli, controller, shared]
+        folder: [acceptance, cli, controller, shared]
     defaults:
       run:
         working-directory: ${{ matrix.folder }}
