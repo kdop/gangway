@@ -70,3 +70,6 @@ func (s *Session) Live() bool { return !s.ended }
 
 // End ends the session. There is no way back.
 func (s *Session) End() { s.ended = true }
+
+// Address gives the controller's address, as the AI must call it.
+func (s *Session) Address() string { return s.address }

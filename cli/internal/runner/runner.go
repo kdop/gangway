@@ -247,3 +247,6 @@ func (r *Runner) finish(result Result) {
 	r.sender.Ended(req.ID, result)
 	r.gate.Done()
 }
+
+// RequestID gives the ID of the request that runs, or "" when none does.
+func (r *Runner) RequestID() string { return r.req.ID }
