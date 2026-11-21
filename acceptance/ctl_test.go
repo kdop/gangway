@@ -22,7 +22,7 @@ func otherAddress(t *testing.T) string {
 			return ip.IP.String()
 		}
 	}
-	t.Skip("this machine has no address but localhost")
+	skip(t, "this machine has no address but localhost")
 	return ""
 }
 
@@ -42,7 +42,7 @@ func defaultController(t *testing.T) {
 		select {
 		case <-done:
 			if strings.Contains(printed.String(), "address already in use") {
-				t.Skip("another program holds 127.0.0.1:8642")
+				skip(t, "another program holds 127.0.0.1:8642")
 			}
 			t.Fatalf("the controller did not start: %s", printed.String())
 		default:
