@@ -134,6 +134,9 @@ Gangway is for an AI to look into a small problem on a host. It is not for movin
 - The question "wait more, or stop?" has a time limit of its own. If no answer comes in that time and the command is still running, the cli-tool kills the command. If the command ends by itself in that time, its result is sent as usual.
 - All three limits are settings. Starting values: 60 seconds for a command, 100 KB of output, 60 seconds for the question, which leaves an AI time to answer.
 - Ending the session stops any running command.
+- A command gets no keyboard. A read from its input finds the end at once, so a command that asks a question does not hang. It runs with `PAGER=cat` and `TERM=dumb`, so tools print plain text and do not open a pager.
+- Killing a command kills every program it started. The command is first asked to stop, so it can clean up, and is killed by force after a short time if it still runs.
+- A command is over when its shell ends. A program it left in the background runs on and is not killed: starting a service again is a normal thing to do while debugging. Such a program must send its output to a file.
 
 ## Folder grants (later stage)
 

@@ -57,6 +57,9 @@ led to it.
 - **Two Ctrl+C close together always end the cli-tool.** An AI that sends request after request could otherwise put a new prompt in front of each press.
 - **When the session's time runs out, a running command is not killed; new requests and a waiting prompt are refused.** A command cut halfway can leave the host broken. The command gets no more "wait more", so it outlives the session by one command time limit at most. Known weakness: not killing can be exploited, so this may change.
 - **If the AI hangs up while a command runs, the command is killed.** Nobody is left to receive the result.
+- **Killing a command kills every program it started, first by asking, then by force.** A kill that leaves half of a pipe running is no kill. Asking first lets a program clean up, so the host is less likely to be left broken.
+- **A program left in the background outlives its command.** Starting a service again is a normal step in debugging, and the user approved the exact line that did it.
+- **A command gets no keyboard, and runs with `PAGER=cat` and `TERM=dumb`.** The AI cannot type into a running command, so one that asks a question or opens a pager would hang until the time limit.
 - **Google is the first login provider.**
 - **Host settings come in three layers that only narrow: `/etc/gangway/` owned by root, `~/.config/gangway/`, then start options.** An approved command runs as the plain user and could rewrite the user's own settings, so the outer bounds must sit where only root can write. The cli-tool only reads that folder and never runs as root.
 - **No Python; tests are plain Go tests.** One language for the whole project.
