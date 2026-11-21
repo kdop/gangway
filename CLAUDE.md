@@ -43,6 +43,7 @@ led to it.
 - **One repo holds all three parts.** The parts change together, and the skill sits next to the API it calls.
 - **The repo has one folder per part: `cli/`, `controller/`, `skill/`.** Each part picks its own language, so not everything has to be Go. The cli-tool is Go because of `tsnet`.
 - **A fourth folder, `shared/`, holds the Go code both programs use: the message types and the check that ties tests to requirements.** Two copies of the message types would drift apart.
+- **A fifth folder, `acceptance/`, holds the acceptance tests.** They start both real programs, so they belong to neither one.
 - **Host to controller goes over Tailscale; the AI calls the controller's API.** The host is never open to the internet. The AI machine does not have to be on Tailscale.
 - **The cli-tool is written in Go.** `tsnet` is Go only, and Go gives one file to copy to the host with nothing else to install.
 - **Tailscale is built into the cli-tool with `tsnet`.** The host needs no Tailscale install and no root. Source: https://pkg.go.dev/tailscale.com/tsnet ("No root privileges required", "No system daemons to install or manage").
