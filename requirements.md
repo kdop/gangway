@@ -27,16 +27,16 @@ Where a test says the user presses a key at a prompt, `PROMPT_MIN_SHOW` has pass
 
 ## The MVP
 
-The MVP is set in `plan.md`. It delivers these 45 requirements:
+The MVP is set in `plan.md`. It delivers these 48 requirements:
 
 | Group | Requirements |
 |---|---|
 | GATE | 01, 02, 03, 04, 05, 06, 07, 08, 10, 11, 12, 13, 14, 15, 16, 17, 18 |
-| SHOW | 01, 02, 03 |
+| SHOW | 01, 02, 03, 04, 05 |
 | SES | 01, 02, 03, 05, 06, 07 |
 | KEY | 01, 02, 03, 04 |
 | LIM | 01, 02, 03, 04, 06, 07, 08, 09, 10, 11, 12, 13 |
-| HOST | 01, 02 |
+| HOST | 01, 02, 07 |
 | CTL | 01 |
 
 Two of them are delivered in part:
@@ -265,6 +265,24 @@ Output shown on the cli-tool's terminal must hold no control character other tha
 | SHOW-03.3 | Live session | An approved file read returns a file that holds an Escape | No raw Escape reaches the terminal. The AI gets the file unchanged |
 | SHOW-03.4 | Live session | An approved command prints bytes that are not text, such as the start of a picture file | The AI gets text in which each such byte is replaced by a mark. The answer says that bytes were replaced. The text around them is unchanged |
 | SHOW-03.5 | Live session | An approved command prints the same bytes through `base64` | The AI gets the coded text unchanged. The answer does not say that bytes were replaced |
+
+### SHOW-04
+
+Every line of output shown on the cli-tool's terminal must start with a mark that no line of the cli-tool itself starts with. Step 1.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| SHOW-04.1 | Live session | An approved command prints three lines | Each of the three starts with the mark |
+| SHOW-04.2 | Live session | An approved command prints text that looks like a prompt of the cli-tool | Each line of it starts with the mark. No line of it starts where a real prompt starts |
+| SHOW-04.3 | Live session | An approved command prints text with no line break at the end, and ends | What the cli-tool shows next starts on a new line |
+
+### SHOW-05
+
+Output shown on the cli-tool's terminal must hold no invisible character and no character that changes the reading order. Step 1.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| SHOW-05.1 | Live session | An approved command prints a character that turns the reading order around, and a zero-width space | Neither reaches the terminal. The AI gets the output unchanged |
 
 ## SES: the session
 
@@ -718,6 +736,15 @@ The cli-tool must join Tailscale with no Tailscale install on the host and no ro
 | Test | Start | Action | Expect |
 |---|---|---|---|
 | HOST-06.1 | A host with no Tailscale installed, and a plain user | Do `login`, then start the cli-tool | A live session, reached over Tailscale |
+
+### HOST-07
+
+When the cli-tool ends, it must leave the terminal as it found it. Step 1.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| HOST-07.1 | Live session | The user ends the cli-tool with two Ctrl+C | In the same terminal, typed letters show again and Enter works as before |
+| HOST-07.2 | A command runs | The cli-tool is ended from outside | The same |
 
 ## PAIR: pairing a host to a user
 

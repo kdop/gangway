@@ -21,7 +21,7 @@ func Check(req request.Request) (reason string, ok bool) {
 		return ReasonControlCharacter, false
 	}
 	for _, r := range req.Command {
-		if isControl(r) || isHidden(r) {
+		if Forbidden(r) {
 			return ReasonControlCharacter, false
 		}
 	}
@@ -44,4 +44,10 @@ func isControl(r rune) bool {
 // order: the Unicode format class, and the line and paragraph separators.
 func isHidden(r rune) bool {
 	return unicode.In(r, unicode.Cf, unicode.Zl, unicode.Zp)
+}
+
+// Forbidden tells whether a character may not be in a request. The
+// terminal uses the same rule for what it shows.
+func Forbidden(r rune) bool {
+	return isControl(r) || isHidden(r)
 }
