@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kdop/gangway/cli/internal/request"
+	"github.com/kdop/gangway/shared/messages"
 )
 
 // State is where the gate stands.
@@ -44,9 +45,9 @@ const (
 // The reasons sent with a refusal. They are part of the contract in
 // architecture.md.
 const (
-	ReasonUser         = "user"
-	ReasonAIGone       = "ai_gone"
-	ReasonSessionEnded = "session_ended"
+	ReasonUser         = messages.ReasonUser
+	ReasonAIGone       = messages.ReasonAIGone
+	ReasonSessionEnded = messages.ReasonSessionEnded
 )
 
 // Line holds the requests that wait.

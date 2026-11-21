@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/kdop/gangway/cli/internal/designcheck"
 	"github.com/kdop/gangway/cli/internal/request"
+	"github.com/kdop/gangway/shared/designcheck"
 )
 
 func wantPass(t *testing.T, command string) {

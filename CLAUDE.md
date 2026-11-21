@@ -42,6 +42,7 @@ led to it.
 - **Three parts: cli-tool, controller, skill.** The host has no AI, so something must sit on the host, something must reach it, and the AI must know how to ask.
 - **One repo holds all three parts.** The parts change together, and the skill sits next to the API it calls.
 - **The repo has one folder per part: `cli/`, `controller/`, `skill/`.** Each part picks its own language, so not everything has to be Go. The cli-tool is Go because of `tsnet`.
+- **A fourth folder, `shared/`, holds the Go code both programs use: the message types and the check that ties tests to requirements.** Two copies of the message types would drift apart.
 - **Host to controller goes over Tailscale; the AI calls the controller's API.** The host is never open to the internet. The AI machine does not have to be on Tailscale.
 - **The cli-tool is written in Go.** `tsnet` is Go only, and Go gives one file to copy to the host with nothing else to install.
 - **Tailscale is built into the cli-tool with `tsnet`.** The host needs no Tailscale install and no root. Source: https://pkg.go.dev/tailscale.com/tsnet ("No root privileges required", "No system daemons to install or manage").
@@ -88,6 +89,7 @@ led to it.
 - **The answer is one key press, strictly lower-case `y` or `n`; every other key is ignored.** One rule with no special cases.
 - **A key does not count in the first half second a prompt is on screen.** A new prompt can replace an old one just as the user presses `y`, and the key would approve a request nobody read. Ctrl+C is not held back, because it can only refuse.
 - **A request with an invisible character, or one that changes the reading order, is refused too.** The prompt would show a command that differs from the one that runs. No real command needs them. The cost: an emoji built from joined parts is refused, because the joiner is invisible.
+- **Every line of a command's output is shown with a mark in front, and no line of the cli-tool starts that way.** A command could otherwise print text that looks like a prompt of the cli-tool.
 - **A request with a control character is refused, except for line breaks and tabs; output shown on the terminal is cleaned the same way.** Cursor codes could paint over the real command or fake a prompt, so the user would approve something they did not read. Line breaks and tabs stay because writing a file of many lines needs them.
 - **"Always allow" is second stage.** The first version asks every time. How wide an allow rule reaches (exact command, program, safe list; session or saved) is not settled.
 - **The cli-tool makes the key, and the key is tied to the first AI that uses it.** A copied key is then of no use to a second caller. The cost, known and accepted: one session cannot be shared between two AI windows.

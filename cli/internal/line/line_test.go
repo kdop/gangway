@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/kdop/gangway/cli/internal/designcheck"
 	"github.com/kdop/gangway/cli/internal/gate"
 	"github.com/kdop/gangway/cli/internal/request"
+	"github.com/kdop/gangway/shared/designcheck"
 )
 
 // The gate takes its requests from the line.

@@ -114,6 +114,7 @@ Sources: https://tailscale.com/kb/1244/tsnet, https://pkg.go.dev/tailscale.com/t
 - A key does not count for a short time after a prompt is shown. A new prompt can replace an old one just as the user presses `y`, and the key would then approve a request the user did not read.
 - A request that holds a control character is refused before any prompt. Only line breaks and tabs are let through. Such characters could move the cursor and paint over the real command, so the user would approve something other than what they read.
 - For the same reason, the output shown on the terminal is cleaned of control characters. The AI still gets the output unchanged.
+- Every line of output is shown with a mark in front. A command cannot print something that passes for a prompt of the cli-tool.
 - A request that holds an invisible character, or one that changes the reading order of the text, is refused the same way. The prompt would show a line that differs from the line that runs.
 - In the first version every request is asked, each time. "Always allow" comes in the second stage.
 - The gate is never in the AI, and in the first version never in the controller. If the yes came from the controller, the cli-tool could not tell a real yes from a fake one.

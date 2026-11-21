@@ -8,6 +8,7 @@ import (
 
 	"github.com/kdop/gangway/cli/internal/gate"
 	"github.com/kdop/gangway/cli/internal/request"
+	"github.com/kdop/gangway/shared/messages"
 )
 
 // State is where the runner stands.
@@ -37,13 +38,13 @@ func (s State) String() string {
 // The ways a command ends. They are part of the contract in
 // architecture.md.
 const (
-	HowExit               = "exit"
-	HowKilledByUser       = "killed_by_user"
-	HowKilledByAI         = "killed_by_ai"
-	HowKilledNoAnswer     = "killed_no_answer"
-	HowKilledAIGone       = "killed_ai_gone"
-	HowKilledSessionEnded = "killed_session_ended"
-	HowStartFailed        = "start_failed"
+	HowExit               = messages.HowExit
+	HowKilledByUser       = messages.HowKilledByUser
+	HowKilledByAI         = messages.HowKilledByAI
+	HowKilledNoAnswer     = messages.HowKilledNoAnswer
+	HowKilledAIGone       = messages.HowKilledAIGone
+	HowKilledSessionEnded = messages.HowKilledSessionEnded
+	HowStartFailed        = messages.HowStartFailed
 )
 
 // Result is how a command ended. ExitCode is set only when How is HowExit.

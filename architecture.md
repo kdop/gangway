@@ -349,7 +349,7 @@ Each program is made of a few pieces. A piece has one job, and the table names t
 | `checks` | Refuses a request before any prompt: control characters, invisible characters, protected files | `GATE-10`, `GATE-16`, `KEY-08` |
 | `gate` | Shows one request and takes the `y` or `n`. Nothing else can say yes | `GATE-01` to `GATE-05`, `GATE-07`, `GATE-12`, `GATE-14`, `GATE-15`, `LIM-09` |
 | `runner` | Runs an approved command through the shell as the plain user, or reads a file. Counts the time, cuts the output, kills when told | `GATE-08`, `GATE-09`, `GATE-11`, `GATE-15`, `GATE-17`, `GATE-18`, `LIM-01` to `LIM-05`, `LIM-07`, `LIM-08`, `LIM-11` to `LIM-13`, `SES-05`, `SHOW-03` |
-| `terminal` | The only piece that writes to the screen and reads keys. Cleans what it shows. Tells one Ctrl+C from two | `SHOW-01` to `SHOW-03`, `GATE-03`, `GATE-04`, `LIM-10` |
+| `terminal` | The only piece that writes to the screen and reads keys. Cleans what it shows. Tells one Ctrl+C from two | `SHOW-01` to `SHOW-05`, `GATE-03`, `GATE-04`, `GATE-05`, `KEY-04`, `LIM-09`, `LIM-10`, `HOST-02`, `HOST-07` |
 | `log` | Writes each request, answer and output to the log, and starts a new file at the size limit | `LOG-01` to `LOG-05` |
 | `pairing` | The exchange at `login`: the code, the `y`/`n`, the host token | `PAIR-02` to `PAIR-05`, `PAIR-10` |
 
@@ -407,7 +407,18 @@ Nothing else is replaceable. The gate, the checks, the line, the session and the
 
 ### The messages in code
 
-The message types of the connection are written down in this file, and this file is the contract. While both programs are Go, they share one piece of code for those types, so the two sides cannot drift apart. If the controller ever moves to another language, this file stays the contract.
+The message types of the connection are written down in this file, and this file is the contract. While both programs are Go, they share one piece of code for those types, the folder `shared/`, so the two sides cannot drift apart. If the controller ever moves to another language, this file stays the contract.
+
+What the code pins down, on top of the tables above:
+
+| What | Value |
+|---|---|
+| Where the cli-tool opens its websocket on the controller | The path `/host/v1` |
+| Where the controller listens when nothing is set | `127.0.0.1:8642` |
+| The session key | `gw_` and then `SESSION_KEY_BITS` random bits written in hex |
+| The hash of the key that the controller holds | SHA-256 of the whole key, `gw_` included, written in hex |
+| The `id` of a request | Made by the controller |
+| The websocket code | The library `github.com/coder/websocket`, on both sides |
 
 ### How the pieces are put together
 
