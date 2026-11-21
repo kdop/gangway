@@ -206,46 +206,14 @@ func TestLIM04_1_ACommandThatEndsWhileTheQuestionWaits(t *testing.T) {
 	}
 }
 
-// The starting values are a minute each, so this test takes two minutes.
-// With -short it only reads the values
-// from what hello reports.
+// The starting values are a minute each, too long to wait for: the test
+// reads them from what hello reports. TestLIM06_2 shows that the limits
+// act at the values they are set to.
 func TestLIM06_1_TheLimitsStartAtTheirStartingValues(t *testing.T) {
 	w := newWorld(t)
 	if command, answer := w.limits(); command != 60 || answer != 60 {
 		t.Fatalf("want 60 and 60 seconds, got %d and %d", command, answer)
 	}
-	if testing.Short() {
-		return
-	}
-	const limit, slack = 60 * time.Second, 5 * time.Second
-	within := func(what string, took time.Duration) {
-		t.Helper()
-		if took < limit-time.Second || took > limit+slack {
-			t.Fatalf("%s after %s, want %s", what, took, limit)
-		}
-	}
-
-	a := w.ask(long(w, "pid"))
-	w.prompt(1)
-	approved := time.Now()
-	w.press("y")
-	pid := w.pid("pid")
-	var first answer
-	select {
-	case first = <-a.done:
-	case <-time.After(limit + slack):
-		t.Fatal("no question came")
-	}
-	asked := time.Now()
-	first.asksWaitOrStop(t)
-	within("the question came", asked.Sub(approved))
-
-	for end := asked.Add(limit + slack); runs(pid); time.Sleep(50 * time.Millisecond) {
-		if time.Now().After(end) {
-			t.Fatal("the command was not killed")
-		}
-	}
-	within("the command was killed", time.Since(asked))
 }
 
 func TestLIM06_2_TheLimitsActAtTheSetValues(t *testing.T) {
