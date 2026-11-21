@@ -27,11 +27,11 @@ Where a test says the user presses a key at a prompt, `PROMPT_MIN_SHOW` has pass
 
 ## The MVP
 
-The MVP is set in `plan.md`. It delivers these 39 requirements:
+The MVP is set in `plan.md`. It delivers these 40 requirements:
 
 | Group | Requirements |
 |---|---|
-| GATE | 01, 02, 03, 04, 05, 06, 07, 08, 10, 11, 12, 13, 14, 15 |
+| GATE | 01, 02, 03, 04, 05, 06, 07, 08, 10, 11, 12, 13, 14, 15, 16 |
 | SHOW | 01, 02, 03 |
 | SES | 01, 02, 03, 05, 06, 07 |
 | KEY | 01, 02, 03, 04 |
@@ -202,6 +202,17 @@ One `y` must run its request once, and never a second time. Step 1.
 | GATE-15.1 | Live session | The AI asks for a command that adds one line to a file. The user presses `y` | The file holds one line |
 | GATE-15.2 | Live session | The same request. The user presses `y` many times | The file holds one line |
 | GATE-15.3 | Live session | The AI asks for the same command twice. The user presses `y` at the first prompt only | The file holds one line. The second prompt waits |
+
+### GATE-16
+
+A request that holds an invisible character, or a character that changes the reading order of the text, must be refused before any prompt. Step 1.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| GATE-16.1 | Live session | The AI asks for a command that holds a character that turns the reading order around | No prompt is shown. The command has not run. The AI gets "refused" with the reason `control_character` |
+| GATE-16.2 | Live session | The AI asks for a command that holds a zero-width space inside a word | Refused the same way |
+| GATE-16.3 | Live session | The AI asks for a command with Greek letters, accents and a plain emoji | The prompt is shown as usual |
+| GATE-16.4 | Live session | The AI asks for a command that holds such a character | The terminal shows that a request was refused. The character itself never reaches the terminal |
 
 ## SHOW: nothing is hidden
 
