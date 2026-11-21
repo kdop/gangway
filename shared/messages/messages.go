@@ -72,8 +72,9 @@ const (
 
 // The reasons a session ends.
 const (
-	EndUser           = "user"            // the user ended the cli-tool
-	EndConnectionLost = "connection_lost" // noted by the side that saw it
+	EndUser              = "user"               // the user ended the cli-tool
+	EndConnectionLost    = "connection_lost"    // noted by the side that saw it
+	EndControllerStopped = "controller_stopped" // the controller is shutting down
 )
 
 // Limits are the limits of a session, told to the AI up front.
@@ -112,3 +113,7 @@ type Message struct {
 	Host    string  `json:"host,omitempty"`
 	Limits  *Limits `json:"limits,omitempty"`
 }
+
+// MaxMessageBytes is the largest message either side sends or takes. A
+// piece of output must be cut into messages that stay under it.
+const MaxMessageBytes = 1 << 20

@@ -119,6 +119,7 @@ The call stays open while the request waits in line, while the prompt waits, and
 | `killed_time_up` | The session's time was up and the command reached its time limit | `LEN-08` |
 | `read` | A file read. `output` is the file | `GATE-09` |
 | `start_failed` | The command could not be started. `output` says why. Nothing ran | `GATE-11` |
+| `killed_session_ended` | The session ended while the command ran | `SES-05` |
 
 - `output` holds what the command wrote, normal and error output together, in the order it came.
 - When `cut` is true, the output passed the size limit. `output` then holds the first part and ends with a note that says so (`LIM-05`).
@@ -166,7 +167,8 @@ These are not answers to a request. The call itself is turned away.
 | HTTP status | Meaning | Requirement |
 |---|---|---|
 | 401 | No key, a wrong key, a key whose session has ended, or a missing or wrong caller token | `KEY-02`, `KEY-03`, `KEY-05`, `SES-01` |
-| 404 | The `id` in `wait` or `stop` is not a running command of this session | |
+| 400 | The body of a new request cannot be read: it is not JSON, has no command, or has a kind the controller does not know | `CTL-11` |
+| 404 | The `id` in `wait` or `stop` is not a command that waits for that answer, or the path is not one of the five calls | |
 | 429 | Too many wrong keys came from this address. It is blocked for a while | `KEY-07` |
 
 A 401 says nothing about which of its causes it was. A guesser learns nothing from it.
@@ -260,7 +262,7 @@ Each of them asks or narrows. No message type exists that approves a request, ex
 | cli-tool | `ended` | `id`, `how`, `exit_code`, `cut`, `bytes_replaced` | "It is over, and this is how" |
 
 - Every request ends with exactly one `refused` or one `ended`. Nothing is left hanging.
-- On `cancel`, a request that waits is removed (`GATE-12`), and a command that runs is killed (`LIM-07`). The cli-tool closes the request with `refused` and the reason `ai_gone`, or with `ended` and `killed_ai_gone`. A command killed because the session ended closes with `killed_session_ended`. No AI ever sees these three: they are for the dashboard and the log.
+- On `cancel`, a request that waits is removed (`GATE-12`), and a command that runs is killed (`LIM-07`). The cli-tool closes the request with `refused` and the reason `ai_gone`, or with `ended` and `killed_ai_gone`. A command killed because the session ended closes with `killed_session_ended`. No AI ever sees `ai_gone` or `killed_ai_gone`: its call is gone. An AI whose call is still open when the session ends can see `killed_session_ended`.
 - After `still_running`, the cli-tool itself counts the answer time. With no `wait` and no `stop` in time, it kills the command (`LIM-03`). It does not wait for the controller to say so.
 - Output is sent in pieces as it comes, not in one block at the end. The dashboard can then show it live (`CTL-07`), and a `running` answer can carry the output so far.
 - The cli-tool cleans nothing in what it sends. Cleaning is only for its own terminal (`SHOW-03`).
@@ -371,8 +373,8 @@ How a request goes through them:
 | Piece | Job | Requirements |
 |---|---|---|
 | `start` | Reads where to listen. Refuses a public address when no login is set up | `CTL-01`, `CTL-02` |
-| `api` | The five calls. Checks the key and the caller token, blocks an address after too many wrong keys, and insists on HTTPS off localhost | `KEY-02`, `KEY-05`, `KEY-06`, `KEY-07`, `SES-01` |
-| `sessions` | The live sessions, in memory only: the key's hash, the caller token, the user, the host, the state. Drops a session when it ends or does not come back in time | `SES-06`, `SES-07`, `SES-09`, `SES-11`, `KEY-03`, `PAIR-09` |
+| `api` | The five calls. Checks the key and the caller token, blocks an address after too many wrong keys, and insists on HTTPS off localhost | `KEY-02`, `KEY-05`, `KEY-06`, `KEY-07`, `SES-01`, `CTL-11` |
+| `sessions` | The live sessions, in memory only: the key's hash, the caller token, the user, the host, the state. Drops a session when it ends or does not come back in time | `SES-06`, `SES-07`, `SES-09`, `SES-11`, `KEY-03`, `KEY-09`, `PAIR-09` |
 | `hostdoor` | Takes the connections from the cli-tools, over Tailscale only, and checks the host token | `CTL-10`, `PAIR-01` |
 | `relay` | Ties an open API call to its request on the host and passes messages both ways. Turns a hung-up call into a `cancel` | `GATE-12`, `LIM-07`, `SES-10` |
 | `hosts` | The paired hosts, kept in a small file with a hash of each token. Makes and checks pairing codes | `PAIR-02`, `PAIR-03`, `PAIR-07`, `PAIR-08`, `PAIR-10` |

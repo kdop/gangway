@@ -27,17 +27,17 @@ Where a test says the user presses a key at a prompt, `PROMPT_MIN_SHOW` has pass
 
 ## The MVP
 
-The MVP is set in `plan.md`. It delivers these 48 requirements:
+The MVP is set in `plan.md`. It delivers these 51 requirements:
 
 | Group | Requirements |
 |---|---|
 | GATE | 01, 02, 03, 04, 05, 06, 07, 08, 10, 11, 12, 13, 14, 15, 16, 17, 18 |
 | SHOW | 01, 02, 03, 04, 05 |
 | SES | 01, 02, 03, 05, 06, 07 |
-| KEY | 01, 02, 03, 04 |
+| KEY | 01, 02, 03, 04, 09 |
 | LIM | 01, 02, 03, 04, 06, 07, 08, 09, 10, 11, 12, 13 |
 | HOST | 01, 02, 07 |
-| CTL | 01 |
+| CTL | 01, 02, 11 |
 
 Two of them are delivered in part:
 
@@ -477,6 +477,15 @@ A file read must never return the Tailscale auth key file or the host token file
 | KEY-08.2 | Live session | The AI asks to read the host token file | The same |
 | KEY-08.3 | Live session | The AI asks for either file by another road: through a link that points at it, and through a path with `..` in it | Both refused the same way |
 | KEY-08.4 | Every setting and start option set to its widest | The AI asks to read the auth key file | Still refused |
+
+### KEY-09
+
+The controller must refuse to start a session whose key hash a live session already has. Step 3.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| KEY-09.1 | Live session | A second program connects as a host and starts a session with the same key hash | It is refused. The AI's requests still reach the first cli-tool only |
+| KEY-09.2 | A session has ended | A cli-tool starts a session with the hash of the old key | It is taken as a new session. This cannot happen by chance: each key is random |
 
 ## LEN: session length
 
@@ -932,6 +941,15 @@ A host must reach the controller over Tailscale only. Step 2.
 | Test | Start | Action | Expect |
 |---|---|---|---|
 | CTL-10.1 | The controller is running | A cli-tool tries to connect as a host over a road that is not Tailscale | Refused |
+
+### CTL-11
+
+The API must turn away a request it cannot read, and nothing must reach a host. Step 1.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| CTL-11.1 | Live session | The AI sends a request that is not JSON, one with no command, and one of a kind the controller does not know | Each is turned away. No prompt on the host |
+| CTL-11.2 | Live session | The AI sends a request with fields the API does not have, such as one that says it is approved | The host gets the command only. A prompt is shown as usual |
 
 ## SET: settings
 
