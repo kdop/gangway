@@ -91,6 +91,7 @@ The call stays open while the request waits in line, while the prompt waits, and
 | `user` | The user pressed `n` or Ctrl+C at the prompt | `GATE-02`, `LIM-09` |
 | `control_character` | The request holds a control character, an invisible character, or one that changes the reading order. No prompt was shown | `GATE-10`, `GATE-16` |
 | `line_full` | Too many requests already wait. No prompt was shown | `GATE-13` |
+| `unknown_kind` | The cli-tool does not know this kind of request. No prompt was shown | `GATE-01` |
 | `protected_file` | The path is the auth key file or the host token file. No prompt was shown | `KEY-08` |
 | `time_up` | The session's time is up | `LEN-06`, `LEN-07` |
 | `host_away` | The connection to the host is lost for the moment. Ask again shortly | `SES-10` |

@@ -474,3 +474,145 @@ Tests 01 to 10 are for the keys, 11 to 23 for the screen, with a buffer in place
 | UNIT-TERMINAL-25 | `LIM-09` | A real terminal in raw mode | Ctrl+C is typed | Code 3 can be read |
 | UNIT-TERMINAL-26 | `HOST-02` | | Ask whether a real terminal is a terminal. Ask the same of a plain file | Yes. No |
 | UNIT-TERMINAL-27 | `HOST-07` | A real terminal in raw mode | Put it back | Its settings are the ones found at the start |
+
+## `session`
+
+The `session` makes the session key and the paste line, and holds whether the session is live. The session's length, the question to extend and the clock are not in the MVP. They are added here when they are built.
+
+### What it holds
+
+- The controller's address, as the AI must call it.
+- The session key.
+- Whether the session has ended.
+
+### States
+
+| State | Meaning |
+|---|---|
+| `Live` | The session may take requests |
+| `Ended` | The session is over. Final |
+
+```mermaid
+stateDiagram-v2
+  [*] --> Live: the key is made
+  Live --> Ended: end
+  Ended --> Ended: end
+  Ended --> [*]
+```
+
+There is no event that leads from `Ended` to `Live`. A new start of the cli-tool makes a new session with a new key.
+
+### Rules the code must keep
+
+- **The key is random.** It is `gw_` and then `SESSION_KEY_BITS` bits from the system's random source, written in lower-case hex. (`KEY-01`)
+- **No random bytes, no session.** When the random source fails or gives too few bytes, no session is made. Nothing weaker takes its place. (`KEY-01`)
+- **A weak length is refused.** `SESSION_KEY_BITS` must be a multiple of 8 and at least 128. A mistake in the settings must not make a key that can be guessed. (`KEY-01`)
+- **The paste line is `/gangway`, the address, the key, with one space between.** An address that is empty, or holds a space or a control character, is refused, because the line would not split into its three parts. (`KEY-04`)
+- **The controller gets the hash, never the key.** The `session` gives the hash for `session_start`. The key itself goes to the user's screen in the paste line and nowhere else. (`SES-06`)
+- **Nothing goes to disk.** The code of the `session` uses no package that can write a file. (`SES-06`)
+- **Ended is final.** (`SES-03`)
+
+### Unit tests
+
+| Test | Requirement | Start | Action | Expect |
+|---|---|---|---|---|
+| UNIT-SESSION-01 | `KEY-01` | | Make a session with 128, 256 and 512 bits | Each key is `gw_` and then 32, 64 and 128 lower-case hex characters |
+| UNIT-SESSION-02 | `KEY-01`, `SES-03` | | Make a hundred sessions | All keys differ |
+| UNIT-SESSION-03 | `KEY-01` | A random source that fails after 0, 5 and 31 bytes | Make a session of 256 bits | An error each time. No session |
+| UNIT-SESSION-04 | `KEY-01` | | Make a session with a length below 128 bits, and with one that is not a multiple of 8 | An error each time. No session |
+| UNIT-SESSION-05 | `KEY-04` | A session | Read the paste line | `/gangway`, the address and the key, with one space between |
+| UNIT-SESSION-06 | `KEY-04` | | Make a session with an address that is empty, or holds a space, a tab, a line break or an Escape | An error each time. No session |
+| UNIT-SESSION-07 | `SES-03` | A live session | End it. End it again. Read the key, the hash and the paste line | Not live after the first end, and not live after anything that follows |
+| UNIT-SESSION-08 | `SES-06` | A session | Read the hash | It is the hash the contract sets for that key. It does not hold the key |
+| UNIT-SESSION-09 | `SES-06` | The code of the `session` | List the packages it uses | Each is on a short list of packages that cannot write a file |
+
+## `connection`
+
+The `connection` holds the websocket to the controller. It turns the cli-tool's answers into messages, and the controller's messages into events for the loop. It decides nothing about a request.
+
+There is no reconnect in the MVP. A lost connection is told once, and that is the end. Reconnect adds states here when it is built.
+
+### What it holds
+
+- The websocket.
+- The messages that wait to be sent, in order, and their size.
+- Whether it is closed, and whether the end was asked for.
+
+### What it talks to
+
+| Piece | How |
+|---|---|
+| The controller | Messages of `architecture.md`, one JSON object each, over the websocket at the path `/host/v1` |
+| The loop | The `connection` calls a handler, one call for each message that counts. The handler hands the call over to the loop and comes back at once |
+| `gate`, `runner`, the loop | They call the `connection` to send: `started`, `refused`, `output`, `still_running`, `ended`, and `session_end` at the close |
+
+### States
+
+| State | Meaning |
+|---|---|
+| `Opening` | The websocket is being opened. `session_start` is sent and `session_ok` is waited for |
+| `Live` | Messages go both ways |
+| `Closed` | Nothing is sent and nothing is handed over. Final |
+
+```mermaid
+stateDiagram-v2
+  [*] --> Opening: dial
+  Opening --> Live: session_ok
+  Opening --> Closed: anything else, or no answer in time
+  Live --> Closed: close, asked by the loop
+  Live --> Closed: session_end from the controller
+  Live --> Closed: the connection is lost
+  Closed --> [*]
+```
+
+### What comes in
+
+| Message from the controller | Event for the loop |
+|---|---|
+| `request`, with an `id` and the kind `command` | A request, with that `id` and the command as it came |
+| `request`, with an `id` and another kind | None. The `connection` sends `refused` with `unknown_kind` |
+| `wait`, `stop`, `cancel`, with an `id` | The same, with that `id` |
+| `session_end` | The controller ends the session, with its reason. The last event |
+| Any of the above with no `id`, where one is needed | None |
+| Any other type, text that is not JSON, or a message that is not text | None |
+
+When the connection goes away and neither side asked for it, the loop gets one event: the connection is lost. It is the last event.
+
+### Rules the code must keep
+
+- **No session without `session_ok`.** Opening fails unless the controller's first message is `session_ok`. It also fails when no answer comes in ten seconds. (`SES-01`)
+- **The key never goes on the connection.** The `connection` is handed the hash. It never sees the key. (`SES-06`)
+- **Only the listed messages do anything.** There is no code for a message that approves a request, extends a session or changes a setting. A field the contract does not name, such as "approved", is not read. (`GATE-07`)
+- **A request comes through as it was sent.** The command is not trimmed, cleaned or changed. The checks come after, in `checks`. (`GATE-05`)
+- **Sending never waits for the network.** A send puts the message in a line and comes back. One goroutine writes the line to the websocket, in order. The loop is then never held up by a slow controller, and Ctrl+C always works. (`LIM-10`)
+- **A controller that does not take what is sent is a lost connection.** When more than 8 MB wait to be sent, the connection is cut and told as lost. Memory does not fill up.
+- **One last event.** After "lost" or "the controller ends the session", no event follows. A close asked by the loop gives no "lost".
+- **A close sends `session_end` last.** What waited to be sent goes out first, then `session_end`, then the websocket is closed. The close waits two seconds at most. (`SES-02`)
+- **After the end, sends are dropped.** They do not wait and do not fail.
+- **A message from the controller may be 1 MB at most.** A larger one cuts the connection.
+
+### Unit tests
+
+Each test runs the real `connection` against a controller inside the test: a small web server that speaks websocket and does what the test tells it.
+
+| Test | Requirement | Start | Action | Expect |
+|---|---|---|---|---|
+| UNIT-CONNECTION-01 | `SES-06` | A controller that answers `session_ok` | Dial with a hash, a host name and limits | The controller's first message is `session_start` at the path `/host/v1`, with that hash, name and limits, and with no key in it. The dial comes back with no error |
+| UNIT-CONNECTION-02 | `SES-01` | A controller whose first message is, in turn: a `request`, text that is not JSON, a message that is not text | Dial | An error each time. The loop gets no event |
+| UNIT-CONNECTION-03 | `SES-01` | In turn: a controller that closes with no answer, a controller that never answers, no controller at all | Dial | An error each time, the second one when the time limit of the dial passes |
+| UNIT-CONNECTION-04 | `GATE-05` | Live | The controller sends a `request` whose command has three lines, quotes and Greek letters | One request event, with the same `id` and the same command, byte for byte |
+| UNIT-CONNECTION-05 | `GATE-07` | Live | The controller sends messages of the types `approve`, `approved`, `yes`, `extend`, `settings`, `started`, `ended`, one unknown type and one with no type. Then a `request` with the extra fields "approved" and "answer" | No event for the first ones. The last gives a plain request event, the same as with no extra field |
+| UNIT-CONNECTION-06 | `LIM-02` | Live | The controller sends `wait` and `stop` with an `id`, and each once more with no `id` | One wait event and one stop event, each with the `id`. Nothing for the ones with no `id` |
+| UNIT-CONNECTION-07 | `GATE-12`, `LIM-07` | Live | The controller sends `cancel` with an `id` | One cancel event with that `id` |
+| UNIT-CONNECTION-08 | `GATE-01`, `GATE-02` | Live | Send `started` for A and `refused` for B with the reason `user` | The controller gets both, in that order, with the right `id` and reason |
+| UNIT-CONNECTION-09 | `LIM-01`, `SHOW-03` | Live | Send `output`, `still_running`, and `ended` three times: `exit` with code 3, `exit` with code 0, and `killed_by_user` with replaced bytes | The controller gets each. `exit_code` is there for both exits, also when it is 0. It is left out for the kill. `bytes_replaced` is true only for the last |
+| UNIT-CONNECTION-10 | `SHOW-03` | Live | Send `output` with an Escape, a zero byte, quotes, a backslash, Greek letters and the mark for replaced bytes | The controller gets the same text, character for character |
+| UNIT-CONNECTION-11 | `SHOW-02` | Live | Send two thousand pieces of output, one after the other | The controller gets all of them, in the order they were sent |
+| UNIT-CONNECTION-12 | `SES-05`, `SES-07` | Live | The controller drops the connection. Then the cli-tool sends more, and closes | One lost event and no other. The sends and the close come back at once and nothing breaks |
+| UNIT-CONNECTION-13 | `SES-02` | Live, with messages sent just before | Close with the reason `user`. Then send more | The controller gets the earlier messages, then `session_end` with `user` as the last one, then sees a proper close of the websocket, not a cut. The close comes back within a second. The loop gets no lost event |
+| UNIT-CONNECTION-14 | `SES-03` | Live | The controller sends `session_end` with a reason, then a `request` | One event: the controller ends the session, with that reason. No request event and no lost event. The controller sees the connection close |
+| UNIT-CONNECTION-15 | `GATE-01` | Live | The controller sends a `request` of the kind `read`, one with no kind, and one with no `id` | No event. The controller gets `refused` with `unknown_kind` for the first two, and nothing for the third |
+| UNIT-CONNECTION-16 | `GATE-07` | Live | The controller sends text that is not JSON, a JSON list, and a message that is not text. Then a `request` | No event for the first three. The connection lives: the request event comes |
+| UNIT-CONNECTION-17 | `LIM-10` | Live, a controller that reads nothing, the limit of waiting bytes set low | Send output until the limit is passed | Every send comes back at once. Then one lost event, which says the controller does not take what is sent |
+| UNIT-CONNECTION-18 | `SES-05` | Live | The controller sends a message larger than 1 MB | One lost event |
+| UNIT-CONNECTION-19 | `LIM-10` | Live, a controller that reads nothing. Once with nothing waiting to be sent, once with far more than the network takes | Close. While it is under way, the controller sends a `request` | The close comes back within its short wait both times. The loop gets no request event and no lost event |
