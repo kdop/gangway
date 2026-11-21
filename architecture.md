@@ -346,7 +346,7 @@ Each program is made of a few pieces. A piece has one job, and the table names t
 | `session` | Makes the key and the paste line. Runs the session's clock: time up, the question to extend, the maximum | `KEY-01`, `KEY-04`, `SES-02`, `SES-03`, `SES-12`, `LEN-01` to `LEN-09` |
 | `line` | Holds the requests that wait, in order, up to the limit | `GATE-06`, `GATE-13` |
 | `checks` | Refuses a request before any prompt: control characters, protected files | `GATE-10`, `KEY-08` |
-| `gate` | Shows one request and takes the `y` or `n`. Nothing else can say yes | `GATE-01` to `GATE-05`, `GATE-07`, `GATE-12`, `LIM-09` |
+| `gate` | Shows one request and takes the `y` or `n`. Nothing else can say yes | `GATE-01` to `GATE-05`, `GATE-07`, `GATE-12`, `GATE-14`, `LIM-09` |
 | `runner` | Runs an approved command through the shell as the plain user, or reads a file. Counts the time, cuts the output, kills when told | `GATE-08`, `GATE-09`, `GATE-11`, `LIM-01` to `LIM-05`, `LIM-07`, `LIM-08`, `SES-05` |
 | `terminal` | The only piece that writes to the screen and reads keys. Cleans what it shows. Tells one Ctrl+C from two | `SHOW-01` to `SHOW-03`, `GATE-03`, `GATE-04`, `LIM-10` |
 | `log` | Writes each request, answer and output to the log, and starts a new file at the size limit | `LOG-01` to `LOG-05` |
@@ -435,3 +435,6 @@ These check that one piece hands over to the next as laid out above. They run in
 | PIE-09 | controller | A host connects and sends `session_start` | `api` accepts the key only after `sessions` holds the session, and refuses it again once the session is dropped |
 | PIE-10 | controller, two hosts with live sessions | The end button for one session | `hostdoor` sends `session_end` to that host only |
 | PIE-11 | controller, users A and B signed in | A's `dashboard` asks to end B's session | `sessions` refuses. Nothing is sent to any host |
+| PIE-12 | cli-tool, live session, the clock in the test's hands | A `request`, then a `y` key press with no time passed. Then the clock moves by `PROMPT_MIN_SHOW` and `y` is pressed again | The first `y` goes from `terminal` to `gate` and is dropped: no `started` is sent. The second one runs the command |
+| PIE-13 | cli-tool, a prompt waits for A, B waits in `line` | A `cancel` for A, then a `y` key press with no time passed | `gate` takes B from `line` and shows its prompt. The `y` is dropped. `runner` was not called |
+| PIE-14 | cli-tool, `PROMPT_MIN_SHOW` set to another value in the user's settings | A `request`, then `y` just before that time, then `y` just after | `settings` hands the value to `gate`: the first `y` is dropped, the second one runs the command |

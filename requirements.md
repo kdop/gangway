@@ -23,13 +23,15 @@ To prove that a command did or did not run, a test asks for a command that leave
 
 Where a test says a time "passes", the test sets that setting to a short value first. No test waits 30 minutes.
 
+Where a test says the user presses a key at a prompt, `PROMPT_MIN_SHOW` has passed since the prompt was shown, unless the test says otherwise.
+
 ## The MVP
 
-The MVP is set in `plan.md`. It delivers these 37 requirements:
+The MVP is set in `plan.md`. It delivers these 38 requirements:
 
 | Group | Requirements |
 |---|---|
-| GATE | 01, 02, 03, 04, 05, 06, 07, 08, 10, 11, 12, 13 |
+| GATE | 01, 02, 03, 04, 05, 06, 07, 08, 10, 11, 12, 13, 14 |
 | SHOW | 01, 02, 03 |
 | SES | 01, 02, 03, 05, 06, 07 |
 | KEY | 01, 02, 03, 04 |
@@ -178,6 +180,18 @@ No more than `MAX_WAITING_REQUESTS` requests must wait in line. A request past t
 | GATE-13.1 | Live session | The AI asks for `MAX_WAITING_REQUESTS` commands, with no answer given | All of them wait in line |
 | GATE-13.2 | State after GATE-13.1 | The AI asks for one more | That one is refused at once, with the reason. It never gets a prompt |
 | GATE-13.3 | State after GATE-13.2 | The user answers one prompt. The AI asks for one more | The new request is taken into the line |
+
+### GATE-14
+
+A key pressed within `PROMPT_MIN_SHOW` after a prompt is shown must not answer it. Step 1.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| GATE-14.1 | Live session | The AI asks for a command. The user presses `y` before `PROMPT_MIN_SHOW` has passed | The prompt still waits. The command has not run |
+| GATE-14.2 | State after GATE-14.1 | `PROMPT_MIN_SHOW` passes. The user presses `y` | The command runs |
+| GATE-14.3 | A prompt waits for A. B waits behind it | The AI hangs up on A. The user presses `y` at once | The prompt for B waits. B has not run |
+| GATE-14.4 | A prompt waits for A. B waits behind it | The user presses `n` twice, at once | A is refused. The prompt for B waits |
+| GATE-14.5 | Live session | The AI asks for a command. The user presses Ctrl+C before `PROMPT_MIN_SHOW` has passed | The request is refused. Ctrl+C is not held back |
 
 ## SHOW: nothing is hidden
 
@@ -926,6 +940,7 @@ A name in upper case is a setting. The requirements use the name, never the numb
 | `SESSION_MAX` | None | The longest a session may last, extensions included. Set in `/etc/gangway/` only | LEN-05 |
 | `EXTEND_WAIT` | 60 seconds | How long the question to extend waits for an answer | LEN-04 |
 | `MAX_WAITING_REQUESTS` | 20 | How many requests may wait in line for a prompt | GATE-13 |
+| `PROMPT_MIN_SHOW` | 0.5 seconds | How long a prompt must be on screen before a key can answer it | GATE-14 |
 | `COMMAND_SHELL` | `/bin/sh` | The shell that runs an approved command | GATE-11 |
 | `COMMAND_TIME_LIMIT` | 60 seconds | How long a command runs before the AI is asked to wait or stop | LIM-01, LIM-02 |
 | `QUESTION_WAIT` | 60 seconds | How long the wait-or-stop question waits for the AI | LIM-03 |

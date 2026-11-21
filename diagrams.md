@@ -120,6 +120,7 @@ stateDiagram-v2
 ```
 
 - Only `y` in the Asking state leads to Running. There is no other way in.
+- A key pressed in the first moment after a prompt is shown is thrown away too.
 - A key pressed in Idle or Running is thrown away. It does not answer the next request.
 - A request that arrives in Asking or Running waits in line. Requests are asked one at a time, in order.
 - Extending is the question "extend?" when the session's time is up. Only the user at the terminal can answer it.

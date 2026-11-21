@@ -111,6 +111,7 @@ Sources: https://tailscale.com/kb/1244/tsnet, https://pkg.go.dev/tailscale.com/t
 - The gate lives in the cli-tool, on the host. The host is what gets hurt, so the host has the last word.
 - Reading a file is a request like any other. It passes the gate too.
 - An approved command runs through a shell, so pipes and redirection work. One line can then hold several commands, and one `y` covers the whole line. The prompt shows the whole line.
+- A key does not count for a short time after a prompt is shown. A new prompt can replace an old one just as the user presses `y`, and the key would then approve a request the user did not read.
 - A request that holds a control character is refused before any prompt. Only line breaks and tabs are let through. Such characters could move the cursor and paint over the real command, so the user would approve something other than what they read.
 - For the same reason, the output shown on the terminal is cleaned of control characters. The AI still gets the output unchanged.
 - In the first version every request is asked, each time. "Always allow" comes in the second stage.
