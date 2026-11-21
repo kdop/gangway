@@ -207,10 +207,9 @@ func TestLIM04_1_ACommandThatEndsWhileTheQuestionWaits(t *testing.T) {
 }
 
 // The starting values are a minute each, so this test takes two minutes.
-// It runs beside the other tests. With -short it only reads the values
+// With -short it only reads the values
 // from what hello reports.
 func TestLIM06_1_TheLimitsStartAtTheirStartingValues(t *testing.T) {
-	t.Parallel()
 	w := newWorld(t)
 	if command, answer := w.limits(); command != 60 || answer != 60 {
 		t.Fatalf("want 60 and 60 seconds, got %d and %d", command, answer)

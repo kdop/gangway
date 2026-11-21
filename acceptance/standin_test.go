@@ -25,6 +25,7 @@ type standIn struct {
 // test.
 func newStandIn(t *testing.T) *standIn {
 	t.Helper()
+	beside(t)
 	s := &standIn{t: t}
 	connected := make(chan *websocket.Conn, 1)
 	mux := http.NewServeMux()

@@ -100,6 +100,7 @@ type world struct {
 // settings is one line of the cli-tool's settings file.
 func newWorld(t *testing.T, settings ...string) *world {
 	t.Helper()
+	beside(t)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -450,4 +451,14 @@ func skip(t *testing.T, why string) {
 		t.Fatalf("must not be skipped on GitHub: %s", why)
 	}
 	t.Skip(why)
+}
+
+var besides sync.Map
+
+// beside lets the test run beside the other tests. Each test has its own
+// controller, cli-tool and folders, so they do not get in each other's way.
+func beside(t *testing.T) {
+	if _, done := besides.LoadOrStore(t, true); !done {
+		t.Parallel()
+	}
 }
