@@ -3,12 +3,10 @@ package gate
 import (
 	"fmt"
 	"math/rand"
-	"os"
-	"regexp"
-	"strings"
 	"testing"
 	"time"
 
+	"github.com/kdop/gangway/cli/internal/designcheck"
 	"github.com/kdop/gangway/cli/internal/request"
 )
 
@@ -461,41 +459,6 @@ func TestUNITGATE21_YAfterACancelDoesNotAnswerTheNext(t *testing.T) {
 	wantRuns(t, w, 0)
 }
 
-// Every UNIT-GATE test of design.md must have a Go test in this file, with
-// the same requirements in the comment above it. Every requirement named
-// must be in requirements.md.
 func TestDesignAndGoTestsMatch(t *testing.T) {
-	read := func(path string) string {
-		b, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return string(b)
-	}
-	design := read("../../../design.md")
-	requirements := read("../../../requirements.md")
-	code := read("gate_test.go")
-
-	rows := regexp.MustCompile(`(?m)^\| UNIT-GATE-(\d+) \| ([^|]*) \|`).FindAllStringSubmatch(design, -1)
-	if len(rows) == 0 {
-		t.Fatal("found no UNIT-GATE test in design.md")
-	}
-	for _, row := range rows {
-		num, reqs := row[1], strings.ReplaceAll(row[2], "`", "")
-		if reqs == "" {
-			t.Errorf("UNIT-GATE-%s names no requirement in design.md", num)
-		}
-		for _, id := range strings.Split(reqs, ", ") {
-			if !strings.Contains(requirements, "\n### "+id+"\n") {
-				t.Errorf("UNIT-GATE-%s names %s, which is not in requirements.md", num, id)
-			}
-		}
-		want := "// UNIT-GATE-" + num + ". Requirement: " + reqs + ".\nfunc TestUNITGATE" + num + "_"
-		if !strings.Contains(code, want) {
-			t.Errorf("UNIT-GATE-%s: no Go test with the comment %q", num, "// UNIT-GATE-"+num+". Requirement: "+reqs+".")
-		}
-	}
-	if n := len(regexp.MustCompile(`(?m)^func TestUNITGATE\d+_`).FindAllString(code, -1)); n != len(rows) {
-		t.Errorf("%d Go tests carry a UNIT-GATE number, design.md has %d", n, len(rows))
-	}
+	designcheck.Match(t, "UNIT-GATE", "gate_test.go")
 }
