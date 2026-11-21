@@ -85,11 +85,13 @@ func (s *screen) text() string { return strings.ReplaceAll(s.raw(), "\r\n", "\n"
 type world struct {
 	t       *testing.T
 	dir     string // an empty folder for the files of the test
+	home    string // the home folder both programs run with
+	listen  string
 	address string
 	key     string
 	screen  *screen
 	keys    *os.File
-	ctl     *exec.Cmd
+	ctl     **exec.Cmd // shared by every cli-tool on this controller
 	cli     *exec.Cmd
 	cliDone chan struct{}
 }
@@ -98,30 +100,64 @@ type world struct {
 // settings is one line of the cli-tool's settings file.
 func newWorld(t *testing.T, settings ...string) *world {
 	t.Helper()
-	w := &world{t: t, dir: t.TempDir(), screen: &screen{}, cliDone: make(chan struct{})}
-
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	listen := ln.Addr().String()
 	ln.Close()
-	w.address = "http://" + listen
 
-	w.ctl = exec.Command(controllerBin, "-listen", listen)
-	if err := w.ctl.Start(); err != nil {
-		t.Fatal(err)
+	w := &world{t: t, home: t.TempDir(), listen: listen, address: "http://" + listen, ctl: new(*exec.Cmd)}
+	w.startController()
+	t.Cleanup(w.stopController)
+	w.startCli(settings)
+	return w
+}
+
+// join starts one more cli-tool on the same controller.
+func (w *world) join(settings ...string) *world {
+	w.t.Helper()
+	more := &world{t: w.t, home: w.home, listen: w.listen, address: w.address, ctl: w.ctl}
+	more.startCli(settings)
+	return more
+}
+
+// startController starts the controller and waits until it listens.
+func (w *world) startController() {
+	w.t.Helper()
+	ctl := exec.Command(controllerBin, "-listen", w.listen)
+	ctl.Dir = w.home
+	ctl.Env = append(os.Environ(), "HOME="+w.home)
+	if err := ctl.Start(); err != nil {
+		w.t.Fatal(err)
 	}
-	t.Cleanup(func() { w.ctl.Process.Kill(); w.ctl.Wait() })
+	*w.ctl = ctl
 	w.until("the controller listens", func() bool {
-		c, err := net.Dial("tcp", listen)
+		c, err := net.Dial("tcp", w.listen)
 		if err == nil {
 			c.Close()
 		}
 		return err == nil
 	})
+}
 
-	config := t.TempDir()
+// stopController kills the controller, as a crash would.
+func (w *world) stopController() {
+	(*w.ctl).Process.Kill()
+	(*w.ctl).Wait()
+}
+
+// startCli starts a cli-tool on a terminal of its own and waits for the
+// paste line.
+func (w *world) startCli(settings []string) {
+	w.t.Helper()
+	t := w.t
+	w.dir, w.screen, w.cliDone = t.TempDir(), &screen{}, make(chan struct{})
+
+	config, err := os.MkdirTemp(w.home, "config")
+	if err != nil {
+		t.Fatal(err)
+	}
 	lines := []string{"CONTROLLER_ADDRESS = " + w.address}
 	if !hasSetting(settings, "PROMPT_MIN_SHOW") {
 		lines = append(lines, "PROMPT_MIN_SHOW = "+promptMinShow.String())
@@ -138,17 +174,19 @@ func newWorld(t *testing.T, settings ...string) *world {
 	master, slave := openTerminal(t)
 	w.keys = master
 	w.cli = exec.Command(cliBin)
+	w.cli.Dir = w.home
 	w.cli.Stdin, w.cli.Stdout, w.cli.Stderr = slave, slave, slave
-	w.cli.Env = append(os.Environ(), "XDG_CONFIG_HOME="+config)
+	w.cli.Env = append(os.Environ(), "HOME="+w.home, "XDG_CONFIG_HOME="+config)
 	if err := w.cli.Start(); err != nil {
 		t.Fatal(err)
 	}
 	slave.Close()
 	go io.Copy(w.screen, master)
-	go func() { w.cli.Wait(); close(w.cliDone) }()
+	done := w.cliDone
+	go func() { w.cli.Wait(); close(done) }()
 	t.Cleanup(func() {
 		w.cli.Process.Kill()
-		<-w.cliDone
+		<-done
 		master.Close()
 		if t.Failed() {
 			t.Logf("the screen:\n%s", strings.ReplaceAll(w.screen.text(), w.key, "gw_<key>"))
@@ -164,7 +202,16 @@ func newWorld(t *testing.T, settings ...string) *world {
 		}
 		return false
 	})
-	return w
+}
+
+// ended waits until the cli-tool has ended.
+func (w *world) ended() {
+	w.t.Helper()
+	select {
+	case <-w.cliDone:
+	case <-time.After(soon):
+		w.t.Fatal("the cli-tool did not end")
+	}
 }
 
 func hasSetting(settings []string, name string) bool {
@@ -234,11 +281,18 @@ type answer struct {
 
 // call makes one API call with the session key.
 func (w *world) call(ctx context.Context, method, path, body string) (answer, error) {
+	return w.callWith(ctx, w.key, method, path, body)
+}
+
+// callWith makes one API call with this key. An empty key sends none.
+func (w *world) callWith(ctx context.Context, key, method, path, body string) (answer, error) {
 	req, err := http.NewRequestWithContext(ctx, method, w.address+path, strings.NewReader(body))
 	if err != nil {
 		return answer{}, err
 	}
-	req.Header.Set("Authorization", "Bearer "+w.key)
+	if key != "" {
+		req.Header.Set("Authorization", "Bearer "+key)
+	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
