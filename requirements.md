@@ -729,7 +729,7 @@ The cli-tool must accept no connection from outside. Step 2.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
-| HOST-03.1 | Live session | List the ports the cli-tool holds | No TCP port listens. The one UDP port is the Tailscale tunnel's |
+| HOST-03.1 | Live session | List the ports the cli-tool holds, and try each TCP port from another network | The UDP ports are the Tailscale tunnel's. No TCP port answers from another network |
 | HOST-03.2 | Live session in the one-machine mode | The same | The cli-tool holds no port that listens |
 
 ### HOST-04
