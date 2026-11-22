@@ -110,7 +110,7 @@ func TestUNITSECRETS05_TextThatCannotBeAKeyIsRefused(t *testing.T) {
 
 // UNIT-SECRETS-06. Requirement: HOST-05.
 func TestUNITSECRETS06_NoErrorHoldsTheKey(t *testing.T) {
-	secret := strings.TrimPrefix(goodKey, keyStart)
+	secret := strings.TrimPrefix(goodKey, "tskey-auth-")
 
 	open := place(t)
 	if err := Save(open, goodKey); err != nil {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/kdop/gangway/cli/internal/network"
 	"github.com/kdop/gangway/cli/internal/secrets"
+	"github.com/kdop/gangway/shared/authkey"
 )
 
 // Parts are what a login needs.
@@ -27,7 +28,7 @@ type Parts struct {
 }
 
 // ErrStopped says the user pressed Ctrl+C at the question.
-var ErrStopped = errors.New("stopped: no key was stored")
+var ErrStopped = authkey.ErrStopped
 
 // Run asks for the key, stores it and tries it.
 func Run(ctx context.Context, p Parts) error {
@@ -35,7 +36,7 @@ func Run(ctx context.Context, p Parts) error {
 		return err
 	}
 	fmt.Fprint(p.Screen, "Paste the Tailscale auth key and press Enter. It is not shown: ")
-	key, err := readHidden(p.Keys)
+	key, err := authkey.ReadHidden(p.Keys)
 	fmt.Fprintln(p.Screen)
 	if err != nil {
 		return err
@@ -65,32 +66,5 @@ func Run(ctx context.Context, p Parts) error {
 	default:
 		fmt.Fprintln(p.Screen, "The key is stored, but it could not be tried:", err)
 		return nil
-	}
-}
-
-// readHidden reads one line from a keyboard that sends every key at once.
-// A pasted key comes as many keys.
-func readHidden(keys io.Reader) (string, error) {
-	var line []byte
-	buf := make([]byte, 256)
-	for {
-		n, err := keys.Read(buf)
-		for _, b := range buf[:n] {
-			switch b {
-			case '\r', '\n':
-				return string(line), nil
-			case 0x03: // Ctrl+C
-				return "", ErrStopped
-			case 0x7f, 0x08: // the two forms of the backspace key
-				if len(line) > 0 {
-					line = line[:len(line)-1]
-				}
-			default:
-				line = append(line, b)
-			}
-		}
-		if err != nil {
-			return "", ErrStopped
-		}
 	}
 }

@@ -8,7 +8,7 @@ It exists because SSH gives an AI a full shell with no say over the commands.
 
 ## Status
 
-The first version, the MVP, is built: the three parts work together on one machine. The next step, reaching a host over Tailscale, is being built piece by piece.
+The first version, the MVP, is built: the three parts work together on one machine. The next step is built too: a host reaches the controller over Tailscale. It passes its tests on a stand-in for the Tailscale network, and has not been run on a real one yet.
 
 The design is written down in three levels, each with its tests: the requirements, the architecture, and the inside of each piece. The pieces are built one at a time, and every test in the code names the requirement it proves.
 
@@ -32,6 +32,16 @@ cd cli && go run ./cmd/gangway --local
 ```
 
 The cli-tool prints a line that starts with `/gangway`. Paste it to an AI that has the skill in `skill/gangway/`.
+
+## Use it over Tailscale
+
+The controller and each host join your Tailscale network from inside the program. Nothing else is installed, and a Tailscale that is already on the machine is left alone.
+
+1. In the Tailscale admin page, make two auth keys. The one for the controller: not ephemeral. The one for the hosts: reusable and ephemeral, with a tag that your Tailscale rules let reach the controller and nothing else.
+2. On the controller machine, once: `gangway-controller login`, and paste the controller's key. Then start it: `gangway-controller`. Add `-public-address https://…` when the AI reaches it at another address than the one it listens on.
+3. On a host, once: `gangway login`, and paste the hosts' key. Then start a session: `gangway`.
+
+Until pairing is built, any device that your Tailscale rules let reach the controller can start a session of its own. The rules are the guard.
 
 ## Run the tests
 

@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"github.com/kdop/gangway/shared/rawterm"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -101,7 +102,7 @@ func TestUNITTERMINAL26_IsTerminal(t *testing.T) {
 func TestUNITTERMINAL27_RestorePutsTheTerminalBack(t *testing.T) {
 	_, tty := openTerminal(t)
 	fd := int(tty.Fd())
-	before, err := getTermios(fd)
+	before, err := rawterm.State(fd)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,14 +110,14 @@ func TestUNITTERMINAL27_RestorePutsTheTerminalBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	during, _ := getTermios(fd)
+	during, _ := rawterm.State(fd)
 	if during == before {
 		t.Fatal("raw mode changed nothing")
 	}
 	if err := restore(); err != nil {
 		t.Fatal(err)
 	}
-	after, _ := getTermios(fd)
+	after, _ := rawterm.State(fd)
 	if after != before {
 		t.Fatalf("the settings after are %+v, want %+v", after, before)
 	}

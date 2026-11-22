@@ -42,7 +42,7 @@ led to it.
 - **Three parts: cli-tool, controller, skill.** The host has no AI, so something must sit on the host, something must reach it, and the AI must know how to ask.
 - **One repo holds all three parts.** The parts change together, and the skill sits next to the API it calls.
 - **The repo has one folder per part: `cli/`, `controller/`, `skill/`.** Each part picks its own language, so not everything has to be Go. The cli-tool is Go because of `tsnet`.
-- **A fourth folder, `shared/`, holds the Go code both programs use: the message types and the check that ties tests to requirements.** Two copies of the message types would drift apart.
+- **A fourth folder, `shared/`, holds the Go code both programs use: the message types, the auth key file, the raw terminal, and the check that ties tests to requirements.** Two copies of the message types would drift apart, and two copies of the code that guards a key would too.
 - **A fifth folder, `acceptance/`, holds the acceptance tests.** They start both real programs, so they belong to neither one.
 - **Host to controller goes over Tailscale; the AI calls the controller's API.** The host is never open to the internet. The AI machine does not have to be on Tailscale.
 - **The cli-tool is written in Go.** `tsnet` is Go only, and Go gives one file to copy to the host with nothing else to install.
