@@ -108,7 +108,7 @@ func TestUNITCTLSTART05_OneListenerTwoDoors(t *testing.T) {
 }
 
 func TestDesignAndGoTestsMatch(t *testing.T) {
-	designcheck.Match(t, "UNIT-CTLSTART", "start_test.go")
+	designcheck.Match(t, "UNIT-CTLSTART", "start_test.go", "tailscale_test.go")
 }
 
 // syncBuffer is a buffer that the program writes and the test reads.
@@ -140,7 +140,7 @@ func started(t *testing.T, args ...string) (printed *syncBuffer, address string)
 	t.Cleanup(func() { stop(); <-done })
 	for i := 0; i < 500; i++ {
 		for _, line := range strings.Split(printed.String(), "\n") {
-			if a, ok := strings.CutPrefix(line, "gangway-controller: listening on "); ok && strings.Contains(printed.String(), "one-machine") {
+			if a, ok := strings.CutPrefix(line, "gangway-controller: the API listens on "); ok && strings.Contains(printed.String(), "one-machine") {
 				return printed, a
 			}
 		}

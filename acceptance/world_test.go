@@ -94,6 +94,13 @@ type world struct {
 	ctl     **exec.Cmd // shared by every cli-tool on this controller
 	cli     *exec.Cmd
 	cliDone chan struct{}
+
+	// For a world on a stand-in Tailscale network. Empty: the one-machine
+	// mode.
+	ctlArgs []string // the words the controller is started with
+	cliArgs []string // the words the cli-tool is started with
+	env     []string // more of the surroundings of both programs
+	cliKey  string   // the Tailscale auth key stored for the cli-tool
 }
 
 // newWorld starts both programs and waits for the paste line. Each of
@@ -118,7 +125,7 @@ func newWorld(t *testing.T, settings ...string) *world {
 // join starts one more cli-tool on the same controller.
 func (w *world) join(settings ...string) *world {
 	w.t.Helper()
-	more := &world{t: w.t, home: w.home, listen: w.listen, address: w.address, ctl: w.ctl}
+	more := &world{t: w.t, home: w.home, listen: w.listen, address: w.address, ctl: w.ctl, cliArgs: w.cliArgs, env: w.env, cliKey: w.cliKey}
 	more.startCli(settings)
 	return more
 }
@@ -126,9 +133,13 @@ func (w *world) join(settings ...string) *world {
 // startController starts the controller and waits until it listens.
 func (w *world) startController() {
 	w.t.Helper()
-	ctl := exec.Command(controllerBin, "-local", "-listen", w.listen)
+	args := w.ctlArgs
+	if args == nil {
+		args = []string{"-local", "-listen", w.listen}
+	}
+	ctl := exec.Command(controllerBin, args...)
 	ctl.Dir = w.home
-	ctl.Env = append(os.Environ(), "HOME="+w.home)
+	ctl.Env = append(append(os.Environ(), "HOME="+w.home), w.env...)
 	if err := ctl.Start(); err != nil {
 		w.t.Fatal(err)
 	}
@@ -174,10 +185,19 @@ func (w *world) startCli(settings []string) {
 
 	master, slave := openTerminal(t)
 	w.keys = master
-	w.cli = exec.Command(cliBin, "--local", w.address)
+	args := w.cliArgs
+	if args == nil {
+		args = []string{"--local", w.address}
+	}
+	if w.cliKey != "" {
+		if err := os.WriteFile(filepath.Join(config, "gangway", "tailscale-auth-key"), []byte(w.cliKey+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w.cli = exec.Command(cliBin, args...)
 	w.cli.Dir = w.home
 	w.cli.Stdin, w.cli.Stdout, w.cli.Stderr = slave, slave, slave
-	w.cli.Env = append(os.Environ(), "HOME="+w.home, "XDG_CONFIG_HOME="+config)
+	w.cli.Env = append(append(append(os.Environ(), "HOME="+w.home), w.env...), "XDG_CONFIG_HOME="+config)
 	if err := w.cli.Start(); err != nil {
 		t.Fatal(err)
 	}

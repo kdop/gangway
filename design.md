@@ -1170,6 +1170,10 @@ Start: the API over a store with one live session of key K. The test plays the h
 | UNIT-CTLSTART-06 | `CTL-10` | | Run the program with `-local` | The start text says that the one-machine mode is on, and that any program on this machine can start a session |
 | UNIT-CTLSTART-07 | `KEY-10` | The program runs with `-local`. Again with `-public-address` set | A host sends `session_start` | `session_ok` holds the address the API listens on. Again: it holds the address that was set |
 | UNIT-CTLSTART-08 | `KEY-10` | | Run the program with `-public-address` set to, one by one: a name with no `http`, an address with a space, one that starts with `ftp`, one with a cursor code, `http://` alone | It stops each time, names the option, and listens on nothing |
+| UNIT-CTLSTART-09 | `CTL-10` | The two handlers of the Tailscale form | A websocket to `/host/v1` on the API's handler. A call to `/v1/session` on the hosts' handler | Both get "not found" |
+| UNIT-CTLSTART-10 | `CTL-12` | No auth key file | Run the program with no option | It says to run `login`, gives an exit code that is not 0, and listens on nothing, not even for the API |
+| UNIT-CTLSTART-11 | `CTL-10`, `KEY-10` | A stand-in for Tailscale's servers, a key stored | Run the program with no option. A second device on the stand-in network opens `/host/v1` at `gangway-controller` and sends `session_start`. The same is tried on the API's listener | Over Tailscale, `session_ok` comes back with the API address. On the API's listener: "not found" |
+| UNIT-CTLSTART-12 | `CTL-12` | A stand-in for Tailscale's servers. An old key is stored | `Login` with a key the stand-in takes. Again with one it refuses | The new key is stored. Again: the error says Tailscale refused it, and the key from before is still the one stored |
 
 ## `network` (controller)
 
@@ -1186,7 +1190,10 @@ Start: the API over a store with one live session of key K. The test plays the h
 - **The API does not answer on that listener, and the hosts' path does not answer on the API's.** Each listener has its own set of paths. (`CTL-10`)
 - **The device is kept.** The controller's Tailscale identity lives in `~/.local/state/gangway-controller/`, with rights for the owner only, so its name stays the same after a restart.
 - **The auth key is given once**, with `gangway-controller login`, and kept as on the host: its own file in `~/.config/gangway-controller/`, readable by its owner only. (`CTL-12`)
-- **A start with no key stops**, and says to run `login`. It does not fall back to the one-machine form.
+- **A start with no key stops**, and says to run `login`. It does not fall back to the one-machine form. Nothing listens, not even the API.
+- **`login` tries the key.** It stores the key, joins once, and leaves. A key that Tailscale refuses is not kept, and the key from before, if there was one, is put back.
+- **The library's log lines are not sent to Tailscale**, as on the cli-tool.
+- **The name can be set** with `-tailscale-name`, for a network where `gangway-controller` is taken. The hosts then set `CONTROLLER_TAILSCALE_NAME` to the same.
 
 ### The one-machine form
 
@@ -1197,12 +1204,10 @@ Start: the API over a store with one live session of key K. The test plays the h
 
 | Test | Requirement | Start | Action | Expect |
 |---|---|---|---|---|
-| UNIT-CTLNETWORK-01 | `CTL-10` | Tailscale form, a stand-in for Tailscale's servers | Start | The stand-in has a device named `gangway-controller`, not ephemeral |
-| UNIT-CTLNETWORK-02 | `CTL-10` | State after UNIT-CTLNETWORK-01 | Call the hosts' path on the API's listener. Call an API path on the hosts' listener | Both get "not found" |
-| UNIT-CTLNETWORK-03 | `CTL-10` | State after UNIT-CTLNETWORK-01 | A second device on the stand-in network opens the hosts' path and sends `session_start` | `session_ok` comes back |
-| UNIT-CTLNETWORK-04 | `CTL-12` | Tailscale form, no auth key file | Start | It stops and says to run `login`. Nothing listens |
-| UNIT-CTLNETWORK-05 | `CTL-12` | State after UNIT-CTLNETWORK-01 | Stop. Start again with the same folders | The stand-in still has one device, with the same identity |
-| UNIT-CTLNETWORK-06 | `CTL-12` | Nothing | `login` with a key | The key file and the state folder are readable by their owner only |
-| UNIT-CTLNETWORK-07 | `CTL-10` | One-machine form | Start | The hosts' path answers on the API's listener. The start text says the mode is on. Tailscale was not joined |
-| UNIT-CTLNETWORK-08 | `KEY-10` | Either form, `PUBLIC_ADDRESS` set to an address. Again with it not set | A host sends `session_start` | `session_ok` holds that address. Not set: it holds the address the API listens on |
-| UNIT-CTLNETWORK-09 | `KEY-10` | `PUBLIC_ADDRESS` set to, one by one: text with a space, a path with no `http`, an empty value | Start | It stops each time and names the setting |
+| UNIT-CTLNETWORK-01 | `CTL-12` | A stand-in for Tailscale's servers, a key stored | Join | The stand-in has one device named `gangway-controller`. The library was not asked for an ephemeral device |
+| UNIT-CTLNETWORK-02 | `CTL-10` | State after UNIT-CTLNETWORK-01, the door open | A second device on the stand-in network dials `gangway-controller` at the hosts' port | It reads what the door wrote |
+| UNIT-CTLNETWORK-03 | `CTL-10` | State after UNIT-CTLNETWORK-01, the door open | Dial the hosts' port on localhost and on every address of the machine | Refused each time |
+| UNIT-CTLNETWORK-04 | `CTL-12` | No auth key file | Join | An error that says to run the controller's `login`. No device joined. No state folder was made |
+| UNIT-CTLNETWORK-05 | `CTL-12` | A key stored | Join, close, join again with the same folders | The same identity both times. The stand-in has one device |
+| UNIT-CTLNETWORK-06 | `CTL-12` | A key stored, and a state folder that others can read | Join | The key file and the state folder are for the owner only. The identity is in the state folder |
+| UNIT-CTLNETWORK-07 | `CTL-12` | A key stored that the stand-in refuses | Join | The error about a refused key. It says to run `login` and does not hold the key |

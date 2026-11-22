@@ -207,7 +207,7 @@ func TestCTL02_1_APublicAddressIsRefusedWithNoLogin(t *testing.T) {
 			ctl.Process.Kill()
 			t.Fatalf("%s: the controller started", listen)
 		}
-		if strings.Contains(printed.String(), "listening on") || !strings.Contains(printed.String(), "login") {
+		if strings.Contains(printed.String(), "listens on") || !strings.Contains(printed.String(), "login") {
 			t.Fatalf("%s: want the reason and no start, got %q", listen, printed.String())
 		}
 	}
