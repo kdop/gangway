@@ -33,7 +33,7 @@ jobs:
         shell: bash
         run: go test -count=1 -cover ./... | tee test.out
       - name: Coverage
-        if: always()
+        if: always() && matrix.folder != 'acceptance'
         shell: bash
         run: |
           {
@@ -41,7 +41,7 @@ jobs:
             echo
             echo "| Package | Lines run |"
             echo "|---|---|"
-            grep -E "coverage: [0-9.]+%" test.out | awk '{
+            { grep -E "coverage: [0-9.]+%" test.out || true; } | awk '{
               for (i = 1; i <= NF; i++) {
                 if ($i ~ /^github.com\/kdop\/gangway\//) { name = $i; sub("github.com/kdop/gangway/", "", name) }
                 if ($i == "coverage:") print "| `" name "` | " $(i + 1) " |"
