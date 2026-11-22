@@ -326,5 +326,5 @@ func TestUNITTERMINAL23_EverythingIsCleaned(t *testing.T) {
 }
 
 func TestDesignAndGoTestsMatch(t *testing.T) {
-	designcheck.Match(t, "UNIT-TERMINAL", "terminal_test.go", "raw_linux_test.go")
+	designcheck.Match(t, "UNIT-TERMINAL", "terminal_test.go", "../../../shared/rawterm/rawterm_linux_test.go")
 }

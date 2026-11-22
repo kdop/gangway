@@ -229,3 +229,63 @@ func err2text(err error) string {
 	}
 	return err.Error()
 }
+
+// UNIT-CTLSTART-13. Requirement: CTL-12.
+func TestUNITCTLSTART13_ABusyAPIAddressStopsTheStart(t *testing.T) {
+	control, keyFile := standIn(t)
+	if err := authkey.Save(keyFile, goodKey); err != nil {
+		t.Fatal(err)
+	}
+	busy, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer busy.Close()
+
+	var out bytes.Buffer
+	done := make(chan int, 1)
+	go func() { done <- Run([]string{"-listen", busy.Addr().String()}, &out) }()
+	select {
+	case code := <-done:
+		if code == 0 {
+			t.Fatal("the exit code is 0")
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("the program did not end")
+	}
+	if !strings.Contains(out.String(), "address already in use") || strings.Contains(out.String(), "listens on") {
+		t.Fatalf("want the reason and no start, got %q", out.String())
+	}
+	// The controller had joined before it found the address busy. It must
+	// have left again: its door no longer answers.
+	store, _ := mem.New(logger.Discard, "")
+	host := &tsnet.Server{
+		Dir: t.TempDir(), Store: store, Hostname: "gangway-host", Ephemeral: true,
+		AuthKey: goodKey, ControlURL: control.HTTPTestServer.URL, Logf: logger.Discard, UserLogf: logger.Discard,
+	}
+	up, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if _, err := host.Up(up); err != nil {
+		t.Fatal(err)
+	}
+	defer host.Close()
+	dial, stop := context.WithTimeout(context.Background(), 3*time.Second)
+	defer stop()
+	if conn, err := host.Dial(dial, "tcp", "gangway-controller:8643"); err == nil {
+		conn.Close()
+		t.Fatal("the hosts' door still answers after the start failed")
+	}
+}
+
+// UNIT-CTLSTART-14. Requirement: CTL-12.
+func TestUNITCTLSTART14_WordsThatMakeNoSense(t *testing.T) {
+	for _, args := range [][]string{{"login", "now"}, {"start"}, {"-local", "extra"}, {"-no-such-option"}} {
+		var out bytes.Buffer
+		if code := Run(args, &out); code != 2 {
+			t.Fatalf("%v: the exit code is %d, want 2", args, code)
+		}
+		if !strings.Contains(out.String(), "gangway-controller login") || strings.Contains(out.String(), "gangway-controller: the API listens on") {
+			t.Fatalf("%v: want the text on how to start, got %q", args, out.String())
+		}
+	}
+}

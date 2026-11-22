@@ -248,6 +248,59 @@ func TestUNITCTLNETWORK07_ARefusedKey(t *testing.T) {
 	}
 }
 
+// UNIT-CTLNETWORK-08. Requirement: CTL-12.
+func TestUNITCTLNETWORK08_NoAnswerEndsAfterTheTimeout(t *testing.T) {
+	// A server that takes the call and never answers.
+	silent, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer silent.Close()
+	netns.SetEnabled(false)
+	c := (&standIn{url: "http://" + silent.Addr().String()}).config(t, goodKey)
+	c.JoinTimeout = time.Second
+	start := time.Now()
+	n, err := Join(context.Background(), c)
+	if err == nil || n != nil || !strings.Contains(err.Error(), "1s") || strings.Contains(err.Error(), goodKey) {
+		t.Fatalf("got %v, want an error that names the timeout and not the key", err)
+	}
+	if took := time.Since(start); took > 6*time.Second {
+		t.Fatalf("Join came back after %s", took)
+	}
+}
+
+// UNIT-CTLNETWORK-09. Requirement: CTL-12.
+func TestUNITCTLNETWORK09_AStateFolderThatCannotBeMade(t *testing.T) {
+	s := newStandIn(t)
+	c := s.config(t, goodKey)
+	// A file stands where the folder must go.
+	if err := os.MkdirAll(filepath.Dir(c.StateDir), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(c.StateDir, []byte("in the way"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	n, err := Join(context.Background(), c)
+	if err == nil || n != nil || strings.Contains(err.Error(), goodKey) {
+		t.Fatalf("got %v, want an error that does not hold the key", err)
+	}
+	if s.NumNodes() != 0 {
+		t.Fatal("a device joined")
+	}
+}
+
+func TestStateDir(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "/somewhere")
+	if dir, err := StateDir(); err != nil || dir != "/somewhere/gangway-controller" {
+		t.Fatalf("got %q, %v", dir, err)
+	}
+	t.Setenv("XDG_STATE_HOME", "")
+	t.Setenv("HOME", "/home/someone")
+	if dir, _ := StateDir(); dir != "/home/someone/.local/state/gangway-controller" {
+		t.Fatalf("with no XDG_STATE_HOME the folder is %q", dir)
+	}
+}
+
 func TestDesignAndGoTestsMatch(t *testing.T) {
 	designcheck.Match(t, "UNIT-CTLNETWORK", "network_test.go")
 }

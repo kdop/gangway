@@ -1174,6 +1174,8 @@ Start: the API over a store with one live session of key K. The test plays the h
 | UNIT-CTLSTART-10 | `CTL-12` | No auth key file | Run the program with no option | It says to run `login`, gives an exit code that is not 0, and listens on nothing, not even for the API |
 | UNIT-CTLSTART-11 | `CTL-10`, `KEY-10` | A stand-in for Tailscale's servers, a key stored | Run the program with no option. A second device on the stand-in network opens `/host/v1` at `gangway-controller` and sends `session_start`. The same is tried on the API's listener | Over Tailscale, `session_ok` comes back with the API address. On the API's listener: "not found" |
 | UNIT-CTLSTART-12 | `CTL-12` | A stand-in for Tailscale's servers. An old key is stored | `Login` with a key the stand-in takes. Again with one it refuses | The new key is stored. Again: the error says Tailscale refused it, and the key from before is still the one stored |
+| UNIT-CTLSTART-13 | `CTL-12` | A stand-in for Tailscale's servers, a key stored. The API's address is taken by another program | Run the program | It says why, gives an exit code that is not 0, and has left Tailscale again: its door no longer answers |
+| UNIT-CTLSTART-14 | `CTL-12` | | Run the program with words that make no sense, such as `login now`, `start`, an option it does not have | The text on how to start, and the exit code 2. Nothing listens |
 
 ## `network` (controller)
 
@@ -1211,3 +1213,5 @@ Start: the API over a store with one live session of key K. The test plays the h
 | UNIT-CTLNETWORK-05 | `CTL-12` | A key stored | Join, close, join again with the same folders | The same identity both times. The stand-in has one device |
 | UNIT-CTLNETWORK-06 | `CTL-12` | A key stored, and a state folder that others can read | Join | The key file and the state folder are for the owner only. The identity is in the state folder |
 | UNIT-CTLNETWORK-07 | `CTL-12` | A key stored that the stand-in refuses | Join | The error about a refused key. It says to run `login` and does not hold the key |
+| UNIT-CTLNETWORK-08 | `CTL-12` | A key stored. Tailscale's servers never answer | Join | An error after the timeout. It names the timeout and does not hold the key |
+| UNIT-CTLNETWORK-09 | `CTL-12` | A key stored. A file stands where the state folder must go | Join | An error that does not hold the key. No device joined |
