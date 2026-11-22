@@ -101,6 +101,10 @@ Every session is new. A session that has ended is never resumed, and nothing of 
 - The key is kept in a file in the home folder that only its owner can read. The exact place follows the usual practice for such files and is picked when it is built.
 - The cli-tool never gives that file to the AI. The ban is fixed in the code, not a setting. Limit: this is sure for file reads. An approved command could still print the file, so the user must refuse such a command.
 - The key is ephemeral: Tailscale removes the host from the network after it goes offline.
+- Each start joins as a new device, kept in memory only. The key must be the reusable kind.
+- The controller joins the same way, from inside the program, with its own key and its own `login`. Its device is kept, so its name stays. The hosts dial that name, `gangway-controller`.
+- A host or a controller machine that already has Tailscale installed keeps it. The device inside the program is a second, separate one.
+- Each program can be started in a one-machine mode with no Tailscale, on localhost only.
 - The key carries a tag. The Tailscale rules let that tag reach the controller and nothing else.
 - Later: the controller makes a fresh one-off auth key per session through the Tailscale API.
 
