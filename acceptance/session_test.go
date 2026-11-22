@@ -333,12 +333,12 @@ func refusesToStart(t *testing.T, prefix []string, onTerminal bool) (printed str
 	config := t.TempDir()
 	os.MkdirAll(filepath.Join(config, "gangway"), 0o755)
 	os.Chmod(config, 0o755)
-	settings := "CONTROLLER_ADDRESS = http://" + ln.Addr().String() + "\n"
+	settings := "# the controller is at " + ln.Addr().String() + "\n"
 	if err := os.WriteFile(filepath.Join(config, "gangway", "settings"), []byte(settings), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	words := append(append([]string{}, prefix...), "env", "XDG_CONFIG_HOME="+config, cliBin)
+	words := append(append([]string{}, prefix...), "env", "XDG_CONFIG_HOME="+config, cliBin, "--local", "http://"+ln.Addr().String())
 	cmd := exec.Command(words[0], words[1:]...)
 	var out bytes.Buffer
 	scr := &screen{}

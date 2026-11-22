@@ -18,8 +18,11 @@ const address = "http://127.0.0.1:8642"
 
 func mustNew(t *testing.T) *Session {
 	t.Helper()
-	s, err := New(address, 256)
+	s, err := New(256)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetAddress(address); err != nil {
 		t.Fatal(err)
 	}
 	return s
@@ -28,7 +31,7 @@ func mustNew(t *testing.T) *Session {
 // UNIT-SESSION-01. Requirement: KEY-01.
 func TestUNITSESSION01_TheKeyHoldsTheBitsAskedFor(t *testing.T) {
 	for bits, hexLen := range map[int]int{128: 32, 256: 64, 512: 128} {
-		s, err := New(address, bits)
+		s, err := New(bits)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -61,7 +64,7 @@ func (b brokenRandom) Read(p []byte) (int, error) {
 // UNIT-SESSION-03. Requirement: KEY-01.
 func TestUNITSESSION03_NoRandomBytesNoSession(t *testing.T) {
 	for _, give := range []int{0, 5, 31} {
-		s, err := newFrom(brokenRandom{give}, address, 256)
+		s, err := newFrom(brokenRandom{give}, 256)
 		if err == nil || s != nil {
 			t.Fatalf("a random source that gave %d bytes made a session", give)
 		}
@@ -71,7 +74,7 @@ func TestUNITSESSION03_NoRandomBytesNoSession(t *testing.T) {
 // UNIT-SESSION-04. Requirement: KEY-01.
 func TestUNITSESSION04_AWeakKeyLengthIsRefused(t *testing.T) {
 	for _, bits := range []int{-8, 0, 8, 64, 120, 127, 129, 130, 255} {
-		if s, err := New(address, bits); err == nil {
+		if s, err := New(bits); err == nil {
 			t.Fatalf("%d bits made a session with the key %q", bits, s.Key())
 		}
 	}
@@ -89,11 +92,22 @@ func TestUNITSESSION05_ThePasteLine(t *testing.T) {
 	}
 }
 
-// UNIT-SESSION-06. Requirement: KEY-04.
+// UNIT-SESSION-06. Requirement: KEY-04, KEY-10.
 func TestUNITSESSION06_AnAddressThatBreaksThePasteLineIsRefused(t *testing.T) {
-	for _, bad := range []string{"", "http://a b", "http://a\tb", "http://a\nb", "http://a\x1b[2Jb", "http://a b"} {
-		if s, err := New(bad, 256); err == nil {
-			t.Fatalf("the address %q made a session with the paste line %q", bad, s.PasteLine())
+	for _, bad := range []string{
+		"", "http://a b", "http://a\tb", "http://a\nb", "http://a\x1b[2Jb", "http://a b",
+		"example.com", "ftp://example.com", "http://", "http://a​b", "http://a‮b",
+	} {
+		s, err := New(256)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = s.SetAddress(bad)
+		if err != ErrBadAddress {
+			t.Fatalf("the address %q gave %v, and the paste line %q", bad, err, s.PasteLine())
+		}
+		if bad != "" && strings.Contains(err.Error(), bad) {
+			t.Fatalf("the error holds the bad address %q", bad)
 		}
 	}
 }
@@ -130,7 +144,7 @@ func TestUNITSESSION08_TheHashIsNotTheKey(t *testing.T) {
 // UNIT-SESSION-09. Requirement: SES-06.
 func TestUNITSESSION09_ThePackageCannotWriteAFile(t *testing.T) {
 	allowed := map[string]bool{
-		"crypto/rand": true, "encoding/hex": true, "errors": true, "fmt": true, "io": true, "unicode": true,
+		"crypto/rand": true, "encoding/hex": true, "errors": true, "fmt": true, "io": true,
 		"github.com/kdop/gangway/shared/messages": true,
 	}
 	files, err := os.ReadDir(".")

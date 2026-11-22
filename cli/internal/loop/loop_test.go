@@ -62,8 +62,11 @@ func newWorld(t *testing.T, change func(*settings.Settings)) *world {
 	if change != nil {
 		change(&s)
 	}
-	sess, err := session.New(s.ControllerAddress, 256)
+	sess, err := session.New(256)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sess.SetAddress("http://127.0.0.1:8642"); err != nil {
 		t.Fatal(err)
 	}
 	w := &world{now: time.Unix(1000, 0)}

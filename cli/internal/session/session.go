@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"unicode"
 
 	"github.com/kdop/gangway/shared/messages"
 )
@@ -28,29 +27,35 @@ type Session struct {
 }
 
 // New makes a live session with a fresh key from the system's random
-// source. address is the controller's address, as the AI must call it.
-// bits is SESSION_KEY_BITS.
-func New(address string, bits int) (*Session, error) {
-	return newFrom(rand.Reader, address, bits)
+// source. bits is SESSION_KEY_BITS. The session has no address yet.
+func New(bits int) (*Session, error) {
+	return newFrom(rand.Reader, bits)
 }
 
-func newFrom(random io.Reader, address string, bits int) (*Session, error) {
+func newFrom(random io.Reader, bits int) (*Session, error) {
 	if bits < MinKeyBits || bits%8 != 0 {
 		return nil, fmt.Errorf("SESSION_KEY_BITS is %d: it must be a multiple of 8 and at least %d", bits, MinKeyBits)
-	}
-	if address == "" {
-		return nil, errors.New("the controller's address is empty")
-	}
-	for _, r := range address {
-		if unicode.IsSpace(r) || unicode.IsControl(r) {
-			return nil, errors.New("the controller's address holds a space or a control character")
-		}
 	}
 	raw := make([]byte, bits/8)
 	if _, err := io.ReadFull(random, raw); err != nil {
 		return nil, fmt.Errorf("no random bytes for the session key: %w", err)
 	}
-	return &Session{address: address, key: messages.KeyPrefix + hex.EncodeToString(raw)}, nil
+	return &Session{key: messages.KeyPrefix + hex.EncodeToString(raw)}, nil
+}
+
+// ErrBadAddress says the controller gave an address that cannot go into
+// the paste line. It does not hold the address: that text must not reach
+// the screen.
+var ErrBadAddress = errors.New("the controller gave an API address that cannot be used: it must be a plain web address")
+
+// SetAddress takes the API address the controller gave, as the AI must
+// call it. Anything but a plain web address is refused.
+func (s *Session) SetAddress(address string) error {
+	if !messages.PlainWebAddress(address) {
+		return ErrBadAddress
+	}
+	s.address = address
+	return nil
 }
 
 // Key is the session key. It goes to the user's screen in the paste line

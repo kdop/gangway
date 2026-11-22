@@ -177,7 +177,7 @@ Settings on the host come in three layers. Each layer can only narrow the one ab
 | Layer | Where | Who can change it | Holds |
 |---|---|---|---|
 | Admin | `/etc/gangway/` | Root only, with sudo | The outer bounds: the folders that may ever be granted, and the maximum session length |
-| User | `~/.config/gangway/` | The user | The user's own defaults: controller address, session length, time and size limits |
+| User | `~/.config/gangway/` | The user | The user's own defaults: the controller's Tailscale name, session length, time and size limits |
 | Session | Start options | The user, at each start | The choices for this one session, such as the granted folders and the length |
 
 - The admin layer exists because an approved command runs as the plain user, and the plain user can rewrite `~/.config/gangway/`. A bound kept only there could be changed by one careless `y`. A file owned by root cannot.
@@ -194,7 +194,7 @@ On the host:
 | What | Where |
 |---|---|
 | Admin bounds: grantable folders, maximum session length | `/etc/gangway/`, owned by root |
-| Settings: controller address, session length, time and size limits | `~/.config/gangway/` |
+| Settings: the controller's Tailscale name, session length, time and size limits | `~/.config/gangway/` |
 | Tailscale auth key from `login` | Same folder, own file, readable by its owner only |
 | Host token from pairing | Same folder, own file, readable by its owner only |
 | Log of requests, answers and output. A new file is started at a set size, and only the last few are kept | `~/.local/state/gangway/` |

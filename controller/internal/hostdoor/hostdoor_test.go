@@ -354,6 +354,17 @@ func TestUNITHOSTDOOR12_AMessageThatIsTooLargeEndsTheSession(t *testing.T) {
 	f.wantNoSession()
 }
 
+// UNIT-HOSTDOOR-13. Requirement: KEY-10.
+func TestUNITHOSTDOOR13_SessionOKHoldsTheAPIAddress(t *testing.T) {
+	f := newFixture(t, &Door{APIAddress: "https://gangway.example.com"})
+	c := f.connect()
+	c.send(start(keyK))
+	msg, ok := c.read()
+	if !ok || msg.Type != messages.TypeSessionOK || msg.APIAddress != "https://gangway.example.com" {
+		t.Fatalf("got %+v (ok=%v), want session_ok with the API address", msg, ok)
+	}
+}
+
 func TestDesignAndGoTestsMatch(t *testing.T) {
 	designcheck.Match(t, "UNIT-HOSTDOOR", "hostdoor_test.go")
 }

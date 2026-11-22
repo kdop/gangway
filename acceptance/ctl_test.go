@@ -30,7 +30,7 @@ func otherAddress(t *testing.T) string {
 // defaultController starts the controller with no setting. It skips the
 // test when another program already holds the starting address.
 func defaultController(t *testing.T) {
-	ctl := exec.Command(controllerBin)
+	ctl := exec.Command(controllerBin, "-local")
 	var printed bytes.Buffer
 	ctl.Stderr = &printed
 	if err := ctl.Start(); err != nil {
@@ -190,7 +190,7 @@ func TestCTL01_2_WithNoSettingTheControllerAnswersNowhereElse(t *testing.T) {
 
 func TestCTL02_1_APublicAddressIsRefusedWithNoLogin(t *testing.T) {
 	for _, listen := range []string{"0.0.0.0:0", otherAddress(t) + ":0", "[::]:0"} {
-		ctl := exec.Command(controllerBin, "-listen", listen)
+		ctl := exec.Command(controllerBin, "-local", "-listen", listen)
 		var printed bytes.Buffer
 		ctl.Stderr = &printed
 		done := make(chan error, 1)

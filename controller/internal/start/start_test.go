@@ -3,10 +3,12 @@ package start
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -107,4 +109,103 @@ func TestUNITCTLSTART05_OneListenerTwoDoors(t *testing.T) {
 
 func TestDesignAndGoTestsMatch(t *testing.T) {
 	designcheck.Match(t, "UNIT-CTLSTART", "start_test.go")
+}
+
+// syncBuffer is a buffer that the program writes and the test reads.
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
+
+// started runs the program with these options and gives what it printed
+// once it listens. It gives the address it listens on.
+func started(t *testing.T, args ...string) (printed *syncBuffer, address string) {
+	t.Helper()
+	printed = &syncBuffer{}
+	ctx, stop := context.WithCancel(context.Background())
+	done := make(chan int, 1)
+	go func() { done <- run(ctx, args, printed) }()
+	t.Cleanup(func() { stop(); <-done })
+	for i := 0; i < 500; i++ {
+		for _, line := range strings.Split(printed.String(), "\n") {
+			if a, ok := strings.CutPrefix(line, "gangway-controller: listening on "); ok && strings.Contains(printed.String(), "one-machine") {
+				return printed, a
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("the program did not start: %q", printed.String())
+	return nil, ""
+}
+
+// apiAddress starts a session as a host would and gives the API address
+// that session_ok holds.
+func apiAddress(t *testing.T, address string) string {
+	t.Helper()
+	ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
+	defer stop()
+	conn, _, err := websocket.Dial(ctx, "ws://"+address+messages.HostPath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.CloseNow()
+	limits := messages.Limits{CommandSeconds: 60, AnswerSeconds: 60, MaxWaiting: 20}
+	first, _ := json.Marshal(messages.Message{Type: messages.TypeSessionStart, KeyHash: messages.KeyHash("gw_" + strings.Repeat("a", 64)), Host: "h", Limits: &limits})
+	if err := conn.Write(ctx, websocket.MessageText, first); err != nil {
+		t.Fatal(err)
+	}
+	_, b, err := conn.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var answer messages.Message
+	if json.Unmarshal(b, &answer) != nil || answer.Type != messages.TypeSessionOK {
+		t.Fatalf("got %s, want session_ok", b)
+	}
+	return answer.APIAddress
+}
+
+// UNIT-CTLSTART-06. Requirement: CTL-10.
+func TestUNITCTLSTART06_TheOneMachineModeSaysItIsOn(t *testing.T) {
+	printed, _ := started(t, "-local", "-listen", "127.0.0.1:0")
+	if !strings.Contains(printed.String(), "the one-machine mode is on: any program on this machine can start a session") {
+		t.Fatalf("the start text is %q", printed.String())
+	}
+}
+
+// UNIT-CTLSTART-07. Requirement: KEY-10.
+func TestUNITCTLSTART07_TheAPIAddressGivenToAHost(t *testing.T) {
+	_, address := started(t, "-local", "-listen", "127.0.0.1:0")
+	if got := apiAddress(t, address); got != "http://"+address {
+		t.Fatalf("with no setting the host got %q, want http://%s", got, address)
+	}
+	_, address = started(t, "-local", "-listen", "127.0.0.1:0", "-public-address", "https://gangway.example.com")
+	if got := apiAddress(t, address); got != "https://gangway.example.com" {
+		t.Fatalf("the host got %q, want the address that was set", got)
+	}
+}
+
+// UNIT-CTLSTART-08. Requirement: KEY-10.
+func TestUNITCTLSTART08_ABadPublicAddressStopsTheStart(t *testing.T) {
+	for _, bad := range []string{"gangway.example.com", "https://exa mple.com", "ftp://example.com", "https://example.com/\x1b[2J", "http://"} {
+		var out bytes.Buffer
+		if code := Run([]string{"-local", "-listen", "127.0.0.1:0", "-public-address", bad}, &out); code == 0 {
+			t.Fatalf("%q: the exit code is 0", bad)
+		}
+		if !strings.Contains(out.String(), "-public-address") || strings.Contains(out.String(), "listening") {
+			t.Fatalf("%q: want the setting named and no start, got %q", bad, out.String())
+		}
+	}
 }

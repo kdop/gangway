@@ -40,6 +40,37 @@ func TestUNITSTART04_RootComesFirst(t *testing.T) {
 	}
 }
 
+// UNIT-START-05. Requirement: HOST-04, HOST-08.
+func TestUNITSTART05_TheWordsAfterTheName(t *testing.T) {
+	for _, c := range []struct {
+		args    []string
+		what    int
+		address string
+	}{
+		{nil, doSession, ""},
+		{[]string{"login"}, doLogin, ""},
+		{[]string{"--local"}, doLocal, ""},
+		{[]string{"--local", "http://127.0.0.1:9000"}, doLocal, "http://127.0.0.1:9000"},
+	} {
+		what, address, err := Plan(c.args)
+		if err != nil || what != c.what || address != c.address {
+			t.Fatalf("%v gave %d, %q, %v", c.args, what, address, err)
+		}
+	}
+}
+
+// UNIT-START-06. Requirement: HOST-04.
+func TestUNITSTART06_WordsThatMakeNoSense(t *testing.T) {
+	for _, args := range [][]string{
+		{"start"}, {"login", "now"}, {"-local"}, {"--local", "a", "b"}, {"--help"}, {"Login"}, {""}, {"login", "--local"},
+	} {
+		_, _, err := Plan(args)
+		if err == nil || !strings.Contains(err.Error(), "gangway login") || !strings.Contains(err.Error(), "gangway --local") {
+			t.Fatalf("%v gave %v, want the text on how to start", args, err)
+		}
+	}
+}
+
 func TestDesignAndGoTestsMatch(t *testing.T) {
 	designcheck.Match(t, "UNIT-START", "start_test.go")
 }

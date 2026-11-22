@@ -6,6 +6,7 @@ package messages
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"strings"
 )
 
 // HostPath is the path on the controller where the cli-tool opens its
@@ -31,6 +32,30 @@ const KeyPrefix = "gw_"
 func KeyHash(key string) string {
 	sum := sha256.Sum256([]byte(key))
 	return hex.EncodeToString(sum[:])
+}
+
+// PlainWebAddress tells whether s is an address that may be shown in the
+// paste line: it starts with http:// or https://, names a host, and holds
+// nothing but letters, digits and the usual marks of an address.
+func PlainWebAddress(s string) bool {
+	rest, ok := strings.CutPrefix(s, "https://")
+	if !ok {
+		if rest, ok = strings.CutPrefix(s, "http://"); !ok {
+			return false
+		}
+	}
+	if rest == "" || strings.ContainsAny(rest[:1], "/:?#@") || len(s) > 2000 {
+		return false
+	}
+	for _, r := range rest {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case strings.ContainsRune("-._~:/?#[]@!$&'()*+,;=%", r):
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // The types of message on the connection.
@@ -115,6 +140,9 @@ type Message struct {
 	ExitCode      *int   `json:"exit_code,omitempty"`
 	Cut           bool   `json:"cut,omitempty"`
 	BytesReplaced bool   `json:"bytes_replaced,omitempty"`
+
+	// session_ok: the address the AI calls, for the paste line
+	APIAddress string `json:"api_address,omitempty"`
 
 	// session_start
 	KeyHash string  `json:"key_hash,omitempty"`

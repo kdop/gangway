@@ -8,5 +8,5 @@ import (
 )
 
 func main() {
-	os.Exit(start.Run(os.Stdin, os.Stdout, os.Stderr))
+	os.Exit(start.Run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
 }

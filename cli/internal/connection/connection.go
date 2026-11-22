@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -86,17 +87,28 @@ type Conn struct {
 }
 
 // Dial opens the websocket, sends session_start and waits for session_ok.
-// controller is the controller's address, such as http://127.0.0.1:8642.
-// No session exists unless Dial comes back without an error.
-func Dial(ctx context.Context, controller string, start Start, handler Handler) (*Conn, error) {
+// client and controller come from the network piece: what opens a
+// connection on its road, and the controller's address on that road.
+// apiAddress is the address the controller gave for the paste line. It is
+// not checked here. No session exists unless Dial comes back without an
+// error.
+func Dial(ctx context.Context, client *http.Client, controller string, start Start, handler Handler) (conn *Conn, apiAddress string, err error) {
+	c, address, err := dial(ctx, client, controller, start, handler)
+	if err != nil {
+		return nil, "", err
+	}
+	return c, address, nil
+}
+
+func dial(ctx context.Context, client *http.Client, controller string, start Start, handler Handler) (*Conn, string, error) {
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, dialWait)
 		defer cancel()
 	}
-	ws, _, err := websocket.Dial(ctx, strings.TrimRight(controller, "/")+messages.HostPath, nil)
+	ws, _, err := websocket.Dial(ctx, strings.TrimRight(controller, "/")+messages.HostPath, &websocket.DialOptions{HTTPClient: client})
 	if err != nil {
-		return nil, fmt.Errorf("cannot reach the controller: %w", err)
+		return nil, "", fmt.Errorf("cannot reach the controller: %w", err)
 	}
 	ws.SetReadLimit(readLimit)
 
@@ -109,24 +121,24 @@ func Dial(ctx context.Context, controller string, start Start, handler Handler) 
 	})
 	if err := ws.Write(ctx, websocket.MessageText, hello); err != nil {
 		ws.CloseNow()
-		return nil, fmt.Errorf("cannot start the session: %w", err)
+		return nil, "", fmt.Errorf("cannot start the session: %w", err)
 	}
 	kind, data, err := ws.Read(ctx)
 	if err != nil {
 		ws.CloseNow()
-		return nil, fmt.Errorf("the controller did not take the session: %w", err)
+		return nil, "", fmt.Errorf("the controller did not take the session: %w", err)
 	}
 	var answer messages.Message
 	if kind != websocket.MessageText || json.Unmarshal(data, &answer) != nil || answer.Type != messages.TypeSessionOK {
 		ws.CloseNow()
-		return nil, errors.New("the controller did not take the session: its first message was not session_ok")
+		return nil, "", errors.New("the controller did not take the session: its first message was not session_ok")
 	}
 
 	c := &Conn{ws: ws, handler: handler, maxQueued: defaultMaxQueued, closeWait: closeWait, writerDone: make(chan struct{})}
 	c.cond = sync.NewCond(&c.mu)
 	go c.write()
 	go c.read()
-	return c, nil
+	return c, answer.APIAddress, nil
 }
 
 // Started says the user pressed y for the request.

@@ -8,7 +8,7 @@ It exists because SSH gives an AI a full shell with no say over the commands.
 
 ## Status
 
-The first version, the MVP, is being built piece by piece. It cannot be run yet.
+The first version, the MVP, is built: the three parts work together on one machine. The next step, reaching a host over Tailscale, is being built piece by piece.
 
 The design is written down in three levels, each with its tests: the requirements, the architecture, and the inside of each piece. The pieces are built one at a time, and every test in the code names the requirement it proves.
 
@@ -21,6 +21,17 @@ The design is written down in three levels, each with its tests: the requirement
 | `shared/` | The Go code both programs use |
 | `acceptance/` | The acceptance tests of `requirements.md`. They start both real programs. Go |
 | `skill/` | The skill that teaches the AI how to ask |
+
+## Try it on one machine
+
+No Tailscale is needed for this. Use two terminals.
+
+```
+cd controller && go run . -local
+cd cli && go run ./cmd/gangway --local
+```
+
+The cli-tool prints a line that starts with `/gangway`. Paste it to an AI that has the skill in `skill/gangway/`.
 
 ## Run the tests
 
