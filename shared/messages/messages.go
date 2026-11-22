@@ -15,6 +15,14 @@ const HostPath = "/host/v1"
 // DefaultListen is where the controller listens when nothing else is set.
 const DefaultListen = "127.0.0.1:8642"
 
+// HostDoorPort is where the controller's door for the hosts answers on
+// the Tailscale network.
+const HostDoorPort = 8643
+
+// DefaultControllerName is the controller's name on the Tailscale network
+// when nothing else is set.
+const DefaultControllerName = "gangway-controller"
+
 // KeyPrefix starts every session key.
 const KeyPrefix = "gw_"
 

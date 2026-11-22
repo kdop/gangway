@@ -850,7 +850,9 @@ It uses `tsnet`, Tailscale's library for a device inside a Go program. Source: h
 - **A folder that goes away.** The library needs a folder that exists. `network` makes an empty one for this start, with rights for the owner only, and removes it at `leave`. (`HOST-09`)
 - **The name.** The device shows the host's name with `gangway-` in front, so the user can tell it from the host's own Tailscale device, if it has one.
 - **The address to dial** is `http://` and `CONTROLLER_TAILSCALE_NAME`, at the hosts' port. The port is fixed in the code both programs share.
-- **It listens for nothing.** `network` never asks the library to listen. The library holds one UDP port for the tunnel, which is how Tailscale sends and receives. (`HOST-03`)
+- **It takes no connection from outside.** `network` never asks the library to listen. The library holds UDP ports for the tunnel, which is how Tailscale sends and receives. It also holds one TCP port for calls from the host itself, tied to the loopback device, so no other machine can reach it. (`HOST-03`)
+- **The library's log lines are not sent to Tailscale.** The library would upload them by default. `network` switches that off before it joins.
+- **Only a short-lived device can live in memory.** The library refuses a memory-only identity for any other kind, which fits: the host's device is both.
 - **The library's own log lines stay off the screen.** Only `terminal` writes to the screen.
 
 ### The one-machine form
@@ -875,13 +877,13 @@ The Tailscale form is tried with the library pointed at a stand-in for Tailscale
 | UNIT-NETWORK-02 | `HOST-08` | One-machine form | Make it with, one by one: `http://localhost:9000`, `http://127.0.0.1:9000`, `http://[::1]:9000` | Each is taken |
 | UNIT-NETWORK-03 | `HOST-08` | One-machine form | Make it with, one by one: `http://192.168.1.5:9000`, `http://example.com`, `http://0.0.0.0:9000`, text that is no address | An error each time that says the mode is for localhost only |
 | UNIT-NETWORK-04 | `HOST-08` | One-machine form, no auth key file | `join` | No error. `secrets` was not asked |
-| UNIT-NETWORK-05 | `HOST-06` | Tailscale form, a stand-in for Tailscale's servers, a good key | `join` | No error. The stand-in has one new device, marked ephemeral, with the host's name and `gangway-` in front |
+| UNIT-NETWORK-05 | `HOST-06` | Tailscale form, a stand-in for Tailscale's servers, a good key | `join` | No error. The stand-in has one new device, with the host's name and `gangway-` in front. The library was asked for an ephemeral device |
 | UNIT-NETWORK-06 | `HOST-06` | State after UNIT-NETWORK-05 | `dialer` | The address is `http://`, `CONTROLLER_TAILSCALE_NAME` and the hosts' port |
 | UNIT-NETWORK-07 | `HOST-09` | The same stand-in | `join`, `leave`, then a new `network` and `join` again | The stand-in saw two devices with two identities |
 | UNIT-NETWORK-08 | `HOST-09`, `SES-08` | State after UNIT-NETWORK-05 | `leave` | The folder of this start is gone. The device no longer answers |
 | UNIT-NETWORK-09 | `HOST-06` | Tailscale form, a stand-in that refuses the key | `join` | An error that says Tailscale refused the key and to run `login` again. The error does not hold the key |
 | UNIT-NETWORK-10 | `HOST-06` | Tailscale form, a stand-in that never answers | `join` | An error after `JOIN_TIMEOUT`. The folder of this start is gone |
-| UNIT-NETWORK-11 | `HOST-03` | State after UNIT-NETWORK-05 | List the ports this program holds | No TCP port listens |
+| UNIT-NETWORK-11 | `HOST-03` | State after UNIT-NETWORK-05 | List the TCP ports this program listens on | Each is on a localhost address or tied to the loopback device. A port the test opens to all is seen by the same check |
 | UNIT-NETWORK-12 | `SES-08` | A stand-in that never answers `leave` | `leave` | It comes back within a few seconds |
 
 ## `login`
