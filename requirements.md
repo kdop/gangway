@@ -487,6 +487,16 @@ The controller must refuse to start a session whose key hash a live session alre
 | KEY-09.1 | Live session | A second program connects as a host and starts a session with the same key hash | It is refused. The AI's requests still reach the first cli-tool only |
 | KEY-09.2 | A session has ended | A cli-tool starts a session with the hash of the old key | It is taken as a new session. This cannot happen by chance: each key is random |
 
+### KEY-10
+
+The address in the paste line must be the API address the controller gave at the start of the session. The cli-tool must show it only when it is a plain web address. Step 2.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| KEY-10.1 | A controller with `PUBLIC_ADDRESS` set | Start the cli-tool | The paste line holds that address |
+| KEY-10.2 | A controller with `PUBLIC_ADDRESS` not set | Start the cli-tool | The paste line holds the address the API listens on |
+| KEY-10.3 | A stand-in controller that gives, one by one: an address with a cursor code, one with a space, one that does not start with `http://` or `https://`, an empty one | Start the cli-tool | Each time it says the controller gave an address it cannot use, and ends. No paste line is shown. The bad text never reaches the terminal |
+
 ## LEN: session length
 
 ### LEN-01
@@ -715,11 +725,12 @@ The cli-tool must refuse to start without a terminal. Step 9.
 
 ### HOST-03
 
-The cli-tool must listen on no port of the host. Step 2.
+The cli-tool must accept no connection from outside. Step 2.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
-| HOST-03.1 | Live session | List the ports the host listens on | None belongs to the cli-tool |
+| HOST-03.1 | Live session | List the ports the cli-tool holds | No TCP port listens. The one UDP port is the Tailscale tunnel's |
+| HOST-03.2 | Live session in the one-machine mode | The same | The cli-tool holds no port that listens |
 
 ### HOST-04
 
@@ -745,6 +756,9 @@ The cli-tool must join Tailscale with no Tailscale install on the host and no ro
 | Test | Start | Action | Expect |
 |---|---|---|---|
 | HOST-06.1 | A host with no Tailscale installed, and a plain user | Do `login`, then start the cli-tool | A live session, reached over Tailscale |
+| HOST-06.2 | A host with Tailscale installed and running | Do `login`, then start the cli-tool | A live session. The host's own Tailscale still works, and was not changed |
+| HOST-06.3 | `login` has not been done | Start the cli-tool | It says to run `login` and exits. It has made no connection |
+| HOST-06.4 | `login` was done with a key that Tailscale no longer takes | Start the cli-tool | It says Tailscale refused the key and to run `login` again, and exits |
 
 ### HOST-07
 
@@ -754,6 +768,25 @@ When the cli-tool ends, it must leave the terminal as it found it. Step 1.
 |---|---|---|---|
 | HOST-07.1 | Live session | The user ends the cli-tool with two Ctrl+C | In the same terminal, typed letters show again and Enter works as before |
 | HOST-07.2 | A command runs | The cli-tool is ended from outside | The same |
+
+### HOST-08
+
+The cli-tool must reach the controller over Tailscale, unless it was started in the one-machine mode. In that mode it must dial localhost only, and must not join Tailscale. Step 2.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| HOST-08.1 | A controller in the one-machine mode. `login` has not been done | Start the cli-tool in the one-machine mode | A live session over localhost. No auth key was asked for. Tailscale was not joined |
+| HOST-08.2 | Nothing | Start the cli-tool in the one-machine mode with an address that is not localhost | It says the mode is for localhost only and exits. It has made no connection |
+| HOST-08.3 | A controller on Tailscale, and one in the one-machine mode on the host itself | Start the cli-tool with no option | The session is on the Tailscale controller. The local one has no session |
+
+### HOST-09
+
+The cli-tool must join Tailscale as a new device at every start, and must keep nothing of that device on disk. Step 2.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| HOST-09.1 | `login` has been done | Start the cli-tool twice, one after the other | Tailscale saw two devices with two identities |
+| HOST-09.2 | A session has ended | Search every file the cli-tool has written | The auth key file is the only one that holds anything of Tailscale |
 
 ## PAIR: pairing a host to a user
 
@@ -936,11 +969,14 @@ The dashboard must offer no way to approve a request. Step 8.
 
 ### CTL-10
 
-A host must reach the controller over Tailscale only. Step 2.
+A host must reach the controller over Tailscale only, unless the controller was started in the one-machine mode. In that mode a host must reach it over localhost only, and the controller must say at start that the mode is on. Step 2.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
-| CTL-10.1 | The controller is running | A cli-tool tries to connect as a host over a road that is not Tailscale | Refused |
+| CTL-10.1 | The controller is running | A cli-tool tries to connect as a host over a road that is not Tailscale: over localhost, and at the machine's other addresses | Refused each time |
+| CTL-10.2 | The controller is running | Call an API path over the hosts' door on Tailscale | Not found. The API does not answer there |
+| CTL-10.3 | The controller runs in the one-machine mode | A cli-tool connects as a host over localhost. Another tries at the machine's other addresses | The first is taken. The second gets no answer |
+| CTL-10.4 | Nothing | Start the controller in the one-machine mode | It says that the mode is on and that any program on this machine can start a session. It has not joined Tailscale |
 
 ### CTL-11
 
@@ -950,6 +986,17 @@ The API must turn away a request it cannot read, and nothing must reach a host. 
 |---|---|---|---|
 | CTL-11.1 | Live session | The AI sends a request that is not JSON, one with no command, and one of a kind the controller does not know | Each is turned away. No prompt on the host |
 | CTL-11.2 | Live session | The AI sends a request with fields the API does not have, such as one that says it is approved | The host gets the command only. A prompt is shown as usual |
+
+### CTL-12
+
+The controller must join Tailscale from inside the program, with an auth key given once at its own `login`. The key file and the folder that holds the controller's Tailscale identity must be readable by their owner only. Step 2.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| CTL-12.1 | A machine with no Tailscale installed | Do the controller's `login`, then start it | It is on the Tailscale network under its name. A host reaches it |
+| CTL-12.2 | The controller's `login` has been done | Start the controller and type nothing. Stop it and start it again | Both starts ask for nothing. It is the same device both times |
+| CTL-12.3 | The controller's `login` has been done | Look at the rights of the key file and of the identity folder | Only the owner can read or write them |
+| CTL-12.4 | The controller's `login` has not been done | Start the controller with no option | It says to run `login` and does not start. It does not fall back to the one-machine mode |
 
 ## SET: settings
 
@@ -1058,6 +1105,9 @@ A name in upper case is a setting. The requirements use the name, never the numb
 | `KILL_WAIT` | 2 seconds | How long a command that was asked to stop may still run before it is killed by force | LIM-13 |
 | `OUTPUT_SIZE_LIMIT` | 100 KB | How much output of one command is sent. The rest is cut | LIM-05 |
 | `DOUBLE_CTRL_C_WINDOW` | 2 seconds | Two Ctrl+C within this time end the cli-tool | LIM-10 |
+| `CONTROLLER_TAILSCALE_NAME` | `gangway-controller` | The controller's name on the Tailscale network. The controller takes it, and the cli-tool dials it | HOST-06, CTL-12 |
+| `JOIN_TIMEOUT` | 30 seconds | How long the cli-tool waits to get onto the Tailscale network | HOST-06 |
+| `PUBLIC_ADDRESS` | The address the API listens on | The API address the controller gives for the paste line. Set on the controller | KEY-10 |
 | `PAIRING_CODE_LIFE` | 5 minutes | How long a pairing code works | PAIR-03, PAIR-10 |
 | `LINK_TIMEOUT` | 30 seconds | How long the connection may be silent before it counts as lost | SES-04 |
 | `RECONNECT_WINDOW` | 2 minutes | How long the cli-tool tries to connect again before the session ends | SES-04, SES-09 |

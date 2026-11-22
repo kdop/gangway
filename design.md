@@ -783,6 +783,167 @@ The pieces are the real ones. The test holds the edges: the keyboard, the screen
 | UNIT-START-03 | `HOST-01`, `HOST-02` | A plain user, both are terminals | Check | No error |
 | UNIT-START-04 | `HOST-01` | The user is root and there is no terminal | Check | The error is the one about root |
 
+## `secrets`
+
+`secrets` keeps the Tailscale auth key on the host. It holds no state: it reads and writes one file.
+
+### The file
+
+`~/.config/gangway/tailscale-auth-key`. If `XDG_CONFIG_HOME` is set, the file is `gangway/tailscale-auth-key` under that folder. It holds the key and a line break, and nothing else.
+
+### What it can be asked
+
+| Ask | Does | Gives back |
+|---|---|---|
+| `save`, with a key | Makes the folder if it is not there, with rights for the owner only. Writes the key to a new file with rights for the owner only, then puts that file in the place of the old one | An error, or nothing |
+| `load` | Reads the key | The key, or an error that says to run `login` |
+| `protected`, with a path | Tells whether the path is the auth key file | Yes or no |
+
+### Rules the code must keep
+
+- **Owner only, from the first moment.** The file is made with its rights already set. It is never made open and closed after. (`HOST-05`)
+- **A file that others can read is refused.** `load` gives an error when the group or anyone else can read or write the file, and says how to fix it. (`HOST-05`)
+- **The key never reaches the screen or a message.** `secrets` gives the key to `network` and to nothing else. An error names the file, never the key.
+- **A key that cannot be one is refused at `save`.** It must start with `tskey-auth-` and hold no space and no control character. A paste of the wrong thing is caught before it is stored.
+- **`protected` follows links.** A path that leads to the file through a link or through `..` is the file. The check of file reads uses it when file reads are built. (`KEY-08`)
+
+### Unit tests
+
+| Test | Requirement | Start | Action | Expect |
+|---|---|---|---|---|
+| UNIT-SECRETS-01 | `HOST-05` | No folder, no file | `save` a key | The folder and the file are there. Only the owner can read or write each. `load` gives the key back |
+| UNIT-SECRETS-02 | `HOST-05` | A file with an old key | `save` a new key | `load` gives the new key. The rights are for the owner only |
+| UNIT-SECRETS-03 | `HOST-04` | No file | `load` | An error that says to run `login` |
+| UNIT-SECRETS-04 | `HOST-05` | A file that the group can read. Again one that anyone can read | `load` | An error each time that names the file and the fix. No key is given |
+| UNIT-SECRETS-05 | `HOST-05` | Nothing | `save`, one by one: an empty key, a key with a space, one with a control character, one that does not start with `tskey-auth-` | An error each time. No file is made |
+| UNIT-SECRETS-06 | `HOST-05` | A file with a key | `load` fails, and `save` fails on a folder that cannot be written | Neither error holds the key |
+| UNIT-SECRETS-07 | `KEY-08` | A file with a key | `protected` with: the file's path, a path to it through `..`, a link to it, another file in the same folder | Yes, yes, yes, no |
+
+## `network`
+
+`network` is the road to the controller. It has two forms, picked at start, and the rest of the cli-tool cannot tell them apart.
+
+| Form | When | The road |
+|---|---|---|
+| Tailscale | Always, unless the cli-tool was started with `--local` | Joins the Tailscale network from inside the program and dials the controller by its Tailscale name |
+| One machine | Started with `--local` | Dials the controller on localhost. No Tailscale, no auth key |
+
+### What it holds
+
+- In the Tailscale form: the Tailscale device of this start, and its folder.
+- In the one-machine form: nothing.
+
+### What it can be asked
+
+| Ask | Does | Gives back |
+|---|---|---|
+| `join` | Tailscale: joins the network with the auth key and waits until it is up. One machine: nothing | An error, or nothing |
+| `dialer` | | What `connection` needs to open its websocket over this road, and the address to dial |
+| `leave` | Tailscale: leaves the network and removes the folder. One machine: nothing | |
+
+### The Tailscale form
+
+It uses `tsnet`, Tailscale's library for a device inside a Go program. Source: https://pkg.go.dev/tailscale.com/tsnet
+
+- **A new device at every start.** The device's identity is kept in memory. No start can pick up the device of an earlier one. (`HOST-09`)
+- **Ephemeral.** The device joins as ephemeral, so Tailscale removes it after it goes offline.
+- **A folder that goes away.** The library needs a folder that exists. `network` makes an empty one for this start, with rights for the owner only, and removes it at `leave`. (`HOST-09`)
+- **The name.** The device shows the host's name with `gangway-` in front, so the user can tell it from the host's own Tailscale device, if it has one.
+- **The address to dial** is `http://` and `CONTROLLER_TAILSCALE_NAME`, at the hosts' port. The port is fixed in the code both programs share.
+- **It listens for nothing.** `network` never asks the library to listen. The library holds one UDP port for the tunnel, which is how Tailscale sends and receives. (`HOST-03`)
+- **The library's own log lines stay off the screen.** Only `terminal` writes to the screen.
+
+### The one-machine form
+
+- **Localhost only.** The address is `http://127.0.0.1` at the controller's starting port, or the address given with `--local`. An address that is not localhost stops the start, with the reason. (`HOST-08`)
+- **No auth key is read.** `secrets` is not asked.
+
+### Rules the code must keep
+
+- **Join before anything is shown as live.** The cli-tool says it is connecting, joins, and only then opens the websocket. A join that fails ends the start with the reason: no auth key, a key that Tailscale refuses, or no answer in `JOIN_TIMEOUT`.
+- **`leave` runs on every way out.** After the session ends, when the start fails after `join`, and when the program is told to stop from outside. (`SES-08`)
+- **`leave` does not hang.** It gives up after a few seconds. The device is ephemeral, so Tailscale removes it in any case.
+- **The form is picked once.** Nothing switches the road while the program runs.
+
+### Unit tests
+
+The Tailscale form is tried with the library pointed at a stand-in for Tailscale's servers, which the library's own test tools give. A test against the real network is not part of the unit tests.
+
+| Test | Requirement | Start | Action | Expect |
+|---|---|---|---|---|
+| UNIT-NETWORK-01 | `HOST-08` | One-machine form, no address given | `dialer` | The address is `http://127.0.0.1` at the controller's starting port |
+| UNIT-NETWORK-02 | `HOST-08` | One-machine form | Make it with, one by one: `http://localhost:9000`, `http://127.0.0.1:9000`, `http://[::1]:9000` | Each is taken |
+| UNIT-NETWORK-03 | `HOST-08` | One-machine form | Make it with, one by one: `http://192.168.1.5:9000`, `http://example.com`, `http://0.0.0.0:9000`, text that is no address | An error each time that says the mode is for localhost only |
+| UNIT-NETWORK-04 | `HOST-08` | One-machine form, no auth key file | `join` | No error. `secrets` was not asked |
+| UNIT-NETWORK-05 | `HOST-06` | Tailscale form, a stand-in for Tailscale's servers, a good key | `join` | No error. The stand-in has one new device, marked ephemeral, with the host's name and `gangway-` in front |
+| UNIT-NETWORK-06 | `HOST-06` | State after UNIT-NETWORK-05 | `dialer` | The address is `http://`, `CONTROLLER_TAILSCALE_NAME` and the hosts' port |
+| UNIT-NETWORK-07 | `HOST-09` | The same stand-in | `join`, `leave`, then a new `network` and `join` again | The stand-in saw two devices with two identities |
+| UNIT-NETWORK-08 | `HOST-09`, `SES-08` | State after UNIT-NETWORK-05 | `leave` | The folder of this start is gone. The device no longer answers |
+| UNIT-NETWORK-09 | `HOST-06` | Tailscale form, a stand-in that refuses the key | `join` | An error that says Tailscale refused the key and to run `login` again. The error does not hold the key |
+| UNIT-NETWORK-10 | `HOST-06` | Tailscale form, a stand-in that never answers | `join` | An error after `JOIN_TIMEOUT`. The folder of this start is gone |
+| UNIT-NETWORK-11 | `HOST-03` | State after UNIT-NETWORK-05 | List the ports this program holds | No TCP port listens |
+| UNIT-NETWORK-12 | `SES-08` | A stand-in that never answers `leave` | `leave` | It comes back within a few seconds |
+
+## `login`
+
+`gangway login` stores the Tailscale auth key. It is run once, and again when the key has run out.
+
+### In order
+
+1. Refuse to go on as root, or with no terminal, as at a normal start. (`HOST-01`, `HOST-02`)
+2. Ask for the key. What is typed or pasted is not shown.
+3. `secrets` saves it. A key that cannot be one stops here.
+4. `network` joins with it, to prove that Tailscale takes it, and leaves again.
+5. Say that the host is ready, and how to start a session.
+
+### Rules the code must keep
+
+- **The key is never shown.** Not while it is pasted, not in a message, not in an error.
+- **A key that Tailscale refuses is not kept.** When step 4 fails because of the key, the file is removed again, and the old key, if there was one, is put back.
+- **A network that is down is not the key's fault.** When step 4 fails for another reason, the key is kept, and the message says that it could not be tried.
+- **Pairing comes later.** `login` does not show a pairing code until pairing is built.
+
+### Unit tests
+
+| Test | Requirement | Start | Action | Expect |
+|---|---|---|---|---|
+| UNIT-LOGIN-01 | `HOST-04` | No key file. Tailscale takes the key | Run `login` and paste a key | The key is stored. The screen says the host is ready. `network` joined and left |
+| UNIT-LOGIN-02 | `HOST-05` | The same | Run `login` and paste a key | The key is on no part of the screen |
+| UNIT-LOGIN-03 | `HOST-05` | An old key is stored. Tailscale refuses the new one | Run `login` and paste the new key | The screen says Tailscale refused it. The old key is still the one stored |
+| UNIT-LOGIN-04 | `HOST-05` | No key file. Tailscale refuses the key | Run `login` and paste a key | No key file is left |
+| UNIT-LOGIN-05 | `HOST-04` | No key file. Tailscale does not answer | Run `login` and paste a key | The key is stored. The screen says it could not be tried |
+| UNIT-LOGIN-06 | `HOST-05` | No key file | Run `login` and paste text that cannot be a key | An error. No file. `network` was not asked |
+| UNIT-LOGIN-07 | `HOST-01`, `HOST-02` | The user is root. Again with no terminal | Run `login` | It refuses and asks for no key |
+
+## Step 2: what changes in the pieces that exist
+
+The unit tests for these changes are added to each piece's table in the change that builds them.
+
+### `start`
+
+- The first word after the program's name picks what runs: `login`, or nothing for a session. `--local`, with or without an address, picks the one-machine form. Anything else stops with a short text on how to start. (`HOST-04`)
+- The order of a session's start becomes: the two checks, the settings, `network` joins, the session and its key are made, the websocket is opened, the paste line is shown.
+- `network` leaves on every way out, after the terminal is put back.
+
+### `connection`
+
+- It opens its websocket through the dialer that `network` gives, at the address `network` gives. It no longer knows an address of its own.
+- `session_ok` now holds the API address. `connection` hands it to `session`.
+
+### `session`
+
+- The address in the paste line is the one the controller gave. `session` takes it only if it is a plain web address: it starts with `http://` or `https://`, holds a host, and holds no space, no control character and no invisible character. Anything else ends the start with the reason, and no paste line is shown. (`KEY-10`)
+
+### `settings`
+
+- `CONTROLLER_ADDRESS` is gone from the cli-tool. A settings file that still holds it stops the start, as any unknown name does.
+- New: `CONTROLLER_TAILSCALE_NAME`, a name with letters, digits and `-` only. New: `JOIN_TIMEOUT`, a time, more than zero.
+
+### `hostdoor` (controller)
+
+- `session_ok` holds the controller's `PUBLIC_ADDRESS`.
+- The door is given its listener by `network` (controller). It never opens one of its own.
+
 ## `sessions` (controller)
 
 `sessions` holds the live sessions, in memory only.
@@ -1013,3 +1174,39 @@ Start: the API over a store with one live session of key K. The test plays the h
 | UNIT-CTLSTART-03 | `CTL-02` | | Check `:8642`, `0.0.0.0:8642`, `[::]:8642`, `192.168.1.5:8642`, `100.64.0.1:8642`, `8.8.8.8:80`, `example.com:80`, `8642`, the empty address | Each is refused |
 | UNIT-CTLSTART-04 | `CTL-02` | | Run the program with `-listen 0.0.0.0:0` | It prints the reason, gives an exit code that is not 0, and listens on nothing |
 | UNIT-CTLSTART-05 | `CTL-01` | The handler of the whole controller | A call to `/v1/session` with no key. A websocket to `/host/v1`. A websocket to other paths, such as `/` and `/host/v1/more` | 401 from the API. The websocket is taken by the door at `/host/v1` and at no other path |
+
+## `network` (controller)
+
+`network` (controller) opens the door for the hosts. It has the same two forms as on the cli-tool, picked at start.
+
+| Form | When | The door |
+|---|---|---|
+| Tailscale | Always, unless the controller was started with `-local` | A listener on the Tailscale network only, at the hosts' port, under the name `gangway-controller` |
+| One machine | Started with `-local` | The hosts' path on the same localhost address as the API |
+
+### The Tailscale form
+
+- **The listener comes from the library.** `tsnet` gives a listener that is announced on the Tailscale network only. The door has no address of its own that a setting could get wrong. (`CTL-10`)
+- **The API does not answer on that listener, and the hosts' path does not answer on the API's.** Each listener has its own set of paths. (`CTL-10`)
+- **The device is kept.** The controller's Tailscale identity lives in `~/.local/state/gangway-controller/`, with rights for the owner only, so its name stays the same after a restart.
+- **The auth key is given once**, with `gangway-controller login`, and kept as on the host: its own file in `~/.config/gangway-controller/`, readable by its owner only. (`CTL-12`)
+- **A start with no key stops**, and says to run `login`. It does not fall back to the one-machine form.
+
+### The one-machine form
+
+- **Localhost only.** The hosts' path answers on the API's listener, and that listener is on localhost: the check of `start` holds. (`CTL-10`)
+- **It says so.** At start the controller prints that the one-machine mode is on, and that any program on this machine can start a session. (`CTL-10`)
+
+### Unit tests
+
+| Test | Requirement | Start | Action | Expect |
+|---|---|---|---|---|
+| UNIT-CTLNETWORK-01 | `CTL-10` | Tailscale form, a stand-in for Tailscale's servers | Start | The stand-in has a device named `gangway-controller`, not ephemeral |
+| UNIT-CTLNETWORK-02 | `CTL-10` | State after UNIT-CTLNETWORK-01 | Call the hosts' path on the API's listener. Call an API path on the hosts' listener | Both get "not found" |
+| UNIT-CTLNETWORK-03 | `CTL-10` | State after UNIT-CTLNETWORK-01 | A second device on the stand-in network opens the hosts' path and sends `session_start` | `session_ok` comes back |
+| UNIT-CTLNETWORK-04 | `CTL-12` | Tailscale form, no auth key file | Start | It stops and says to run `login`. Nothing listens |
+| UNIT-CTLNETWORK-05 | `CTL-12` | State after UNIT-CTLNETWORK-01 | Stop. Start again with the same folders | The stand-in still has one device, with the same identity |
+| UNIT-CTLNETWORK-06 | `CTL-12` | Nothing | `login` with a key | The key file and the state folder are readable by their owner only |
+| UNIT-CTLNETWORK-07 | `CTL-10` | One-machine form | Start | The hosts' path answers on the API's listener. The start text says the mode is on. Tailscale was not joined |
+| UNIT-CTLNETWORK-08 | `KEY-10` | Either form, `PUBLIC_ADDRESS` set to an address. Again with it not set | A host sends `session_start` | `session_ok` holds that address. Not set: it holds the address the API listens on |
+| UNIT-CTLNETWORK-09 | `KEY-10` | `PUBLIC_ADDRESS` set to, one by one: text with a space, a path with no `http`, an empty value | Start | It stops each time and names the setting |

@@ -211,7 +211,7 @@ The cli-tool opens one connection to the controller at start and keeps it open f
 ### Basics
 
 - It is a websocket: one connection that stays open and lets both sides send at any moment. The cli-tool dials. The host listens on nothing (`HOST-03`).
-- It runs over Tailscale only (`CTL-10`).
+- It runs over Tailscale only (`CTL-10`). The cli-tool dials the controller by its Tailscale name, at a port fixed in the code both programs share. In the one-machine mode, which each program must be started in, it runs over localhost only (`HOST-08`).
 - At the start the cli-tool shows its host token, so the controller knows the user (`PAIR-01`, `PAIR-09`).
 - Each message is one JSON object with a `type`.
 - One connection carries one session. When the connection is lost, the cli-tool tries to connect again for `RECONNECT_WINDOW`. If it does, the same session carries on. If it does not, the session is over on both sides (`SES-04`, `SES-09`).
@@ -223,9 +223,10 @@ The controller can be taken over, so the cli-tool trusts it with very little. A 
 
 - hand over a request, which then goes to the prompt,
 - take back a request, or stop a command,
-- end the session.
+- end the session,
+- name the API address that goes into the paste line, once, when the session starts.
 
-Each of them asks or narrows. No message type exists that approves a request, extends a session or changes a setting (`GATE-07`, `LEN-09`). A message of an unknown type is ignored and written to the log.
+The first three ask or narrow. The address gives a controller that was taken over nothing new: the AI sends the key to the controller on every call anyway. The cli-tool shows the address only when it is a plain web address (`KEY-10`). No message type exists that approves a request, extends a session or changes a setting (`GATE-07`, `LEN-09`). A message of an unknown type is ignored and written to the log.
 
 ### Who checks what
 
@@ -242,7 +243,7 @@ Each of them asks or narrows. No message type exists that approves a request, ex
 | From | Message | Holds | Meaning |
 |---|---|---|---|
 | cli-tool | `session_start` | A hash of the session key, the host's name, the session's length, the limits | "I am live. An AI that shows a key with this hash may ask" |
-| controller | `session_ok` | Nothing | "Taken. I pass requests from now on" |
+| controller | `session_ok` | The API address for the paste line | "Taken. I pass requests from now on. The AI calls me at this address" |
 
 - The cli-tool makes the key and sends only a hash of it. The controller never holds the key itself. It hashes the key an AI shows and compares (`KEY-01`, `SES-06`).
 - With a wrong or missing host token the controller closes the connection and no session exists (`PAIR-01`).
@@ -342,10 +343,11 @@ Each program is made of a few pieces. A piece has one job, and the table names t
 
 | Piece | Job | Requirements |
 |---|---|---|
-| `start` | Checks that it is not root and has a terminal. Picks between `login` and a session | `HOST-01`, `HOST-02`, `HOST-04` |
+| `start` | Checks that it is not root and has a terminal. Picks between `login` and a session, and between Tailscale and the one-machine mode | `HOST-01`, `HOST-02`, `HOST-04`, `HOST-08` |
+| `login` | Takes the Tailscale auth key once, stores it, and tries it | `HOST-04`, `HOST-05` |
 | `settings` | Reads the three layers and lets each only narrow the one above. Says so when it cuts a value | `SET-01` to `SET-04`, `LIM-06` |
 | `secrets` | Keeps the auth key file and the host token file, readable by the owner only. Knows which paths are never read out | `HOST-05`, `PAIR-06`, `KEY-08` |
-| `network` | Joins Tailscale from inside the program, and leaves it at the end | `HOST-03`, `HOST-06`, `SES-08` |
+| `network` | The road to the controller. Joins Tailscale from inside the program as a new device, and leaves it at the end. In the one-machine mode: localhost | `HOST-03`, `HOST-06`, `HOST-08`, `HOST-09`, `SES-08` |
 | `connection` | Holds the connection to the controller. Turns answers into messages and messages into events. Notices when it is lost, connects again, and holds what could not be sent | `GATE-07`, `SES-04`, `SES-09`, `SES-10`, `SES-11` |
 | `session` | Makes the key and the paste line. Runs the session's clock: time up, the question to extend, the maximum | `KEY-01`, `KEY-04`, `SES-02`, `SES-03`, `SES-12`, `LEN-01` to `LEN-09` |
 | `line` | Holds the requests that wait, in order, up to the limit | `GATE-06`, `GATE-13` |
@@ -375,7 +377,8 @@ How a request goes through them:
 | `start` | Reads where to listen. Refuses a public address when no login is set up | `CTL-01`, `CTL-02` |
 | `api` | The five calls. Checks the key and the caller token, blocks an address after too many wrong keys, and insists on HTTPS off localhost | `KEY-02`, `KEY-05`, `KEY-06`, `KEY-07`, `SES-01`, `CTL-11` |
 | `sessions` | The live sessions, in memory only: the key's hash, the caller token, the user, the host, the state. Drops a session when it ends or does not come back in time | `SES-06`, `SES-07`, `SES-09`, `SES-11`, `KEY-03`, `KEY-09`, `PAIR-09` |
-| `hostdoor` | Takes the connections from the cli-tools, over Tailscale only, and checks the host token | `CTL-10`, `PAIR-01` |
+| `network` | Opens the door for the hosts: on Tailscale only, from inside the program, or on localhost in the one-machine mode. Keeps the controller's auth key and its Tailscale identity | `CTL-10`, `CTL-12` |
+| `hostdoor` | Takes the connections from the cli-tools on the door that `network` opened, tells each the API address, and checks the host token | `CTL-10`, `KEY-10`, `PAIR-01` |
 | `relay` | Ties an open API call to its request on the host and passes messages both ways. Turns a hung-up call into a `cancel` | `GATE-12`, `LIM-07`, `SES-10` |
 | `hosts` | The paired hosts, kept in a small file with a hash of each token. Makes and checks pairing codes | `PAIR-02`, `PAIR-03`, `PAIR-07`, `PAIR-08`, `PAIR-10` |
 | `login` | The sign-in with Google and the list of allowed accounts. Stores no password | `CTL-03`, `CTL-04`, `CTL-05` |
@@ -419,6 +422,8 @@ What the code pins down, on top of the tables above:
 |---|---|
 | Where the cli-tool opens its websocket on the controller | The path `/host/v1` |
 | Where the controller listens when nothing is set | `127.0.0.1:8642` |
+| Where the hosts' door answers on Tailscale | Port `8643` on the controller's Tailscale device |
+| The controller's name on Tailscale when nothing is set | `gangway-controller` |
 | The session key | `gw_` and then `SESSION_KEY_BITS` random bits written in hex |
 | The hash of the key that the controller holds | SHA-256 of the whole key, `gw_` included, written in hex |
 | The `id` of a request | Made by the controller |

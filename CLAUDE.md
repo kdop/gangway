@@ -48,6 +48,12 @@ led to it.
 - **The cli-tool is written in Go.** `tsnet` is Go only, and Go gives one file to copy to the host with nothing else to install.
 - **Tailscale is built into the cli-tool with `tsnet`.** The host needs no Tailscale install and no root. Source: https://pkg.go.dev/tailscale.com/tsnet ("No root privileges required", "No system daemons to install or manage").
 - **The host joins with an ephemeral, tagged auth key.** It leaves the network after it goes offline, and the tag limits it to the controller. Source: https://tailscale.com/kb/1085/auth-keys.
+- **A host joins Tailscale as a new device at every start, and keeps that device in memory only.** Nothing of a session lands on disk, and an old device cannot come back. The cost: a start takes a few seconds longer, and the auth key must be the reusable kind.
+- **The controller carries Tailscale inside the program too.** The library then opens the hosts' door on the Tailscale network only, so a wrong setting cannot open it elsewhere, and the controller machine needs no Tailscale install. It works next to a Tailscale that is installed on the same machine: the two are separate devices.
+- **A host finds the controller by its Tailscale name.** Nobody types an address on a host. The auth key picks the network, and the name picks the controller.
+- **The controller tells the cli-tool the API address for the paste line.** It is set once, on the controller, and no host needs it. A controller that is taken over gains nothing by it: the AI sends it the key on every call anyway. The cli-tool shows the address only when it is a plain web address.
+- **A one-machine mode stays, and each program must be started in it.** The tests and a first trial then need no Tailscale network. It is localhost only, and the controller says at start that it is on.
+- **Until pairing is built, any device that the Tailscale rules let through can start a session.** Such a session is its own: it cannot see or touch another, and the worst it does is use the controller's memory. The tag on the auth key and the Tailscale rules are the guard until then.
 - **Linux hosts only for now.** Keep it simple.
 - **`login` once, then start with no questions.** The auth key is pasted at `login`, about once a month, and kept in a file in the home folder that only the user can read.
 - **The cli-tool never gives its own key file to the AI; the ban is fixed in code.** A setting could be switched off by mistake.
