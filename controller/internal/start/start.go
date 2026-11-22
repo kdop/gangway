@@ -238,11 +238,13 @@ func runLogin(ctx context.Context, stdin, stdout *os.File, fail func(int, error)
 	if err != nil {
 		return fail(1, err)
 	}
-	fmt.Fprint(stdout, "Paste the Tailscale auth key of the controller and press Enter. It is not shown: ")
+	// The terminal stops showing what is typed before the question is
+	// asked: a key pasted at once would be shown otherwise.
 	restore, err := rawterm.MakeRaw(in)
 	if err != nil {
 		return fail(1, err)
 	}
+	fmt.Fprint(stdout, "Paste the Tailscale auth key of the controller and press Enter. It is not shown: ")
 	key, err := authkey.ReadHidden(stdin)
 	restore()
 	fmt.Fprintln(stdout)
