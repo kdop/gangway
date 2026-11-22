@@ -10,18 +10,22 @@ import (
 	"testing"
 )
 
-// notInTheMVP holds the tests of the MVP's requirements that need a
-// feature the MVP does not have.
-var notInTheMVP = map[string]string{
-	"GATE-10.5": "file reads",
-	"SHOW-03.3": "file reads",
-	"CTL-02.2":  "login",
+// stepsBuilt holds the steps of plan.md that are built, beside the MVP.
+var stepsBuilt = map[string]bool{"2": true}
+
+// noGoTest holds the tests of a built requirement that have no Go test,
+// each with the reason.
+var noGoTest = map[string]string{
+	"GATE-10.5": "file reads are not built",
+	"SHOW-03.3": "file reads are not built",
+	"CTL-02.2":  "the login of the controller's API is not built",
+	"HOST-06.2": "it needs a machine with Tailscale installed and running, and root to check that it was not changed",
 }
 
-// TestEveryTestOfTheMVPHasAGoTest fails when a Go test here carries an ID
-// that requirements.md does not have, and when a test of the MVP has no
-// Go test.
-func TestEveryTestOfTheMVPHasAGoTest(t *testing.T) {
+// TestEveryTestThatIsDueHasAGoTest fails when a Go test here carries an ID
+// that requirements.md does not have, and when a test of the MVP or of a
+// built step has no Go test.
+func TestEveryTestThatIsDueHasAGoTest(t *testing.T) {
 	b, err := os.ReadFile(filepath.Join("..", "requirements.md"))
 	if err != nil {
 		t.Fatal(err)
@@ -46,33 +50,50 @@ func TestEveryTestOfTheMVPHasAGoTest(t *testing.T) {
 				t.Errorf("%s has two Go tests", id)
 			}
 			inGo[id] = true
-			if notInTheMVP[id] != "" {
-				t.Errorf("%s has a Go test now: take it off the list notInTheMVP", id)
+			if noGoTest[id] != "" {
+				t.Errorf("%s has a Go test now: take it off the list noGoTest", id)
 			}
 			if !inFile[id] {
 				t.Errorf("%s has a Go test but is not in requirements.md", id)
 			}
 		}
 	}
-
-	// The MVP's requirements, from the table under "The MVP".
-	mvp := map[string]bool{}
-	for _, row := range regexp.MustCompile(`(?m)^\| ([A-Z]+) \| ([\d, ]+) \|`).FindAllStringSubmatch(requirements, -1) {
-		for _, n := range strings.Split(row[2], ",") {
-			mvp[row[1]+"-"+strings.TrimSpace(n)] = true
+	for id := range noGoTest {
+		if !inFile[id] {
+			t.Errorf("%s is on the list noGoTest but is not in requirements.md", id)
 		}
 	}
-	if len(mvp) == 0 {
+
+	// The MVP's requirements, from the table under "The MVP".
+	due := map[string]bool{}
+	for _, row := range regexp.MustCompile(`(?m)^\| ([A-Z]+) \| ([\d, ]+) \|`).FindAllStringSubmatch(requirements, -1) {
+		for _, n := range strings.Split(row[2], ",") {
+			due[row[1]+"-"+strings.TrimSpace(n)] = true
+		}
+	}
+	if len(due) == 0 {
 		t.Fatal("found no MVP table in requirements.md")
 	}
+	// The requirements of a built step: each says its step at its end.
+	ofAStep := 0
+	for _, m := range regexp.MustCompile(`(?m)^### ([A-Z]+-\d+)\n\n.* Step (\d+)\.$`).FindAllStringSubmatch(requirements, -1) {
+		if stepsBuilt[m[2]] {
+			due[m[1]] = true
+			ofAStep++
+		}
+	}
+	if ofAStep == 0 {
+		t.Fatal("found no requirement of a built step in requirements.md")
+	}
+
 	var missing []string
 	for id := range inFile {
-		if mvp[strings.SplitN(id, ".", 2)[0]] && !inGo[id] && notInTheMVP[id] == "" {
+		if due[strings.SplitN(id, ".", 2)[0]] && !inGo[id] && noGoTest[id] == "" {
 			missing = append(missing, id)
 		}
 	}
 	sort.Strings(missing)
 	if len(missing) > 0 {
-		t.Errorf("%d tests of the MVP have no Go test: %s", len(missing), strings.Join(missing, " "))
+		t.Errorf("%d tests that are due have no Go test: %s", len(missing), strings.Join(missing, " "))
 	}
 }

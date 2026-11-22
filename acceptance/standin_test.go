@@ -26,6 +26,14 @@ type standIn struct {
 func newStandIn(t *testing.T) *standIn {
 	t.Helper()
 	beside(t)
+	return standInGiving(t, func(host string) string { return "http://" + host }, false)
+}
+
+// standInGiving is newStandIn with a stand-in that gives the API address
+// of the test's choice. With badStart, the cli-tool is not expected to
+// reach the paste line.
+func standInGiving(t *testing.T, apiAddress func(host string) string, badStart bool) *standIn {
+	t.Helper()
 	s := &standIn{t: t}
 	connected := make(chan *websocket.Conn, 1)
 	mux := http.NewServeMux()
@@ -40,9 +48,13 @@ func newStandIn(t *testing.T) *standIn {
 			conn.CloseNow()
 			return
 		}
-		ok, _ := json.Marshal(messages.Message{Type: messages.TypeSessionOK, APIAddress: "http://" + r.Host})
+		ok, _ := json.Marshal(messages.Message{Type: messages.TypeSessionOK, APIAddress: apiAddress(r.Host)})
 		conn.Write(r.Context(), websocket.MessageText, ok)
 		connected <- conn
+		if badStart {
+			// The cli-tool says goodbye: hear it, so it does not wait.
+			conn.Read(r.Context())
+		}
 		<-r.Context().Done()
 	})
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -53,7 +65,7 @@ func newStandIn(t *testing.T) *standIn {
 	go server.Serve(ln)
 	t.Cleanup(func() { server.Close() })
 
-	s.world = &world{t: t, home: t.TempDir(), listen: ln.Addr().String(), address: "http://" + ln.Addr().String()}
+	s.world = &world{t: t, home: t.TempDir(), listen: ln.Addr().String(), address: "http://" + ln.Addr().String(), noPasteLine: badStart}
 	s.startCli(nil)
 	select {
 	case s.conn = <-connected:
