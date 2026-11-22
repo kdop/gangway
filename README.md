@@ -51,6 +51,8 @@ cd cli && go test ./...
 
 The same goes for each folder that holds Go code. The tests also run on GitHub for every pull request.
 
+To see how many lines of each package its tests run, add `-cover`: `go test -cover ./...`. On GitHub the same numbers are in the summary of each run. There is no pass mark: the check that every requirement has a test is the guard.
+
 ## Read next
 
 - `blueprint.md`: what it is and how the parts fit
