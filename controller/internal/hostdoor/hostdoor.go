@@ -20,6 +20,10 @@ import (
 type Door struct {
 	Store *sessions.Store
 
+	// APIAddress is the address the AI calls. Each host is told it in
+	// session_ok, for its paste line.
+	APIAddress string
+
 	// StartWait is how long a new connection may take to send
 	// session_start. OutQueue is how many messages may wait to be sent to
 	// one host. Zero means the default.
@@ -100,7 +104,7 @@ func (d *Door) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	go h.write(ctx)
-	h.send(messages.Message{Type: messages.TypeSessionOK})
+	h.send(messages.Message{Type: messages.TypeSessionOK, APIAddress: d.APIAddress})
 
 	for {
 		msg, err := read(ctx, conn)

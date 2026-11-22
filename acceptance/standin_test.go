@@ -40,7 +40,7 @@ func newStandIn(t *testing.T) *standIn {
 			conn.CloseNow()
 			return
 		}
-		ok, _ := json.Marshal(messages.Message{Type: messages.TypeSessionOK})
+		ok, _ := json.Marshal(messages.Message{Type: messages.TypeSessionOK, APIAddress: "http://" + r.Host})
 		conn.Write(r.Context(), websocket.MessageText, ok)
 		connected <- conn
 		<-r.Context().Done()

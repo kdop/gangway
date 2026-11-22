@@ -13,9 +13,12 @@ import (
 	"time"
 
 	"github.com/kdop/gangway/cli/internal/connection"
+	"github.com/kdop/gangway/cli/internal/login"
 	"github.com/kdop/gangway/cli/internal/loop"
+	"github.com/kdop/gangway/cli/internal/network"
 	"github.com/kdop/gangway/cli/internal/request"
 	"github.com/kdop/gangway/cli/internal/runner"
+	"github.com/kdop/gangway/cli/internal/secrets"
 	"github.com/kdop/gangway/cli/internal/session"
 	"github.com/kdop/gangway/cli/internal/settings"
 	"github.com/kdop/gangway/cli/internal/terminal"
@@ -66,14 +69,56 @@ type clock struct{}
 
 func (clock) Now() time.Time { return time.Now() }
 
-// Run is the whole program. It gives the exit code.
-func Run(stdin, stdout *os.File, stderr io.Writer) int {
+// What the first words after the program's name ask for.
+const (
+	doSession = iota // a session over Tailscale
+	doLocal          // a session in the one-machine mode
+	doLogin          // store the Tailscale auth key
+)
+
+// Usage is shown when the words after the program's name make no sense.
+const Usage = `How to start gangway:
+  gangway                    start a session
+  gangway login              store the Tailscale auth key of this host, once
+  gangway --local [address]  start a session with a controller on this machine, with no Tailscale`
+
+// Plan reads the words after the program's name. address is the
+// controller's address in the one-machine mode, empty for its starting
+// address.
+func Plan(args []string) (what int, address string, err error) {
+	switch {
+	case len(args) == 0:
+		return doSession, "", nil
+	case len(args) == 1 && args[0] == "login":
+		return doLogin, "", nil
+	case len(args) == 1 && args[0] == "--local":
+		return doLocal, "", nil
+	case len(args) == 2 && args[0] == "--local":
+		return doLocal, args[1], nil
+	}
+	return 0, "", errors.New(Usage)
+}
+
+// Run is the whole program. args are the words after the program's name.
+// It gives the exit code.
+func Run(args []string, stdin, stdout *os.File, stderr io.Writer) int {
 	fail := func(err error) int {
 		fmt.Fprintln(stderr, "gangway:", err)
 		return 1
 	}
+	what, address, err := Plan(args)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
 	in, out := int(stdin.Fd()), int(stdout.Fd())
-	if err := Check(os.Geteuid(), terminal.IsTerminal(in), terminal.IsTerminal(out)); err != nil {
+	check := func() error {
+		return Check(os.Geteuid(), terminal.IsTerminal(in), terminal.IsTerminal(out))
+	}
+	if what == doLogin {
+		return runLogin(check, in, stdin, stdout, fail)
+	}
+	if err := check(); err != nil {
 		return fail(err)
 	}
 	path, err := settings.UserFile()
@@ -84,19 +129,37 @@ func Run(stdin, stdout *os.File, stderr io.Writer) int {
 	if err != nil {
 		return fail(err)
 	}
-	sess, err := session.New(s.ControllerAddress, sessionKeyBits)
+	host, _ := os.Hostname()
+
+	var road network.Network
+	if what == doLocal {
+		if road, err = network.Local(address); err != nil {
+			return fail(err)
+		}
+		fmt.Fprintf(stdout, "Connecting to %s ...\n", road.Address())
+	} else {
+		if road, err = tailscaleRoad(s, host); err != nil {
+			return fail(err)
+		}
+		fmt.Fprintln(stdout, "Joining Tailscale ...")
+	}
+	if err := road.Join(context.Background()); err != nil {
+		return fail(err)
+	}
+	// Runs last, after the terminal is put back.
+	defer road.Leave()
+
+	sess, err := session.New(sessionKeyBits)
 	if err != nil {
 		return fail(err)
 	}
-	host, _ := os.Hostname()
 
 	// The events wait here for the loop. Nothing that posts may be stopped
 	// by a slow loop for long, so there is room.
 	ev := make(events, 1024)
 	var l *loop.Loop
 
-	fmt.Fprintf(stdout, "Connecting to %s ...\n", s.ControllerAddress)
-	conn, err := connection.Dial(context.Background(), s.ControllerAddress, connection.Start{
+	conn, apiAddress, err := connection.Dial(context.Background(), road.Client(), road.Address(), connection.Start{
 		KeyHash: sess.KeyHash(),
 		Host:    host,
 		Limits: messages.Limits{
@@ -106,7 +169,11 @@ func Run(stdin, stdout *os.File, stderr io.Writer) int {
 		},
 	}, handler{ev, &l})
 	if err != nil {
-		return fail(fmt.Errorf("cannot reach the controller at %s: %w", s.ControllerAddress, err))
+		return fail(fmt.Errorf("cannot reach the controller at %s: %w", road.Address(), err))
+	}
+	if err := sess.SetAddress(apiAddress); err != nil {
+		conn.Close(messages.EndUser)
+		return fail(err)
 	}
 
 	restore, err := terminal.MakeRaw(in)
@@ -161,4 +228,63 @@ func readKeys(stdin *os.File, ev events, l **loop.Loop) {
 			return
 		}
 	}
+}
+
+// tailscaleRoad gives the road over Tailscale, with the auth key of login.
+func tailscaleRoad(s settings.Settings, host string) (network.Network, error) {
+	file, err := secrets.File()
+	if err != nil {
+		return nil, err
+	}
+	key, err := secrets.Load(file)
+	if err != nil {
+		return nil, err
+	}
+	return network.Tailscale(network.Config{
+		AuthKey:        key,
+		Host:           host,
+		ControllerName: s.ControllerName,
+		JoinTimeout:    s.JoinTimeout,
+	}), nil
+}
+
+// runLogin is "gangway login".
+func runLogin(check func() error, in int, stdin, stdout *os.File, fail func(error) int) int {
+	if err := check(); err != nil {
+		return fail(err)
+	}
+	path, err := settings.UserFile()
+	if err != nil {
+		return fail(err)
+	}
+	s, err := settings.Load(path)
+	if err != nil {
+		return fail(err)
+	}
+	file, err := secrets.File()
+	if err != nil {
+		return fail(err)
+	}
+	host, _ := os.Hostname()
+	// Raw mode: what is pasted is not shown.
+	restore, err := terminal.MakeRaw(in)
+	if err != nil {
+		return fail(err)
+	}
+	err = login.Run(context.Background(), login.Parts{
+		Check:  check,
+		Keys:   stdin,
+		Screen: stdout,
+		File:   file,
+		Try: func(ctx context.Context, key string) error {
+			road := network.Tailscale(network.Config{AuthKey: key, Host: host, ControllerName: s.ControllerName, JoinTimeout: s.JoinTimeout})
+			defer road.Leave()
+			return road.Join(ctx)
+		},
+	})
+	restore()
+	if err != nil {
+		return fail(err)
+	}
+	return 0
 }

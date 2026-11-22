@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -155,16 +156,17 @@ func wantClosed(t *testing.T, ws *websocket.Conn) {
 }
 
 type dialed struct {
-	conn *Conn
-	err  error
+	conn    *Conn
+	err     error
+	address string
 }
 
 // dialAsync dials in the background, so the test can play the controller.
 func dialAsync(ctx context.Context, c *controller, h Handler) chan dialed {
 	done := make(chan dialed, 1)
 	go func() {
-		conn, err := Dial(ctx, c.srv.URL, startA, h)
-		done <- dialed{conn, err}
+		conn, address, err := Dial(ctx, http.DefaultClient, c.srv.URL, startA, h)
+		done <- dialed{conn, err, address}
 	}()
 	return done
 }
@@ -297,7 +299,7 @@ func TestUNITCONNECTION03_AControllerThatDoesNotAnswer(t *testing.T) {
 	gone := httptest.NewServer(http.NotFoundHandler())
 	url := gone.URL
 	gone.Close()
-	if conn, err := Dial(context.Background(), url, startA, newRecorder()); err == nil || conn != nil {
+	if conn, _, err := Dial(context.Background(), http.DefaultClient, url, startA, newRecorder()); err == nil || conn != nil {
 		t.Fatal("a dial to nothing made a session")
 	}
 }
@@ -573,6 +575,55 @@ func TestUNITCONNECTION19_CloseDoesNotWaitForASilentController(t *testing.T) {
 			t.Fatalf("flood=%v: the close took %v with a controller that reads nothing", flood, d)
 		}
 		rec.none(t)
+	}
+}
+
+// UNIT-CONNECTION-20. Requirement: KEY-10.
+func TestUNITCONNECTION20_TheAPIAddressOfSessionOK(t *testing.T) {
+	for _, given := range []string{"https://gangway.example.com", "", "not checked here\x1b[2J"} {
+		c := newController(t)
+		done := dialAsync(context.Background(), c, newRecorder())
+		ws := c.accept(t)
+		read(t, ws)
+		answer, _ := json.Marshal(messages.Message{Type: messages.TypeSessionOK, APIAddress: given})
+		write(t, ws, string(answer))
+		d := await(t, done)
+		if d.err != nil || d.address != given {
+			t.Fatalf("the dial gave the address %q and %v, want %q", d.address, d.err, given)
+		}
+		d.conn.Close(messages.EndUser)
+		ws.CloseNow()
+	}
+}
+
+// countingRoad counts the calls that go through it.
+type countingRoad struct{ calls atomic.Int32 }
+
+func (r *countingRoad) RoundTrip(req *http.Request) (*http.Response, error) {
+	r.calls.Add(1)
+	return http.DefaultTransport.RoundTrip(req)
+}
+
+// UNIT-CONNECTION-21. Requirement: HOST-08.
+func TestUNITCONNECTION21_TheDialGoesOverTheRoadItIsGiven(t *testing.T) {
+	c := newController(t)
+	road := &countingRoad{}
+	done := make(chan dialed, 1)
+	go func() {
+		conn, address, err := Dial(context.Background(), &http.Client{Transport: road}, c.srv.URL, startA, newRecorder())
+		done <- dialed{conn, err, address}
+	}()
+	ws := c.accept(t)
+	read(t, ws)
+	write(t, ws, `{"type":"session_ok"}`)
+	d := await(t, done)
+	if d.err != nil {
+		t.Fatal(d.err)
+	}
+	defer d.conn.Close(messages.EndUser)
+	defer ws.CloseNow()
+	if road.calls.Load() != 1 {
+		t.Fatalf("%d calls went over the road that was given, want 1", road.calls.Load())
 	}
 }
 

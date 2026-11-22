@@ -60,28 +60,51 @@ func (c *Controller) Handler() http.Handler {
 
 // Run is the whole program. It gives the exit code.
 func Run(args []string, stderr io.Writer) int {
+	return run(context.Background(), args, stderr)
+}
+
+// run is Run, and ends when ctx does.
+func run(ctx context.Context, args []string, stderr io.Writer) int {
+	fail := func(code int, err error) int {
+		fmt.Fprintln(stderr, "gangway-controller:", err)
+		return code
+	}
 	flags := flag.NewFlagSet("gangway-controller", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	listen := flags.String("listen", messages.DefaultListen, "the address to listen on")
+	listen := flags.String("listen", messages.DefaultListen, "the address the API listens on")
+	local := flags.Bool("local", false, "the one-machine mode: take hosts on localhost, with no Tailscale")
+	public := flags.String("public-address", "", "the API address given to the AI. Empty: the address the API listens on")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
 	if err := CheckListen(*listen); err != nil {
-		fmt.Fprintln(stderr, "gangway-controller:", err)
-		return 2
+		return fail(2, err)
+	}
+	if *public != "" && !messages.PlainWebAddress(*public) {
+		return fail(2, errors.New("-public-address must be a plain web address, such as https://gangway.example.com"))
+	}
+	if !*local {
+		return fail(2, errors.New("the controller cannot join Tailscale yet: start it with -local, for hosts on this machine only"))
 	}
 	ln, err := net.Listen("tcp", *listen)
 	if err != nil {
-		fmt.Fprintln(stderr, "gangway-controller:", err)
-		return 1
+		return fail(1, err)
 	}
 	c := New()
+	c.Door.APIAddress = *public
+	if c.Door.APIAddress == "" {
+		c.Door.APIAddress = "http://" + ln.Addr().String()
+	}
 	server := &http.Server{Handler: c.Handler(), ReadHeaderTimeout: 10 * time.Second}
 
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(signals)
 	go func() {
-		<-signals
+		select {
+		case <-signals:
+		case <-ctx.Done():
+		}
 		c.Door.EndAll(messages.EndControllerStopped)
 		ctx, stop := context.WithTimeout(context.Background(), 2*time.Second)
 		defer stop()
@@ -90,9 +113,9 @@ func Run(args []string, stderr io.Writer) int {
 	}()
 
 	fmt.Fprintln(stderr, "gangway-controller: listening on", ln.Addr())
+	fmt.Fprintln(stderr, "gangway-controller: the one-machine mode is on: any program on this machine can start a session")
 	if err := server.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		fmt.Fprintln(stderr, "gangway-controller:", err)
-		return 1
+		return fail(1, err)
 	}
 	return 0
 }

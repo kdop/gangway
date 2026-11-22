@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -19,7 +18,8 @@ import (
 
 // Settings are the values of the MVP.
 type Settings struct {
-	ControllerAddress  string        // CONTROLLER_ADDRESS
+	ControllerName     string        // CONTROLLER_TAILSCALE_NAME
+	JoinTimeout        time.Duration // JOIN_TIMEOUT
 	CommandShell       string        // COMMAND_SHELL
 	CommandTimeLimit   time.Duration // COMMAND_TIME_LIMIT
 	QuestionWait       time.Duration // QUESTION_WAIT
@@ -33,7 +33,8 @@ type Settings struct {
 // table of requirements.md.
 func Default() Settings {
 	return Settings{
-		ControllerAddress:  "http://" + messages.DefaultListen,
+		ControllerName:     messages.DefaultControllerName,
+		JoinTimeout:        30 * time.Second,
 		CommandShell:       "/bin/sh",
 		CommandTimeLimit:   60 * time.Second,
 		QuestionWait:       60 * time.Second,
@@ -101,12 +102,13 @@ func Load(path string) (Settings, error) {
 
 func (s *Settings) set(name, value string) error {
 	switch name {
-	case "CONTROLLER_ADDRESS":
-		u, err := url.Parse(value)
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			return fmt.Errorf("%s must be an address that starts with http:// or https://", name)
+	case "CONTROLLER_TAILSCALE_NAME":
+		if !deviceName(value) {
+			return fmt.Errorf("%s must be a name of letters, digits and \"-\"", name)
 		}
-		s.ControllerAddress = strings.TrimRight(value, "/")
+		s.ControllerName = value
+	case "JOIN_TIMEOUT":
+		return setTime(&s.JoinTimeout, name, value, false)
 	case "COMMAND_SHELL":
 		if !filepath.IsAbs(value) {
 			return fmt.Errorf("%s must be a full path, from /", name)
@@ -144,4 +146,17 @@ func setTime(target *time.Duration, name, value string, zeroOK bool) error {
 	}
 	*target = d
 	return nil
+}
+
+// deviceName tells whether s can be a name on the Tailscale network.
+func deviceName(s string) bool {
+	if s == "" || len(s) > 63 || s[0] == '-' || s[len(s)-1] == '-' {
+		return false
+	}
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-') {
+			return false
+		}
+	}
+	return true
 }

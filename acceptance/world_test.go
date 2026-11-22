@@ -126,7 +126,7 @@ func (w *world) join(settings ...string) *world {
 // startController starts the controller and waits until it listens.
 func (w *world) startController() {
 	w.t.Helper()
-	ctl := exec.Command(controllerBin, "-listen", w.listen)
+	ctl := exec.Command(controllerBin, "-local", "-listen", w.listen)
 	ctl.Dir = w.home
 	ctl.Env = append(os.Environ(), "HOME="+w.home)
 	if err := ctl.Start(); err != nil {
@@ -159,7 +159,7 @@ func (w *world) startCli(settings []string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lines := []string{"CONTROLLER_ADDRESS = " + w.address}
+	var lines []string
 	if !hasSetting(settings, "PROMPT_MIN_SHOW") {
 		lines = append(lines, "PROMPT_MIN_SHOW = "+promptMinShow.String())
 	}
@@ -174,7 +174,7 @@ func (w *world) startCli(settings []string) {
 
 	master, slave := openTerminal(t)
 	w.keys = master
-	w.cli = exec.Command(cliBin)
+	w.cli = exec.Command(cliBin, "--local", w.address)
 	w.cli.Dir = w.home
 	w.cli.Stdin, w.cli.Stdout, w.cli.Stderr = slave, slave, slave
 	w.cli.Env = append(os.Environ(), "HOME="+w.home, "XDG_CONFIG_HOME="+config)

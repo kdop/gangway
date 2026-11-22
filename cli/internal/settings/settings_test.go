@@ -60,13 +60,15 @@ func TestUNITSETTINGS01_TheStartingValues(t *testing.T) {
 		table[row[1]] = strings.Trim(strings.TrimSpace(row[2]), "`")
 	}
 	for name, have := range map[string]string{
-		"COMMAND_SHELL":        got.CommandShell,
-		"COMMAND_TIME_LIMIT":   words(got.CommandTimeLimit),
-		"QUESTION_WAIT":        words(got.QuestionWait),
-		"KILL_WAIT":            words(got.KillWait),
-		"PROMPT_MIN_SHOW":      words(got.PromptMinShow),
-		"DOUBLE_CTRL_C_WINDOW": words(got.DoubleCtrlCWindow),
-		"MAX_WAITING_REQUESTS": "20",
+		"COMMAND_SHELL":             got.CommandShell,
+		"COMMAND_TIME_LIMIT":        words(got.CommandTimeLimit),
+		"QUESTION_WAIT":             words(got.QuestionWait),
+		"KILL_WAIT":                 words(got.KillWait),
+		"PROMPT_MIN_SHOW":           words(got.PromptMinShow),
+		"DOUBLE_CTRL_C_WINDOW":      words(got.DoubleCtrlCWindow),
+		"MAX_WAITING_REQUESTS":      "20",
+		"CONTROLLER_TAILSCALE_NAME": got.ControllerName,
+		"JOIN_TIMEOUT":              words(got.JoinTimeout),
 	} {
 		if table[name] != have {
 			t.Errorf("%s starts at %q in the code and %q in requirements.md", name, have, table[name])
@@ -84,7 +86,8 @@ func words(d time.Duration) string {
 
 // UNIT-SETTINGS-02. Requirement: LIM-06.
 func TestUNITSETTINGS02_TheFileChangesEveryValue(t *testing.T) {
-	got, err := Load(write(t, `CONTROLLER_ADDRESS=https://gw.example:9000/
+	got, err := Load(write(t, `CONTROLLER_TAILSCALE_NAME=my-controller
+JOIN_TIMEOUT=10s
 COMMAND_SHELL=/bin/bash
 COMMAND_TIME_LIMIT=90s
 QUESTION_WAIT=45s
@@ -97,7 +100,8 @@ MAX_WAITING_REQUESTS=7
 		t.Fatal(err)
 	}
 	want := Settings{
-		ControllerAddress:  "https://gw.example:9000",
+		ControllerName:     "my-controller",
+		JoinTimeout:        10 * time.Second,
 		CommandShell:       "/bin/bash",
 		CommandTimeLimit:   90 * time.Second,
 		QuestionWait:       45 * time.Second,
@@ -188,11 +192,16 @@ func TestUNITSETTINGS11_PromptMinShowMayBeZero(t *testing.T) {
 	}
 }
 
-// UNIT-SETTINGS-12. Requirement: LIM-06.
-func TestUNITSETTINGS12_TheAddressNeedsItsStart(t *testing.T) {
-	for _, value := range []string{"127.0.0.1:8642", "ftp://x", "http://", ""} {
-		wantError(t, "CONTROLLER_ADDRESS="+value+"\n", "line 1")
+// UNIT-SETTINGS-12. Requirement: HOST-06.
+func TestUNITSETTINGS12_TheControllersNameMustBeAName(t *testing.T) {
+	for _, value := range []string{"", "My-Controller", "gangway controller", "http://gangway-controller", "gangway.example.com", "-gangway", "gangway-", "a\x1b[2J"} {
+		wantError(t, "CONTROLLER_TAILSCALE_NAME="+value+"\n", "line 1")
 	}
+}
+
+// UNIT-SETTINGS-13. Requirement: HOST-08.
+func TestUNITSETTINGS13_TheControllersAddressIsNoSettingAnyMore(t *testing.T) {
+	wantError(t, "CONTROLLER_ADDRESS=http://127.0.0.1:8642\n", "line 1", "CONTROLLER_ADDRESS")
 }
 
 func TestDesignAndGoTestsMatch(t *testing.T) {

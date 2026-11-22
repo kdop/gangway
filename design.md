@@ -481,7 +481,7 @@ The `session` makes the session key and the paste line, and holds whether the se
 
 ### What it holds
 
-- The controller's address, as the AI must call it.
+- The API address, as the AI must call it. The controller gives it in `session_ok`. It is taken only when it is a plain web address: it starts with `http://` or `https://`, names a host, and holds letters, digits and the usual marks of an address only. (`KEY-10`)
 - The session key.
 - Whether the session has ended.
 
@@ -521,7 +521,7 @@ There is no event that leads from `Ended` to `Live`. A new start of the cli-tool
 | UNIT-SESSION-03 | `KEY-01` | A random source that fails after 0, 5 and 31 bytes | Make a session of 256 bits | An error each time. No session |
 | UNIT-SESSION-04 | `KEY-01` | | Make a session with a length below 128 bits, and with one that is not a multiple of 8 | An error each time. No session |
 | UNIT-SESSION-05 | `KEY-04` | A session | Read the paste line | `/gangway`, the address and the key, with one space between |
-| UNIT-SESSION-06 | `KEY-04` | | Make a session with an address that is empty, or holds a space, a tab, a line break or an Escape | An error each time. No session |
+| UNIT-SESSION-06 | `KEY-04`, `KEY-10` | A session | Give it an address that is empty, or holds a space, a tab, a line break, an Escape or an invisible character, or does not start with `http://` or `https://` | An error each time, and the error does not hold the address. The session has no address |
 | UNIT-SESSION-07 | `SES-03` | A live session | End it. End it again. Read the key, the hash and the paste line | Not live after the first end, and not live after anything that follows |
 | UNIT-SESSION-08 | `SES-06` | A session | Read the hash | It is the hash the contract sets for that key. It does not hold the key |
 | UNIT-SESSION-09 | `SES-06` | The code of the `session` | List the packages it uses | Each is on a short list of packages that cannot write a file |
@@ -531,6 +531,8 @@ There is no event that leads from `Ended` to `Live`. A new start of the cli-tool
 The `connection` holds the websocket to the controller. It turns the cli-tool's answers into messages, and the controller's messages into events for the loop. It decides nothing about a request.
 
 There is no reconnect in the MVP. A lost connection is told once, and that is the end. Reconnect adds states here when it is built.
+
+It knows no address and no road of its own: `network` gives it what opens a connection, and the controller's address on that road. It hands the API address of `session_ok` back as it came; `session` checks it.
 
 ### What it holds
 
@@ -616,6 +618,8 @@ Each test runs the real `connection` against a controller inside the test: a sma
 | UNIT-CONNECTION-17 | `LIM-10` | Live, a controller that reads nothing, the limit of waiting bytes set low | Send output until the limit is passed | Every send comes back at once. Then one lost event, which says the controller does not take what is sent |
 | UNIT-CONNECTION-18 | `SES-05` | Live | The controller sends a message larger than 1 MB | One lost event |
 | UNIT-CONNECTION-19 | `LIM-10` | Live, a controller that reads nothing. Once with nothing waiting to be sent, once with far more than the network takes | Close. While it is under way, the controller sends a `request` | The close comes back within its short wait both times. The loop gets no request event and no lost event |
+| UNIT-CONNECTION-20 | `KEY-10` | A controller that answers `session_ok` with an API address. Again with none, and with one that holds a cursor code | Dial | The dial gives the address back as it came. It is not checked here: `session` checks it |
+| UNIT-CONNECTION-21 | `HOST-08` | A road that counts its calls | Dial over that road | The one call to the controller went over it |
 
 ## `settings`
 
@@ -643,7 +647,8 @@ MAX_WAITING_REQUESTS = 10
 
 | Name | Kind | Must be |
 |---|---|---|
-| `CONTROLLER_ADDRESS` | Address | `http://` or `https://` and a host |
+| `CONTROLLER_TAILSCALE_NAME` | Name | Lower-case letters, digits and `-` |
+| `JOIN_TIMEOUT` | Time | More than zero |
 | `COMMAND_SHELL` | Path | A full path, from `/` |
 | `COMMAND_TIME_LIMIT` | Time | More than zero |
 | `QUESTION_WAIT` | Time | More than zero |
@@ -673,7 +678,8 @@ MAX_WAITING_REQUESTS = 10
 | UNIT-SETTINGS-09 | `LIM-06` | `XDG_CONFIG_HOME` set, then not set | Ask where the file is | `gangway/settings` under that folder, then under `.config` in the home folder |
 | UNIT-SETTINGS-10 | `GATE-13` | A file where `MAX_WAITING_REQUESTS` is 0 | Read | An error |
 | UNIT-SETTINGS-11 | `GATE-14` | A file where `PROMPT_MIN_SHOW` is `0s` | Read | No error. The value is zero |
-| UNIT-SETTINGS-12 | `LIM-06` | A file where `CONTROLLER_ADDRESS` has no `http://` in front | Read | An error |
+| UNIT-SETTINGS-12 | `HOST-06` | A file where `CONTROLLER_TAILSCALE_NAME` is, one by one: empty, with a capital, with a space, an address, a name with a dot, a name that starts or ends with `-` | Read | An error each time |
+| UNIT-SETTINGS-13 | `HOST-08` | A file that sets `CONTROLLER_ADDRESS` | Read | An error that names the line and the name: the cli-tool has no such setting any more |
 
 ## `loop`
 
@@ -759,14 +765,22 @@ The pieces are the real ones. The test holds the edges: the keyboard, the screen
 
 ### In order
 
+The words after the program's name pick what runs: none for a session over Tailscale, `login` for the `login` piece, `--local` with or without an address for a session in the one-machine mode. Anything else stops with a short text on how to start. (`HOST-04`, `HOST-08`)
+
+A session, in order:
+
 1. Refuse to go on as root. Say why. (`HOST-01`)
 2. Refuse to go on when the input or the output is not a terminal. Say why. (`HOST-02`)
 3. Read the settings. A mistake in the file stops here, with the line.
-4. Make the session and its key.
-5. Connect to the controller. On failure, say so and stop.
-6. Set the terminal to raw mode.
-7. Run the loop until it is `Over`.
-8. Put the terminal back. This happens on every way out, also when the program fails. (`HOST-07`)
+4. Pick the road: Tailscale with the auth key of `login`, or localhost. With no auth key, say to run `login` and stop. (`HOST-06`)
+5. `network` joins. On failure, say so and stop.
+6. Make the session and its key.
+7. Connect to the controller over that road. On failure, say so and stop.
+8. Give the API address from `session_ok` to `session`. A bad one stops here, and no paste line is shown. (`KEY-10`)
+9. Set the terminal to raw mode.
+10. Run the loop until it is `Over`.
+11. Put the terminal back. This happens on every way out, also when the program fails. (`HOST-07`)
+12. `network` leaves. This happens on every way out after step 5. (`SES-08`)
 
 ### Rules the code must keep
 
@@ -782,6 +796,8 @@ The pieces are the real ones. The test holds the edges: the keyboard, the screen
 | UNIT-START-02 | `HOST-02` | The input is not a terminal. Again with the output | Check | An error each time that says a terminal is needed |
 | UNIT-START-03 | `HOST-01`, `HOST-02` | A plain user, both are terminals | Check | No error |
 | UNIT-START-04 | `HOST-01` | The user is root and there is no terminal | Check | The error is the one about root |
+| UNIT-START-05 | `HOST-04`, `HOST-08` | | Read the words after the program's name: none, `login`, `--local`, `--local` with an address | A session over Tailscale, the login, a session in the one-machine mode, the same with that address |
+| UNIT-START-06 | `HOST-04` | | Read words that make no sense, such as `start`, `login now`, `-local`, `--help` | An error each time, with the text on how to start |
 
 ## `secrets`
 
@@ -917,35 +933,6 @@ The Tailscale form is tried with the library pointed at a stand-in for Tailscale
 | UNIT-LOGIN-05 | `HOST-04` | No key file. Tailscale does not answer | Run `login` and paste a key | The key is stored. The screen says it could not be tried |
 | UNIT-LOGIN-06 | `HOST-05` | No key file | Run `login` and paste text that cannot be a key | An error. No file. `network` was not asked |
 | UNIT-LOGIN-07 | `HOST-01`, `HOST-02` | The user is root. Again with no terminal | Run `login` | It refuses and asks for no key |
-
-## Step 2: what changes in the pieces that exist
-
-The unit tests for these changes are added to each piece's table in the change that builds them.
-
-### `start`
-
-- The first word after the program's name picks what runs: `login`, or nothing for a session. `--local`, with or without an address, picks the one-machine form. Anything else stops with a short text on how to start. (`HOST-04`)
-- The order of a session's start becomes: the two checks, the settings, `network` joins, the session and its key are made, the websocket is opened, the paste line is shown.
-- `network` leaves on every way out, after the terminal is put back.
-
-### `connection`
-
-- It opens its websocket through the dialer that `network` gives, at the address `network` gives. It no longer knows an address of its own.
-- `session_ok` now holds the API address. `connection` hands it to `session`.
-
-### `session`
-
-- The address in the paste line is the one the controller gave. `session` takes it only if it is a plain web address: it starts with `http://` or `https://`, holds a host, and holds no space, no control character and no invisible character. Anything else ends the start with the reason, and no paste line is shown. (`KEY-10`)
-
-### `settings`
-
-- `CONTROLLER_ADDRESS` is gone from the cli-tool. A settings file that still holds it stops the start, as any unknown name does.
-- New: `CONTROLLER_TAILSCALE_NAME`, a name with letters, digits and `-` only. New: `JOIN_TIMEOUT`, a time, more than zero.
-
-### `hostdoor` (controller)
-
-- `session_ok` holds the controller's `PUBLIC_ADDRESS`.
-- The door is given its listener by `network` (controller). It never opens one of its own.
 
 ## `sessions` (controller)
 
@@ -1104,7 +1091,9 @@ Start: a relay whose messages to the host are gathered in a list.
 - **No web page.** A connection that a browser opens from another site is refused.
 - **Shutting down tells the hosts.** Each host gets `session_end` with `controller_stopped`.
 
-The MVP has no Tailscale and no host token. Any program that can reach the listener can start a session, so the listener stays on this machine (`CTL-01`).
+- **`session_ok` holds the API address.** It is the controller's `-public-address`, or the address the API listens on when that is not set. The host puts it in its paste line. (`KEY-10`)
+
+There is no host token yet. Any program that can reach the door can start a session. In the one-machine mode the door is on this machine only (`CTL-01`).
 
 ### Unit tests
 
@@ -1124,6 +1113,7 @@ Start: a door behind a test server, and a websocket client in the test that play
 | UNIT-HOSTDOOR-10 | `SES-07` | Two live sessions | Shut the door down | Each client gets `session_end` with `controller_stopped`. No session is live |
 | UNIT-HOSTDOOR-11 | `CTL-01` | A door | Connect with the `Origin` of another web site | Refused. No session is live |
 | UNIT-HOSTDOOR-12 | `KEY-03` | A live session | The client sends one message larger than the largest allowed | The connection is closed and the session is no longer live |
+| UNIT-HOSTDOOR-13 | `KEY-10` | A door with an API address | Connect. Send `session_start` | `session_ok` holds that address |
 
 ## `api` (controller)
 
@@ -1177,6 +1167,9 @@ Start: the API over a store with one live session of key K. The test plays the h
 | UNIT-CTLSTART-03 | `CTL-02` | | Check `:8642`, `0.0.0.0:8642`, `[::]:8642`, `192.168.1.5:8642`, `100.64.0.1:8642`, `8.8.8.8:80`, `example.com:80`, `8642`, the empty address | Each is refused |
 | UNIT-CTLSTART-04 | `CTL-02` | | Run the program with `-listen 0.0.0.0:0` | It prints the reason, gives an exit code that is not 0, and listens on nothing |
 | UNIT-CTLSTART-05 | `CTL-01` | The handler of the whole controller | A call to `/v1/session` with no key. A websocket to `/host/v1`. A websocket to other paths, such as `/` and `/host/v1/more` | 401 from the API. The websocket is taken by the door at `/host/v1` and at no other path |
+| UNIT-CTLSTART-06 | `CTL-10` | | Run the program with `-local` | The start text says that the one-machine mode is on, and that any program on this machine can start a session |
+| UNIT-CTLSTART-07 | `KEY-10` | The program runs with `-local`. Again with `-public-address` set | A host sends `session_start` | `session_ok` holds the address the API listens on. Again: it holds the address that was set |
+| UNIT-CTLSTART-08 | `KEY-10` | | Run the program with `-public-address` set to, one by one: a name with no `http`, an address with a space, one that starts with `ftp`, one with a cursor code, `http://` alone | It stops each time, names the option, and listens on nothing |
 
 ## `network` (controller)
 
