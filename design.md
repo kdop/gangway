@@ -797,6 +797,7 @@ The pieces are the real ones. The test holds the edges: the keyboard, the screen
 |---|---|---|
 | `save`, with a key | Makes the folder if it is not there, with rights for the owner only. Writes the key to a new file with rights for the owner only, then puts that file in the place of the old one | An error, or nothing |
 | `load` | Reads the key | The key, or an error that says to run `login` |
+| `remove` | Takes the file away. `login` uses it when Tailscale refuses a new key | An error, or nothing |
 | `protected`, with a path | Tells whether the path is the auth key file | Yes or no |
 
 ### Rules the code must keep
