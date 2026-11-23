@@ -26,13 +26,21 @@ For example: `/gangway http://127.0.0.1:8642 gw_4f9c…`
    KEY=gw_4f9c…
    ```
 
-4. Say hello. This checks the key and tells you the limits:
+4. Say hello, once. This checks the key, makes you the owner of the session, and tells you the limits:
 
    ```
    curl -sS -X POST "$GW/v1/hello" -H "Authorization: Bearer $KEY"
    ```
 
-   The answer holds the host's name and the limits. If it holds a `caller_token`, send it with every later call as a second header: `-H "Gangway-Caller: <token>"`.
+   The answer holds a `caller_token`, the host's name and the limits.
+
+5. Keep the caller token like the key: out of your replies and out of files. Put it in a third shell variable, and send it with every later call as a second header:
+
+   ```
+   CALLER=gwc_81b2…
+   ```
+
+   **`hello` works only once.** A second `hello` gets a 401, and so does every call without the token. If you lose the token, the session is lost to you: tell the user, who can start a new session and paste a new line.
 
 ## Ask for a command
 
@@ -44,7 +52,8 @@ grep ERROR /var/log/app.log | tail -n 20
 GW_END
 jq -Rs '{kind: "command", command: (. | rtrimstr("\n"))}' /tmp/gw_cmd.txt |
   curl -sS --max-time 600 -X POST "$GW/v1/requests" \
-    -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -d @-
+    -H "Authorization: Bearer $KEY" -H "Gangway-Caller: $CALLER" \
+    -H "Content-Type: application/json" -d @-
 ```
 
 **Give the call ten minutes.** The call stays open while the person reads the command and while the command runs. Use `--max-time 600`, and set the time limit of your own shell tool to ten minutes (in Claude Code: `timeout: 600000`). If your call is cut short, Gangway takes it as "the AI is gone" and kills the command.
@@ -95,8 +104,10 @@ Every answer is JSON with a `state`.
 You must now answer, within that many seconds, or the command is killed:
 
 ```
-curl -sS --max-time 600 -X POST "$GW/v1/requests/r_81c2/wait" -H "Authorization: Bearer $KEY"
-curl -sS -X POST "$GW/v1/requests/r_81c2/stop" -H "Authorization: Bearer $KEY"
+curl -sS --max-time 600 -X POST "$GW/v1/requests/r_81c2/wait" \
+  -H "Authorization: Bearer $KEY" -H "Gangway-Caller: $CALLER"
+curl -sS -X POST "$GW/v1/requests/r_81c2/stop" \
+  -H "Authorization: Bearer $KEY" -H "Gangway-Caller: $CALLER"
 ```
 
 - `wait` lets it run on. The call stays open like the first one and gives the same kinds of answer. Its `output` holds only what is new.
@@ -107,7 +118,7 @@ curl -sS -X POST "$GW/v1/requests/r_81c2/stop" -H "Authorization: Bearer $KEY"
 
 | HTTP status | What it means |
 |---|---|
-| 401 | The key is wrong, or the session is over. Stop and tell the user |
+| 401 | The key is wrong, the caller token is missing or wrong, or the session is over. Check that you sent both headers. If you did, stop and tell the user |
 | 404 | That `id` is not a running command. It has ended |
 
 ## What a command may hold

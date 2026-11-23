@@ -102,6 +102,9 @@ type world struct {
 	env     []string // more of the surroundings of both programs
 	cliKey  string   // the Tailscale auth key stored for the cli-tool
 
+	callerMu sync.Mutex
+	caller   string // the caller token that the first hello with the key got
+
 	cliConfig   string  // the cli-tool's settings folder. Empty: a new one is made
 	noPasteLine bool    // do not wait for the paste line: the start is meant to fail
 	ctlOut      *screen // what the controller printed
@@ -179,6 +182,11 @@ func (w *world) startCli(settings []string) {
 	w.t.Helper()
 	t := w.t
 	w.dir, w.screen, w.cliDone = t.TempDir(), &screen{}, make(chan struct{})
+	// A new start is a new session: the caller token of the last one is of
+	// no use.
+	w.callerMu.Lock()
+	w.caller = ""
+	w.callerMu.Unlock()
 
 	if w.cliHome == "" {
 		w.cliHome = w.home
@@ -334,21 +342,55 @@ type answer struct {
 	Output        string `json:"output"`
 	ID            string `json:"id"`
 	BytesReplaced bool   `json:"bytes_replaced"`
+	CallerToken   string `json:"caller_token"`
 }
 
-// call makes one API call with the session key.
+// call makes one API call as the AI that owns the session: with the
+// session key and the caller token.
 func (w *world) call(ctx context.Context, method, path, body string) (answer, error) {
 	return w.callWith(ctx, w.key, method, path, body)
 }
 
-// callWith makes one API call with this key. An empty key sends none.
+// callWith makes one API call with this key. An empty key sends none. With
+// the session's own key the caller token goes along, as the AI that owns
+// the session would send it.
 func (w *world) callWith(ctx context.Context, key, method, path, body string) (answer, error) {
+	caller := ""
+	if key != "" && key == w.key {
+		caller = w.hello().CallerToken
+	}
+	return w.callAs(ctx, key, caller, method, path, body)
+}
+
+// hello says hello with the session key, once, and keeps the caller token.
+// It gives the answer to that hello: only the first hello with a key gets
+// a token, so a test must never say hello any other way.
+func (w *world) hello() answer {
+	w.callerMu.Lock()
+	defer w.callerMu.Unlock()
+	if w.caller != "" {
+		return answer{Status: http.StatusOK, CallerToken: w.caller}
+	}
+	got, err := w.callAs(context.Background(), w.key, "", "POST", "/v1/hello", "")
+	if err != nil {
+		return answer{}
+	}
+	w.caller = got.CallerToken
+	return got
+}
+
+// callAs makes one API call with this key and this caller token, as they
+// are. An empty one is not sent.
+func (w *world) callAs(ctx context.Context, key, caller, method, path, body string) (answer, error) {
 	req, err := http.NewRequestWithContext(ctx, method, w.address+path, strings.NewReader(body))
 	if err != nil {
 		return answer{}, err
 	}
 	if key != "" {
 		req.Header.Set("Authorization", "Bearer "+key)
+	}
+	if caller != "" {
+		req.Header.Set("Gangway-Caller", caller)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)

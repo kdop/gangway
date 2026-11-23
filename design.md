@@ -941,7 +941,7 @@ The Tailscale form is tried with the library pointed at a stand-in for Tailscale
 
 ### What it holds
 
-For each live session: the hash of its key, the host's name, the limits the host gave, and the session's `relay`. It never holds a key.
+For each live session: the hash of its key, the host's name, the limits the host gave, the session's `relay`, and, once a caller has claimed the key, the hash of the caller token. It never holds a key or a caller token.
 
 ### What it can be asked
 
@@ -950,6 +950,8 @@ For each live session: the hash of its key, the host's name, the limits the host
 | `add`, with a session | Makes the session live | Yes, or no with the reason |
 | `find`, with a key | Hashes the key and looks the hash up | The session, or nothing |
 | `remove`, with a session | Takes the session out | |
+| `claim`, on a session | Makes the caller the owner of the key | A new caller token the first time. Nothing every time after |
+| `owns`, on a session, with a token | Hashes the token and compares | Yes or no |
 
 ### Rules the code must keep
 
@@ -960,6 +962,10 @@ For each live session: the hash of its key, the host's name, the limits the host
 - **Removed means dead at once.** After `remove`, `find` gives nothing for that key. (`KEY-03`)
 - **Removing an old session does not harm a new one.** `remove` takes out only the very session it was given, not another session that came later with the same hash.
 - **Nothing is written to disk.** A new store is empty. (`SES-06`, `SES-07`)
+- **One caller token for one session.** The first `claim` makes a token of 256 random bits, as many as the session key has, with `gwc_` in front. Every later `claim` gives nothing, also when many come at the same moment: the check and the making happen under one lock. (`KEY-05`)
+- **Only the token's hash is held.** The token itself leaves in the answer to `claim` and is kept nowhere. `owns` hashes what it is shown and compares the two hashes in a time that does not depend on how much of a guess was right. (`KEY-05`, `SES-06`)
+- **No claim, no owner.** Before a `claim`, `owns` says no to everything, an empty token too. (`KEY-05`)
+- **The token dies with the session.** It is part of the session and of nothing else. A new session with the same key hash starts with no owner. (`KEY-05`, `KEY-03`)
 
 ### Unit tests
 
@@ -973,6 +979,11 @@ For each live session: the hash of its key, the host's name, the limits the host
 | UNIT-SESSIONS-06 | `KEY-03` | Session A was removed. Session B was added with the same hash | `remove` A once more | `find` still gives B |
 | UNIT-SESSIONS-07 | `SES-07` | | Make a new store | It holds no session |
 | UNIT-SESSIONS-08 | `SES-06` | A store with one session | Look at every field of the session | The key is in none of them |
+| UNIT-SESSIONS-09 | `KEY-05` | A live session | `claim` twice. Then `claim` on a second session | The first gives a token: `gwc_` and 256 bits in hex. The second gives nothing, and the first token still owns the session. The other session gets another token |
+| UNIT-SESSIONS-10 | `KEY-05` | A live session | `owns` before any `claim`, with: nothing, `gwc_` alone, a made-up token. Then `claim`, and `owns` with: the token, nothing, the token with one letter cut off, with one letter added, without `gwc_`, in capitals, the token of another session, the session key, the token's hash | No three times. Then yes for the token, and no for every other |
+| UNIT-SESSIONS-11 | `KEY-05` | A live session | 100 `claim` at the same moment | Exactly one gets a token, and that token owns the session |
+| UNIT-SESSIONS-12 | `KEY-05`, `SES-06` | A session after `claim` | Look at every field of the session | The token is in none of them, as text or as bytes |
+| UNIT-SESSIONS-13 | `KEY-05`, `KEY-03` | A session after `claim` | `remove` it. `add` a new session with the same hash | The old token does not own the new session. The new session gives a token of its own |
 
 ## `relay` (controller)
 
@@ -1123,15 +1134,17 @@ Start: a door behind a test server, and a websocket client in the test that play
 ### Rules the code must keep
 
 - **No key, no entry.** Every call needs the key of a live session in `Authorization: Bearer`. Without it the answer is 401, always with the same body, and nothing else happens. (`KEY-02`, `SES-01`)
+- **The first `hello` owns the key.** `hello` asks `sessions` to `claim`. The first one gets the caller token in its answer. Every later `hello` gets 401, with or without the token, so the token is handed out once. (`KEY-05`)
+- **No caller token, no entry.** Each of the other four calls needs the token in the `Gangway-Caller` header, next to the key. With none, a wrong one, or before any `hello`, the answer is the same 401 as for a wrong key, nothing reaches the host, and no token is handed out. A token in the address does not count. (`KEY-05`)
 - **Five calls and no more.** Every other path or way of calling gets 404 or 405. No call approves, extends or changes a setting. (`GATE-07`)
 - **Only the command goes on.** From the body of a new request the API takes the kind and the command. Any other field is left behind, so the host never sees it. (`GATE-07`)
 - **A body it does not know is turned away.** A body that is not JSON, has no command, is too large, or has a kind other than `command` gets 400, and nothing reaches the host. (`CTL-11`)
 - **A call stays open** until the `relay` has an answer. When the AI closes it first, the `relay` is told. (`GATE-12`, `LIM-07`)
-- **`hello` and `session` only read.** In the MVP both give the same body: the host's name, the limits, and the counts of requests. There is no caller token yet.
+- **`session` only reads.** It gives the host's name, the limits, and the counts of requests. `hello` gives the same body with the caller token in front, and changes nothing but the owner of the key.
 
 ### Unit tests
 
-Start: the API over a store with one live session of key K. The test plays the host by reading what the session's relay sends.
+Start: the API over a store with one live session of key K. The test plays the host by reading what the session's relay sends. Unless a test says otherwise, the test has said `hello` and sends the caller token with every call.
 
 | Test | Requirement | Start | Action | Expect |
 |---|---|---|---|---|
@@ -1146,8 +1159,14 @@ Start: the API over a store with one live session of key K. The test plays the h
 | UNIT-API-09 | `LIM-02` | State after UNIT-API-08 | `wait` on the `id`, and the host sends `ended`. Then on a second request, `stop` | The host got `wait`, then `stop`. Each call ends with `ended` |
 | UNIT-API-10 | `LIM-02` | A live session | `wait` and `stop` on a made-up `id` | 404 each time. Nothing was sent to the host |
 | UNIT-API-11 | `GATE-12`, `LIM-07` | A request is open | The AI closes the call | The host gets `cancel` with the `id` |
-| UNIT-API-12 | `GATE-06` | A live session with limits from the host. One request waits, one runs | `hello`, then `GET /v1/session` | Both give the same body: the host's name, the limits, one waiting, the largest line, and the `id` that runs. No caller token |
+| UNIT-API-12 | `GATE-06` | A live session with limits from the host | `GET /v1/session`, and compare with what `hello` gave. Then one request waits and one runs: `GET /v1/session` again | The host's name, the limits, nothing waiting, nothing running. `hello` gave the same body with the caller token in front. Then one waiting, and the `id` of the one that runs |
 | UNIT-API-13 | `LIM-08` | A request is open | The host sends `ended` with `killed_by_user` and no exit code | The answer has no `exit_code` field |
+| UNIT-API-14 | `KEY-05` | A live session, no `hello` yet | `hello` with K | 200, with a caller token that `sessions` says owns the session, and the state of the session |
+| UNIT-API-15 | `KEY-05` | A live session | A second `hello` with K and: no token, the right token, a made-up token. Then `GET /v1/session` as the owner | 401 each time, with the body of a call with no key, and no token in it. The owner is still let in |
+| UNIT-API-16 | `KEY-05` | Two live sessions, each after its `hello` | Each of the four other calls with K and: no token, the token with one letter cut off, with one letter added, without `gwc_`, in capitals, the token of the other session, the key, the token's hash, the token in the address | 401 each time, with the body of a call with no key. Nothing was sent to the host |
+| UNIT-API-17 | `KEY-05` | A live session, no `hello` yet | Each of the four other calls with K, with no token and with a made-up one. Then `hello` | 401 each time. Nothing was sent to the host. `hello` still gets the caller token |
+| UNIT-API-18 | `KEY-05` | A live session | With K and the token: `GET /v1/session`, `wait` and `stop` on a made-up `id`, and `POST /v1/requests` | 200, then 404 twice, and the host gets the request |
+| UNIT-API-19 | `KEY-05` | A live session, no `hello` yet | 40 `hello` with K at the same moment | Exactly one gets 200 with a caller token. Every other gets 401 |
 
 ## `start` (controller)
 

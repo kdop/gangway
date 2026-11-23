@@ -94,7 +94,7 @@ func (got answer) killed(t *testing.T, how string) {
 	}
 }
 
-// limits gives the limits that hello reports, in seconds.
+// limits gives the limits that the API reports, in seconds.
 func (w *world) limits() (command, answer int) {
 	w.t.Helper()
 	var body struct {
@@ -103,9 +103,12 @@ func (w *world) limits() (command, answer int) {
 			Answer  int `json:"answer_seconds"`
 		} `json:"limits"`
 	}
-	got := w.post("/v1/hello")
+	got, err := w.call(background, "GET", "/v1/session", "")
+	if err != nil {
+		w.t.Fatal(err)
+	}
 	if err := json.Unmarshal([]byte(got.Body), &body); err != nil || got.Status != 200 {
-		w.t.Fatalf("hello: %d %s", got.Status, got.Body)
+		w.t.Fatalf("session: %d %s", got.Status, got.Body)
 	}
 	return body.Limits.Command, body.Limits.Answer
 }
@@ -208,7 +211,7 @@ func TestLIM04_1_ACommandThatEndsWhileTheQuestionWaits(t *testing.T) {
 }
 
 // The starting values are a minute each, too long to wait for: the test
-// reads them from what hello reports. TestLIM06_2 shows that the limits
+// reads them from what the API reports. TestLIM06_2 shows that the limits
 // act at the values they are set to.
 func TestLIM06_1_TheLimitsStartAtTheirStartingValues(t *testing.T) {
 	w := newWorld(t)

@@ -30,11 +30,29 @@ type fixture struct {
 	store *sessions.Store
 	sess  *sessions.Session
 
+	// token is the caller token. call sends it when it is set.
+	token string
+	// hello is the answer to the first hello.
+	hello reply
+
 	mu   sync.Mutex
 	sent []messages.Message
 }
 
+// newFixture gives a live session whose key has been claimed by a hello.
 func newFixture(t *testing.T) *fixture {
+	t.Helper()
+	f := newUnclaimed(t)
+	f.hello = f.call("POST", "/v1/hello", "Bearer "+keyK, "")
+	f.token, _ = f.hello.fields["caller_token"].(string)
+	if f.hello.status != http.StatusOK || f.token == "" {
+		t.Fatalf("hello gave %d %s", f.hello.status, f.hello.body)
+	}
+	return f
+}
+
+// newUnclaimed gives a live session that no caller has said hello to.
+func newUnclaimed(t *testing.T) *fixture {
 	t.Helper()
 	f := &fixture{t: t, store: sessions.NewStore()}
 	f.sess = &sessions.Session{
@@ -90,7 +108,8 @@ type reply struct {
 	fields map[string]any
 }
 
-// call makes one API call. auth is the whole Authorization header.
+// call makes one API call. auth is the whole Authorization header. The
+// caller token of the fixture goes along.
 func (f *fixture) call(method, path, auth, body string) reply {
 	f.t.Helper()
 	return f.callCtx(context.Background(), method, path, auth, body)
@@ -98,12 +117,27 @@ func (f *fixture) call(method, path, auth, body string) reply {
 
 func (f *fixture) callCtx(ctx context.Context, method, path, auth, body string) reply {
 	f.t.Helper()
+	return f.do(ctx, method, path, auth, f.token, body)
+}
+
+// callAs makes one API call with this caller token. An empty one sends no
+// such header.
+func (f *fixture) callAs(method, path, auth, caller, body string) reply {
+	f.t.Helper()
+	return f.do(context.Background(), method, path, auth, caller, body)
+}
+
+func (f *fixture) do(ctx context.Context, method, path, auth, caller, body string) reply {
+	f.t.Helper()
 	req, err := http.NewRequestWithContext(ctx, method, f.url+path, strings.NewReader(body))
 	if err != nil {
 		f.t.Fatal(err)
 	}
 	if auth != "" {
 		req.Header.Set("Authorization", auth)
+	}
+	if caller != "" {
+		req.Header.Set(messages.CallerHeader, caller)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -384,26 +418,21 @@ func TestUNITAPI11_HangingUpCancels(t *testing.T) {
 // UNIT-API-12. Requirement: GATE-06.
 func TestUNITAPI12_HelloAndSession(t *testing.T) {
 	f := newFixture(t)
+	empty := `{"host":"web-3","limits":{"command_seconds":45,"answer_seconds":30},"requests":{"waiting":0,"max_waiting":7,"running":null}}`
+	session := f.call("GET", "/v1/session", "Bearer "+keyK, "")
+	if session.status != http.StatusOK || strings.TrimSpace(session.body) != empty {
+		t.Fatalf("session gave %d %s, want %s", session.status, session.body, empty)
+	}
+	if want := `{"caller_token":"` + f.token + `",` + empty[1:]; strings.TrimSpace(f.hello.body) != want {
+		t.Fatalf("hello gave %s, want %s", f.hello.body, want)
+	}
+
 	f.open("waits")
 	runs, _ := f.open("runs")
 	f.sess.Relay.FromHost(messages.Message{Type: messages.TypeStarted, ID: runs})
-
-	hello := f.call("POST", "/v1/hello", "Bearer "+keyK, "")
-	session := f.call("GET", "/v1/session", "Bearer "+keyK, "")
-	if hello.status != http.StatusOK || session.status != http.StatusOK {
-		t.Fatalf("hello gave %d, session gave %d", hello.status, session.status)
-	}
-	if hello.body != session.body {
-		t.Fatalf("hello gave %s, session gave %s", hello.body, session.body)
-	}
 	want := `{"host":"web-3","limits":{"command_seconds":45,"answer_seconds":30},"requests":{"waiting":1,"max_waiting":7,"running":"` + runs + `"}}`
-	if strings.TrimSpace(hello.body) != want {
-		t.Fatalf("the body is %s, want %s", hello.body, want)
-	}
-
-	empty := newFixture(t)
-	if r := empty.call("GET", "/v1/session", "Bearer "+keyK, ""); !strings.Contains(r.body, `"running":null`) {
-		t.Fatalf("with nothing running the body is %s", r.body)
+	if r := f.call("GET", "/v1/session", "Bearer "+keyK, ""); strings.TrimSpace(r.body) != want {
+		t.Fatalf("the body is %s, want %s", r.body, want)
 	}
 }
 
@@ -415,6 +444,141 @@ func TestUNITAPI13_NoExitCodeForAKilledCommand(t *testing.T) {
 	r := f.result(done)
 	if _, has := r.fields["exit_code"]; has || r.fields["how"] != "killed_by_user" {
 		t.Fatalf("the answer is %s", r.body)
+	}
+}
+
+var otherCalls = fiveCalls[1:]
+
+// let tells whether the call got past the key and the caller token.
+func let(r reply) bool { return r.status != http.StatusUnauthorized }
+
+// UNIT-API-14. Requirement: KEY-05.
+func TestUNITAPI14_TheFirstHelloGetsTheCallerToken(t *testing.T) {
+	f := newUnclaimed(t)
+	r := f.call("POST", "/v1/hello", "Bearer "+keyK, "")
+	token, _ := r.fields["caller_token"].(string)
+	if r.status != http.StatusOK || !strings.HasPrefix(token, messages.CallerPrefix) {
+		t.Fatalf("the first hello gave %d %s, want 200 with a caller token", r.status, r.body)
+	}
+	if !f.sess.Owns(token) {
+		t.Fatal("the token that hello gave is not the one the session knows")
+	}
+	if r.fields["host"] != "web-3" {
+		t.Fatalf("hello gave no state of the session: %s", r.body)
+	}
+}
+
+// UNIT-API-15. Requirement: KEY-05.
+func TestUNITAPI15_ASecondHelloIsRefused(t *testing.T) {
+	f := newFixture(t)
+	noKey := f.callAs("POST", "/v1/hello", "", "", "")
+	for _, caller := range []string{"", f.token, messages.CallerPrefix + strings.Repeat("0", 64)} {
+		r := f.callAs("POST", "/v1/hello", "Bearer "+keyK, caller, "")
+		if r.status != http.StatusUnauthorized || r.body != noKey.body {
+			t.Errorf("a second hello with the caller %q gave %d %s, want the 401 of a call with no key", caller, r.status, r.body)
+		}
+		if strings.Contains(r.body, "caller_token") {
+			t.Errorf("a second hello handed out a token: %s", r.body)
+		}
+	}
+	// The first caller is still the owner.
+	if r := f.call("GET", "/v1/session", "Bearer "+keyK, ""); r.status != http.StatusOK {
+		t.Fatalf("after the refused hellos the owner got %d, want 200", r.status)
+	}
+}
+
+// UNIT-API-16. Requirement: KEY-05.
+func TestUNITAPI16_NoTokenOrAWrongOneIsRefused(t *testing.T) {
+	f := newFixture(t)
+	other := newFixture(t)
+	noKey := f.callAs("GET", "/v1/session", "", "", "")
+	for _, c := range otherCalls {
+		for _, caller := range []string{
+			"",
+			f.token[:len(f.token)-1],
+			f.token + "0",
+			strings.TrimPrefix(f.token, messages.CallerPrefix),
+			strings.ToUpper(f.token),
+			other.token,
+			keyK,
+			messages.KeyHash(f.token),
+		} {
+			r := f.callAs(c.method, c.path, "Bearer "+keyK, caller, goodBody)
+			if r.status != http.StatusUnauthorized || r.body != noKey.body {
+				t.Errorf("%s %s with the caller %q gave %d %s, want the 401 of a call with no key", c.method, c.path, caller, r.status, r.body)
+			}
+		}
+		// The token in the address is no token.
+		r := f.callAs(c.method, c.path+"?caller_token="+f.token+"&Gangway-Caller="+f.token, "Bearer "+keyK, "", goodBody)
+		if r.status != http.StatusUnauthorized {
+			t.Errorf("%s %s with the token in the address gave %d, want 401", c.method, c.path, r.status)
+		}
+	}
+	f.wantNothingSent()
+}
+
+// UNIT-API-17. Requirement: KEY-05.
+func TestUNITAPI17_BeforeHelloOnlyHelloIsLetIn(t *testing.T) {
+	f := newUnclaimed(t)
+	for _, c := range otherCalls {
+		for _, caller := range []string{"", messages.CallerPrefix + strings.Repeat("0", 64)} {
+			if r := f.callAs(c.method, c.path, "Bearer "+keyK, caller, goodBody); let(r) {
+				t.Errorf("%s %s before any hello gave %d, want 401", c.method, c.path, r.status)
+			}
+		}
+	}
+	f.wantNothingSent()
+	// The refused calls took nothing: the first hello still gets the token.
+	r := f.call("POST", "/v1/hello", "Bearer "+keyK, "")
+	if token, _ := r.fields["caller_token"].(string); r.status != http.StatusOK || token == "" {
+		t.Fatalf("hello after the refused calls gave %d %s, want a caller token", r.status, r.body)
+	}
+}
+
+// UNIT-API-18. Requirement: KEY-05.
+func TestUNITAPI18_TheKeyAndTheTokenAreLetIn(t *testing.T) {
+	f := newFixture(t)
+	if r := f.callAs("GET", "/v1/session", "Bearer "+keyK, f.token, ""); r.status != http.StatusOK {
+		t.Fatalf("session with the key and the token gave %d, want 200", r.status)
+	}
+	// wait and stop on a made-up id are let in, and then not found.
+	for _, c := range otherCalls[2:] {
+		if r := f.callAs(c.method, c.path, "Bearer "+keyK, f.token, ""); r.status != http.StatusNotFound {
+			t.Fatalf("%s %s with the key and the token gave %d, want 404", c.method, c.path, r.status)
+		}
+	}
+	done := make(chan reply, 1)
+	go func() { done <- f.callAs("POST", "/v1/requests", "Bearer "+keyK, f.token, goodBody) }()
+	if got := f.nextSent(1); got.Command != "echo hi" {
+		t.Fatalf("the host got %+v, want the request", got)
+	}
+}
+
+// UNIT-API-19. Requirement: KEY-05.
+func TestUNITAPI19_ManyFirstHellosAtOnceGiveOneToken(t *testing.T) {
+	f := newUnclaimed(t)
+	const callers = 40
+	replies := make(chan reply, callers)
+	start := make(chan struct{})
+	for i := 0; i < callers; i++ {
+		go func() {
+			<-start
+			replies <- f.call("POST", "/v1/hello", "Bearer "+keyK, "")
+		}()
+	}
+	close(start)
+	tokens := 0
+	for i := 0; i < callers; i++ {
+		r := <-replies
+		switch {
+		case r.status == http.StatusOK && r.fields["caller_token"] != nil:
+			tokens++
+		case r.status != http.StatusUnauthorized:
+			t.Errorf("a hello gave %d %s", r.status, r.body)
+		}
+	}
+	if tokens != 1 {
+		t.Fatalf("%d callers got a token, want exactly one", tokens)
 	}
 }
 

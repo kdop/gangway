@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,6 +32,9 @@ type world struct {
 	t   *testing.T
 	c   *start.Controller
 	url string
+
+	mu     sync.Mutex
+	tokens map[string]string // the caller token of each key that said hello
 }
 
 func newWorld(t *testing.T) *world {
@@ -118,7 +122,46 @@ type reply struct {
 	fields map[string]any
 }
 
+// hello says hello with the key and keeps the caller token it gets.
+func (w *world) hello(key string) reply {
+	w.t.Helper()
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	r := w.callAs(context.Background(), "POST", "/v1/hello", key, "", "")
+	if token, _ := r.fields["caller_token"].(string); token != "" {
+		if w.tokens == nil {
+			w.tokens = map[string]string{}
+		}
+		w.tokens[key] = token
+	}
+	return r
+}
+
+// token gives the caller token of the key. A key that has none yet says
+// hello first, as an AI would.
+func (w *world) token(key string) string {
+	w.mu.Lock()
+	token := w.tokens[key]
+	w.mu.Unlock()
+	if token == "" && key != "" {
+		w.hello(key)
+		w.mu.Lock()
+		token = w.tokens[key]
+		w.mu.Unlock()
+	}
+	return token
+}
+
+// call makes one API call as the AI that owns the key: the caller token
+// goes along.
 func (w *world) call(ctx context.Context, method, path, key, body string) reply {
+	w.t.Helper()
+	return w.callAs(ctx, method, path, key, w.token(key), body)
+}
+
+// callAs makes one API call with this key and this caller token, as they
+// are. An empty one is not sent.
+func (w *world) callAs(ctx context.Context, method, path, key, caller, body string) reply {
 	w.t.Helper()
 	req, err := http.NewRequestWithContext(ctx, method, w.url+path, strings.NewReader(body))
 	if err != nil {
@@ -126,6 +169,9 @@ func (w *world) call(ctx context.Context, method, path, key, body string) reply 
 	}
 	if key != "" {
 		req.Header.Set("Authorization", "Bearer "+key)
+	}
+	if caller != "" {
+		req.Header.Set(messages.CallerHeader, caller)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -197,15 +243,54 @@ func (w *world) running(h *host, key string) (id string, answer reply) {
 	return req.ID, w.result(done)
 }
 
-// The MVP has no caller token, so hello gives the session's state only.
 func TestAPI01_Hello(t *testing.T) {
 	w := newWorld(t)
 	w.startSession(keyK, "web-3")
-	r := w.post("/v1/hello", keyK, "")
-	want := `{"host":"web-3","limits":{"command_seconds":45,"answer_seconds":30},"requests":{"waiting":0,"max_waiting":7,"running":null}}`
-	if r.status != http.StatusOK || strings.TrimSpace(r.body) != want {
+	r := w.hello(keyK)
+	token, _ := r.fields["caller_token"].(string)
+	want := `{"caller_token":"` + token + `","host":"web-3","limits":{"command_seconds":45,"answer_seconds":30},"requests":{"waiting":0,"max_waiting":7,"running":null}}`
+	if r.status != http.StatusOK || !strings.HasPrefix(token, messages.CallerPrefix) || strings.TrimSpace(r.body) != want {
 		t.Fatalf("hello gave %d %s, want %s", r.status, r.body, want)
 	}
+}
+
+func TestAPI02_ASecondHelloIsRefused(t *testing.T) {
+	w := newWorld(t)
+	h := w.startSession(keyK, "web-3")
+	token := w.token(keyK)
+	for _, caller := range []string{"", token} {
+		r := w.callAs(context.Background(), "POST", "/v1/hello", keyK, caller, "")
+		if r.status != http.StatusUnauthorized || strings.Contains(r.body, "caller_token") {
+			t.Fatalf("a second hello with the caller %q gave %d %s, want 401", caller, r.status, r.body)
+		}
+	}
+	if r := w.get("/v1/session", keyK); r.status != http.StatusOK {
+		t.Fatalf("the first caller got %d after the refused hellos, want 200", r.status)
+	}
+	h.wantSilence()
+}
+
+func TestAPI03_NoCallerTokenOrAWrongOne(t *testing.T) {
+	w := newWorld(t)
+	h := w.startSession(keyK, "web-3")
+	other := w.startSession(keyL, "db-1")
+	token := w.token(keyK)
+	noKey := w.callAs(context.Background(), "GET", "/v1/session", "", "", "")
+	for _, caller := range []string{"", token[:len(token)-1], token + "0", w.token(keyL), messages.CallerPrefix + strings.Repeat("0", 64)} {
+		for _, c := range []struct{ method, path, body string }{
+			{"GET", "/v1/session", ""},
+			{"POST", "/v1/requests", commandBody("echo hi")},
+			{"POST", "/v1/requests/r_1/wait", ""},
+			{"POST", "/v1/requests/r_1/stop", ""},
+		} {
+			r := w.callAs(context.Background(), c.method, c.path, keyK, caller, c.body)
+			if r.status != http.StatusUnauthorized || r.body != noKey.body {
+				t.Errorf("%s %s with the caller %q gave %d %s, want the 401 of a call with no key", c.method, c.path, caller, r.status, r.body)
+			}
+		}
+	}
+	h.wantSilence()
+	other.wantSilence()
 }
 
 func TestAPI04_SessionTellsWhatTheHostGave(t *testing.T) {

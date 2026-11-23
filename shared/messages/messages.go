@@ -27,6 +27,12 @@ const DefaultControllerName = "gangway-controller"
 // KeyPrefix starts every session key.
 const KeyPrefix = "gw_"
 
+// CallerHeader carries the caller token on every API call but the first.
+const CallerHeader = "Gangway-Caller"
+
+// CallerPrefix starts every caller token.
+const CallerPrefix = "gwc_"
+
 // KeyHash is the form of a session key that the controller may hold: the
 // SHA-256 of the whole key, prefix included, in hex.
 func KeyHash(key string) string {

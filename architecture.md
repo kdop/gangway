@@ -41,7 +41,9 @@ Sends nothing but the key. Gives back the caller token and the state of the sess
 }
 ```
 
-- The first `hello` with a key wins. Any later `hello` with that key is refused (`KEY-05`).
+- The first `hello` with a key wins. Any later `hello` with that key is refused, with or without the caller token (`KEY-05`).
+- Until that first `hello`, every other call with the key is refused: there is no caller token to show yet (`KEY-05`).
+- The caller token is handed out once and cannot be asked for again. A caller that loses it has lost the session, and the user starts a new one.
 - The limits are told up front, so the AI can plan for them.
 - Everything but the caller token is the same body that `GET /v1/session` gives.
 

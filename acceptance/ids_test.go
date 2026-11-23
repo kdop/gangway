@@ -13,6 +13,13 @@ import (
 // stepsBuilt holds the steps of plan.md that are built, beside the MVP.
 var stepsBuilt = map[string]bool{"2": true}
 
+// builtOfAStepInWork holds the requirements that are built while the rest
+// of their step is not. When the whole step is built, the step goes into
+// stepsBuilt and its requirements come off this list.
+var builtOfAStepInWork = map[string]bool{
+	"KEY-05": true, // step 4
+}
+
 // noGoTest holds the tests of a built requirement that have no Go test,
 // each with the reason.
 var noGoTest = map[string]string{
@@ -84,6 +91,12 @@ func TestEveryTestThatIsDueHasAGoTest(t *testing.T) {
 	}
 	if ofAStep == 0 {
 		t.Fatal("found no requirement of a built step in requirements.md")
+	}
+	for id := range builtOfAStepInWork {
+		if !inFile[id+".1"] {
+			t.Errorf("%s is on the list builtOfAStepInWork but is not in requirements.md", id)
+		}
+		due[id] = true
 	}
 
 	var missing []string
