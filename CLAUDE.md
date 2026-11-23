@@ -54,6 +54,8 @@ led to it.
 - **The controller tells the cli-tool the API address for the paste line.** It is set once, on the controller, and no host needs it. A controller that is taken over gains nothing by it: the AI sends it the key on every call anyway. The cli-tool shows the address only when it is a plain web address.
 - **A one-machine mode stays, and each program must be started in it.** The tests and a first trial then need no Tailscale network. It is localhost only, and the controller says at start that it is on.
 - **Until pairing is built, any device that the Tailscale rules let through can start a session.** Such a session is its own: it cannot see or touch another, and the worst it does is use the controller's memory. The tag on the auth key and the Tailscale rules are the guard until then.
+- **Gangway does not have to work from every AI chat.** The AI must send a request with the key in a header. A tool with a shell can, and a chat on the web usually cannot. That limit is accepted.
+- **An MCP door on the controller may come later, next to the API and not in place of it.** It would let in the chats that cannot call the API. It is an addition, so nothing waits for it.
 - **Linux hosts only for now.** Keep it simple.
 - **`login` once, then start with no questions.** The auth key is pasted at `login`, about once a month, and kept in a file in the home folder that only the user can read.
 - **The cli-tool never gives its own key file to the AI; the ban is fixed in code.** A setting could be switched off by mistake.
