@@ -47,7 +47,7 @@ The controller and each host join your Tailscale network from inside the program
 
 1. In the Tailscale admin page, make two auth keys. The one for the controller: reusable and not ephemeral. The one for the hosts: reusable and ephemeral, with a tag that your Tailscale rules let reach the controller and nothing else.
 2. On the controller machine, once: `gangway-controller login`, and paste the controller's key. Then start it: `gangway-controller`. Add `-public-address https://…` when the AI reaches it at another address than the one it listens on.
-3. On a host, once: `gangway login`, and paste the hosts' key. Then start a session: `gangway`.
+3. On a host, once: `gangway login`, and paste the hosts' key. Then start a session: `gangway`. A session lasts 30 minutes, and then asks at its terminal whether to extend. `gangway --length 45m` asks for another length.
 
 Until pairing is built, any device that your Tailscale rules let reach the controller can start a session of its own. The rules are the guard.
 
