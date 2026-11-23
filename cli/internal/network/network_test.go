@@ -2,6 +2,7 @@ package network
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -242,7 +243,7 @@ func TestUNITNETWORK09_ARefusedKey(t *testing.T) {
 	bad := "tskey-auth-kBADKEY11CNTRL-zzzzzzzzzzzz"
 	n, folder := s.road(t, bad)
 	err := n.Join(context.Background())
-	if err != ErrKeyRefused {
+	if !errors.Is(err, ErrKeyRefused) || !strings.Contains(err.Error(), "Tailscale said: ") {
 		t.Fatalf("got %v, want the error about a refused key", err)
 	}
 	if !strings.Contains(err.Error(), "gangway login") || strings.Contains(err.Error(), "zzzz") {
