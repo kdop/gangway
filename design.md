@@ -40,7 +40,7 @@ stateDiagram-v2
   [*] --> Free
   Free --> Asking: the line has a request
   Asking --> Busy: y
-  Asking --> Free: n, Ctrl+C, or cancel
+  Asking --> Free: n, Ctrl+C, cancel, or the time is up
   Asking --> Asking: any other key
   Busy --> Free: the runner is done
   Free --> Ended: the session ends
@@ -58,6 +58,7 @@ stateDiagram-v2
 | `ctrl_c` | `terminal`: one Ctrl+C |
 | `cancel` | `connection`: the AI hung up on the request with this `id` |
 | `done` | `runner`: the request it was given is over |
+| `time_up` | `session`: the session's time is up |
 | `end` | `session`: the session ends, for any reason |
 
 ### The table
@@ -71,6 +72,7 @@ Every state meets every event. An empty "Does" means the event is dropped.
 | `Free` | `ctrl_c` | Not the gate's. `session` ends the session | `Free` |
 | `Free` | `cancel` | Not the gate's. `line` removes the request if it waits | `Free` |
 | `Free` | `done` | | `Free` |
+| `Free` | `time_up` | | `Free` |
 | `Free` | `end` | | `Ended` |
 | `Asking` | `ready` | | `Asking` |
 | `Asking` | any `key`, less than `PROMPT_MIN_SHOW` after the prompt was shown | | `Asking` |
@@ -81,16 +83,18 @@ Every state meets every event. An empty "Does" means the event is dropped.
 | `Asking` | `cancel`, the `id` in front | Shows that the AI left. Sends `refused` with `ai_gone` | `Free` |
 | `Asking` | `cancel`, another `id` | Not the gate's | `Asking` |
 | `Asking` | `done` | | `Asking` |
+| `Asking` | `time_up` | Shows that the time is up. Sends `refused` with `time_up`. Takes no next request | `Free` |
 | `Asking` | `end` | Sends `refused` with `session_ended` | `Ended` |
 | `Busy` | `ready` | | `Busy` |
 | `Busy` | `key` | | `Busy` |
 | `Busy` | `ctrl_c` | Not the gate's. `runner` kills the command | `Busy` |
 | `Busy` | `cancel` | Not the gate's. `runner` kills the command if the `id` is its own | `Busy` |
 | `Busy` | `done` | | `Free` |
+| `Busy` | `time_up` | Not the gate's. `runner` gives the command no more time | `Busy` |
 | `Busy` | `end` | Not the gate's. `runner` stops the command | `Ended` |
 | `Ended` | any | | `Ended` |
 
-Each time the `gate` becomes `Free`, it asks `line` whether a request waits. If one does, that is a `ready`.
+Each time the `gate` becomes `Free`, it asks `line` whether a request waits. If one does, that is a `ready`. The one exception is `time_up`: the `gate` then asks for nothing, because nothing new may be shown until the user extends.
 
 ### Rules the code must keep
 
@@ -101,8 +105,7 @@ Each time the `gate` becomes `Free`, it asks `line` whether a request waits. If 
 - **Exactly two keys answer.** The key must be the single byte `y` or the single byte `n`. Capitals, Enter, and every key that sends more than one byte are other keys. (`GATE-03`)
 - **A fresh prompt takes no key.** A `key` that comes less than `PROMPT_MIN_SHOW` after the prompt was shown is dropped, `y` and `n` too. `ctrl_c` is not held back: it can only refuse. (`GATE-14`)
 - **One answer for each request.** Every request the `gate` takes ends with one `started` or one `refused` from it, never both and never none.
-
-The session's clock is not in the MVP. When it is built, it adds one event, "the time is up", to this table.
+- **The time being up can only refuse.** `time_up` refuses the prompt in front and approves nothing. (`LEN-07`)
 
 ### Unit tests
 
@@ -131,6 +134,8 @@ Start: a `gate` with a fake `line`, `terminal`, `connection` and `runner`, and a
 | UNIT-GATE-19 | `GATE-14` | State after UNIT-GATE-18 | The clock moves by `PROMPT_MIN_SHOW`. `key` `y` | `Busy`. The runner got the approval |
 | UNIT-GATE-20 | `GATE-14`, `LIM-09` | `Asking`, the prompt just shown | `ctrl_c`, with no time passed | `Free`. `refused` with `user` |
 | UNIT-GATE-21 | `GATE-12`, `GATE-14` | `Asking` for A, B in the line | `cancel` for A, then `key` `y` with no time passed | `Asking` for B. The runner was not called |
+| UNIT-GATE-22 | `LEN-07` | `Asking` for A, B in the line | `time_up`, then `key` `y` | `Free`. `refused` with `time_up` for A, and the screen was told the time is up. B is still in the line and got no prompt. The runner was not called |
+| UNIT-GATE-23 | `LEN-07`, `LEN-08` | `Free`, and again `Busy` | `time_up` | The same state. Nothing was shown or sent |
 
 ## `checks`
 
@@ -241,6 +246,7 @@ The `runner` runs one approved command, sends what it writes, asks "wait or stop
 - How the command will be said to have ended, once a kill is sent.
 - Whether any byte of the output was replaced.
 - The number of the timer it waits for.
+- Whether the session's time ran out while this command ran.
 
 ### What it talks to
 
@@ -286,6 +292,7 @@ stateDiagram-v2
 | `wait`, `stop` | `connection`: the AI's answer |
 | `ctrl_c` | `terminal`: one Ctrl+C |
 | `cancel` | `connection`: the AI hung up on the request with this `id` |
+| `time_up` | `session`: the session's time is up |
 | `end` | `session`: the session ends |
 
 ### The table
@@ -302,6 +309,8 @@ An empty "Does" means the event is dropped. "Kill" means: ask the program to sto
 | `Running` | `output` | Shows it. Sends `output` | `Running` |
 | `Running` | `exited` | Sends `ended` with `exit` and the exit code. Tells `gate` `done` | `Idle` |
 | `Running` | `timer`, the one it waits for | Sends `still_running`. Starts a timer of `QUESTION_WAIT` | `Asked` |
+| `Running` | `timer`, the one it waits for, after `time_up` | Kill, `killed_time_up`. No `still_running` is sent | `Stopping` |
+| `Running` | `time_up` | Notes it. Nothing is killed | `Running` |
 | `Running` | `wait` | | `Running` |
 | `Running` | `stop` | Kill, `killed_by_ai` | `Stopping` |
 | `Running` | `ctrl_c` | Kill, `killed_by_user` | `Stopping` |
@@ -312,6 +321,8 @@ An empty "Does" means the event is dropped. "Kill" means: ask the program to sto
 | `Asked` | `output` | Shows it. Sends `output` | `Asked` |
 | `Asked` | `exited` | Sends `ended` with `exit` and the exit code. Tells `gate` `done` | `Idle` |
 | `Asked` | `wait` | Starts a timer of `COMMAND_TIME_LIMIT` | `Running` |
+| `Asked` | `wait`, after `time_up` | Kill, `killed_time_up` | `Stopping` |
+| `Asked` | `time_up` | Notes it. Nothing is killed | `Asked` |
 | `Asked` | `stop` | Kill, `killed_by_ai` | `Stopping` |
 | `Asked` | `timer`, the one it waits for | Kill, `killed_no_answer` | `Stopping` |
 | `Asked` | `ctrl_c` | Kill, `killed_by_user` | `Stopping` |
@@ -330,6 +341,7 @@ An empty "Does" means the event is dropped. "Kill" means: ask the program to sto
 - **One command at a time.** A `run` outside `Idle` is dropped. (`GATE-06`)
 - **Every command that starts gets one `ended`, and the `gate` one `done`.** Never two, never none.
 - **The first reason to kill wins.** Once a kill is sent, a later `stop` or Ctrl+C does not change how the command is said to have ended.
+- **When the session's time is up, a command gets no more time, and is not killed for it at once.** `time_up` only leaves a note on the command that runs. At its next time limit it is killed with no question to the AI, and a `wait` that comes after the note kills it too. The note goes away with the command, so the next command starts clean. (`LEN-08`)
 - **A timer that is no longer waited for does nothing.** Each timer carries a number. The `runner` raises the number each time it starts one, and drops a `timer` event with an old number. No timer is ever cancelled.
 - **The AI gets text.** Output that is not valid UTF-8 has each bad stretch replaced by the mark `�`, and `ended` then says `bytes_replaced`. A character that arrives split over two pieces is put together first and is not replaced. Nothing else in the output is changed: cleaning is for the screen only, and the `terminal` does it. (`SHOW-03`)
 
@@ -345,7 +357,7 @@ An empty "Does" means the event is dropped. "Kill" means: ask the program to sto
 
 ### Unit tests
 
-Tests 01 to 20 run the state machine with a fake starter, fake timers and a fake `terminal`, `connection` and `gate`. Tests 21 to 31 run the real starter with real commands in a scratch folder.
+Tests 01 to 20 and 32 to 35 run the state machine with a fake starter, fake timers and a fake `terminal`, `connection` and `gate`. Tests 21 to 31 run the real starter with real commands in a scratch folder.
 
 | Test | Requirement | Start | Action | Expect |
 |---|---|---|---|---|
@@ -380,6 +392,10 @@ Tests 01 to 20 run the state machine with a fake starter, fake timers and a fake
 | UNIT-RUNNER-29 | `LIM-13` | The real starter, a command that does not stop when asked | Ask it to stop. Then kill by force | It still runs after the asking. It is gone after the force |
 | UNIT-RUNNER-30 | `LIM-12` | The real starter | A command that starts a long program in the background with its output to a file, prints its number, and ends. Then the same with the output not sent to a file | Both times the exit comes in under two seconds and the program still runs. The test then kills it |
 | UNIT-RUNNER-31 | `GATE-11` | The real starter, a shell that is not there | Start a command | An error. No exit is reported |
+| UNIT-RUNNER-32 | `LEN-08` | `Running` | `time_up`. Then the `timer`, then `exited` | Still `Running` after `time_up`, and nothing was killed. At the timer the program was asked to stop and no `still_running` was sent. `ended` with `killed_time_up` |
+| UNIT-RUNNER-33 | `LEN-08` | `Asked`, twice | `time_up`, then `wait`, then `exited`. The second time: `time_up`, then the `timer` of the question, then `exited` | The `wait` gives no new time limit: the program was asked to stop, and `ended` says `killed_time_up`. With no answer, `ended` says `killed_no_answer` |
+| UNIT-RUNNER-34 | `LEN-08` | `Running` | `time_up`, then `exited` with code 0. Then a new approval, and its `timer` | `ended` with `exit` and 0. The next command gets `still_running` at its time limit, as usual |
+| UNIT-RUNNER-35 | `LEN-08` | `Idle` | `time_up`. Then an approval, and its `timer` | Nothing was sent or killed. The command gets `still_running` at its time limit, as usual |
 
 ## `terminal`
 
@@ -395,6 +411,7 @@ The `terminal` is the only piece that reads keys and writes to the screen. It is
 - The time of the last Ctrl+C that a second one can pair with.
 - Whether the cursor is at the start of a line.
 - The request whose prompt waits on screen, if one does.
+- The question to extend that waits on screen, if one does.
 
 ### What it sends
 
@@ -429,7 +446,8 @@ The wording is in `ux.md`.
 - **Output is marked.** Every line of a command's output starts with `  | `. No line of the cli-tool itself starts with a space. So output that copies the words of a prompt still does not look like one. (`SHOW-04`)
 - **The cli-tool's lines start at the start of a line.** If output ended with no line break, a line break is written first.
 - **The prompt shows the request as it is.** Each line of the command is shown on a line of its own, after `  > `. (`GATE-05`)
-- **The prompt is the last thing on screen.** A note that comes while a prompt waits is written, and the prompt is then shown again under it.
+- **The prompt is the last thing on screen.** A note that comes while a prompt waits is written, and the prompt is then shown again under it. The same holds for the question to extend.
+- **A time is written in words.** The question to extend names the length as `30 minutes`, `1 hour` or `90 seconds`. (`LEN-03`)
 - **A refusal with no prompt shows the reason only.** The screen is never handed the refused text. (`GATE-10`, `GATE-16`)
 
 Known limit: a line of output longer than the window is folded by the terminal, and the folded part has no mark. The real prompt still comes last, under it.
@@ -443,7 +461,7 @@ Known limit: a line of output longer than the window is folded by the terminal, 
 
 ### Unit tests
 
-Tests 01 to 10 are for the keys, 11 to 23 for the screen, with a buffer in place of the screen and a clock the test moves. Tests 24 to 27 use a real terminal that the test makes for itself.
+Tests 01 to 10 are for the keys, 11 to 23 and 28 to 31 for the screen, with a buffer in place of the screen and a clock the test moves. Tests 24 to 27 use a real terminal that the test makes for itself.
 
 | Test | Requirement | Start | Action | Expect |
 |---|---|---|---|---|
@@ -474,33 +492,93 @@ Tests 01 to 10 are for the keys, 11 to 23 for the screen, with a buffer in place
 | UNIT-TERMINAL-25 | `LIM-09` | A real terminal in raw mode | Ctrl+C is typed | Code 3 can be read |
 | UNIT-TERMINAL-26 | `HOST-02` | | Ask whether a real terminal is a terminal. Ask the same of a plain file | Yes. No |
 | UNIT-TERMINAL-27 | `HOST-07` | A real terminal in raw mode | Put it back | Its settings are the ones found at the start |
+| UNIT-TERMINAL-28 | `LEN-03` | | The question to extend, for 30 minutes. Then the answer: yes, no, and no answer in time | A line that says the time is up, then the question with the length, and the cursor stays on its line. `y` and a line that says how long the session goes on, `n`, and a line that says no answer came. Each ends its line |
+| UNIT-TERMINAL-29 | `LEN-03`, `LEN-06` | The question to extend on screen | A refusal with no prompt, for the time being up. Then the question is forgotten, and a note comes | The note says a request was refused because the time is up, and the same question is again the last thing on screen. After it is forgotten, a note does not bring it back |
+| UNIT-TERMINAL-30 | `LEN-03` | | Write in words: 30 minutes, 1 minute, 2 hours, 1 hour, 90 seconds, 1 second, and a time and a half second | `30 minutes`, `1 minute`, `2 hours`, `1 hour`, `90 seconds`, `1 second`, and for the last one a form with its unit |
+| UNIT-TERMINAL-31 | `LEN-07`, `LEN-08` | A prompt on screen | The answer "the time is up". Then the end of a command that was killed because the time was up | A line that says the time is up and nothing ran. A line that says the command was killed and why, unlike the line of every other way to end |
 
 ## `session`
 
-The `session` makes the session key and the paste line, and holds whether the session is live. The session's length, the question to extend and the clock are not in the MVP. They are added here when they are built.
+The `session` makes the session key and the paste line, and runs the session's clock: when the time is up, the question to extend, and the end. The maximum, `SESSION_MAX`, is added here when it is built.
 
 ### What it holds
 
 - The API address, as the AI must call it. The controller gives it in `session_ok`. It is taken only when it is a plain web address: it starts with `http://` or `https://`, names a host, and holds letters, digits and the usual marks of an address only. (`KEY-10`)
 - The session key.
-- Whether the session has ended.
+- Its state.
+- The length the session started with: `SESSION_LENGTH`, or the length asked for at start.
+- The end time, and the number of the timer it waits for.
+- The time the question to extend was shown.
+
+### What it talks to
+
+| Piece | The `session` asks it to |
+|---|---|
+| The clock | Tell the time |
+| The timers | Call back after a time. They are the session's own, apart from the ones of the `runner` |
+| `terminal` | Show the question to extend, and show the answer |
+| `connection` | Send `time_up` and `extended` |
+| The loop | Refuse what waits, when the time is up. End the session, when it is not extended |
 
 ### States
 
 | State | Meaning |
 |---|---|
-| `Live` | The session may take requests |
+| `Live` | The session takes requests. The clock counts to the end time |
+| `TimeUp` | The time is up. New requests are refused. A command still runs, and the question waits for it to end |
+| `Extending` | The question to extend is on the screen, and `EXTEND_WAIT` counts |
 | `Ended` | The session is over. Final |
 
 ```mermaid
 stateDiagram-v2
   [*] --> Live: the key is made
+  Live --> TimeUp: the time is up
+  TimeUp --> Extending: no command runs
+  Extending --> Live: y
+  Extending --> Ended: n, Ctrl+C, or no answer in time
   Live --> Ended: end
+  TimeUp --> Ended: end
   Ended --> Ended: end
   Ended --> [*]
 ```
 
-There is no event that leads from `Ended` to `Live`. A new start of the cli-tool makes a new session with a new key.
+There is no event that leads from `Ended` to another state. A new start of the cli-tool makes a new session with a new key.
+
+### Events
+
+| Event | Comes from |
+|---|---|
+| `timer` | The timers: a time has passed. It carries the number it was started with |
+| `request` | The loop: a request came, and asks whether it may go on |
+| `idle` | The loop: no command runs. Sent after the time is up, and again each time a command ends |
+| `key` | `terminal`: one key press, passed on by the loop while the question waits |
+| `ctrl_c` | `terminal`: one Ctrl+C, passed on by the loop while the question waits |
+| `end` | The loop: the session ends, for any reason |
+
+### The table
+
+An empty "Does" means the event is dropped. "Time up" means: send `time_up`, and tell the loop to refuse what waits.
+
+| State | Event | Does | Next |
+|---|---|---|---|
+| `Live` | `timer`, the one it waits for | Time up | `TimeUp` |
+| `Live` | `request`, before the end time | Says yes | `Live` |
+| `Live` | `request`, at or after the end time | Time up. Says no | `TimeUp` |
+| `Live` | `idle`, `key`, `ctrl_c` | | `Live` |
+| `TimeUp` | `request` | Says no | `TimeUp` |
+| `TimeUp` | `idle` | Shows the question. Notes the time. Starts a timer of `EXTEND_WAIT` | `Extending` |
+| `TimeUp` | `timer`, `key`, `ctrl_c` | | `TimeUp` |
+| `Extending` | `request` | Says no | `Extending` |
+| `Extending` | any `key`, less than `PROMPT_MIN_SHOW` after the question was shown | | `Extending` |
+| `Extending` | `key` `y` | Shows the answer. Sets the end time to now plus the length the session started with. Starts a timer of that length. Sends `extended` with that length | `Live` |
+| `Extending` | `key` `n` | Shows the answer. Tells the loop to end the session | `Ended` |
+| `Extending` | any other `key` | | `Extending` |
+| `Extending` | `ctrl_c` | Shows the answer, as for `n`. Tells the loop to end the session | `Ended` |
+| `Extending` | `timer`, the one it waits for | Shows that no answer came. Tells the loop to end the session | `Ended` |
+| `Extending` | `idle` | | `Extending` |
+| any | `timer`, another number | | the same |
+| any | `end` | | `Ended` |
+| `Ended` | any | | `Ended` |
 
 ### Rules the code must keep
 
@@ -511,8 +589,17 @@ There is no event that leads from `Ended` to `Live`. A new start of the cli-tool
 - **The controller gets the hash, never the key.** The `session` gives the hash for `session_start`. The key itself goes to the user's screen in the paste line and nowhere else. (`SES-06`)
 - **Nothing goes to disk.** The code of the `session` uses no package that can write a file. (`SES-06`)
 - **Ended is final.** (`SES-03`)
+- **One place gives more time.** The end time moves in a single place: `Extending` with `key` `y`. No other event can move it, and no message from the controller or the AI is an event of the `session`. (`LEN-09`)
+- **Exactly two keys answer, and a fresh question takes no key.** The rules are the ones of the `gate`: the single byte `y` or `n`, and nothing in the first `PROMPT_MIN_SHOW`. A `y` meant for a command's prompt, pressed just as the time runs out, then does not extend the session. `ctrl_c` is not held back: it can only end. (`LEN-03`, `LEN-04`)
+- **The same length again.** A `y` gives one more stretch of the length the session started with, counted from the moment of the `y`. (`LEN-03`)
+- **No answer is a no.** When `EXTEND_WAIT` passes with no answer, the session ends. (`LEN-04`)
+- **The question waits for a running command.** A command that runs when the time is up is left alone, and the question is shown when it is over. (`LEN-08`)
+- **A late timer lets nothing in.** The end time is also checked each time a request comes, by the time of day. A timer that comes late, as on a machine that slept, cannot let a request through after the end time. (`LEN-06`)
+- **A timer that is no longer waited for does nothing.** Each timer carries a number, as in the `runner`. The timer of a stretch that was ended early, and the timer of a question that was answered, are dropped.
 
 ### Unit tests
+
+Tests 10 to 20 are for the clock: a session with a clock the test moves, fake timers, and a fake `terminal`, `connection` and loop that record what they were asked.
 
 | Test | Requirement | Start | Action | Expect |
 |---|---|---|---|---|
@@ -525,6 +612,17 @@ There is no event that leads from `Ended` to `Live`. A new start of the cli-tool
 | UNIT-SESSION-07 | `SES-03` | A live session | End it. End it again. Read the key, the hash and the paste line | Not live after the first end, and not live after anything that follows |
 | UNIT-SESSION-08 | `SES-06` | A session | Read the hash | It is the hash the contract sets for that key. It does not hold the key |
 | UNIT-SESSION-09 | `SES-06` | The code of the `session` | List the packages it uses | Each is on a short list of packages that cannot write a file |
+| UNIT-SESSION-10 | `LEN-01`, `LEN-02` | A session whose clock starts with a length of 30 minutes. Again with 10 minutes | Look at the timers. A `request` just before the length has passed | One timer of that length was started. The request may go on, and nothing was sent or shown |
+| UNIT-SESSION-11 | `LEN-01`, `LEN-06` | `Live` | The `timer`. Then `request` | `TimeUp`. `time_up` was sent once, and the loop was told once to refuse what waits. The request may not go on. No question yet |
+| UNIT-SESSION-12 | `LEN-03`, `LEN-08` | `TimeUp` | `idle`, twice | `Extending`. The question was shown once, with the length the session started with. A timer of `EXTEND_WAIT` was started |
+| UNIT-SESSION-13 | `LEN-03` | `Extending`, `PROMPT_MIN_SHOW` has passed | `key` `y`. Then `request` | `Live`. The answer was shown. `extended` was sent with the length in seconds. A new timer of the length was started. The request may go on |
+| UNIT-SESSION-14 | `LEN-03` | A session of 10 minutes that was extended once | The clock moves by just under 10 minutes: `request`. Then the old timers, then the new one | The request may go on. The old timers do nothing. The new one: `TimeUp`, and `time_up` was sent a second time |
+| UNIT-SESSION-15 | `LEN-04` | `Extending`, three times | `key` `n`. `ctrl_c`, with no time passed. The `timer` of `EXTEND_WAIT` | Each time the loop was told once to end the session, and nothing was extended. The screen got "no" twice, then "no answer" |
+| UNIT-SESSION-16 | `LEN-03` | `Extending`, the question just shown | `key` `y` and `key` `n` with no time passed. Then, after `PROMPT_MIN_SHOW`: `Y`, `N`, Enter, space, Escape, an arrow key | Still `Extending` after each one. Nothing was shown or sent, and the loop was told nothing |
+| UNIT-SESSION-17 | `LEN-09` | `Live`, and again `TimeUp` | `key` `y`, `ctrl_c` and `idle` in `Live`. `key` `y` and `ctrl_c` in `TimeUp` | The state and the end time have not moved. No timer was started, and `extended` was not sent |
+| UNIT-SESSION-18 | `LEN-06` | `Live`, the clock moved past the end time, and no timer has come | `request` | The request may not go on. `TimeUp`, `time_up` was sent, and the loop was told to refuse what waits. The late `timer` then does nothing more |
+| UNIT-SESSION-19 | `SES-03`, `LEN-04` | `Live`, `TimeUp` and `Extending`, in turn | `end`. Then every event | `Ended`. Nothing more was shown, sent or started, and a request may not go on |
+| UNIT-SESSION-20 | `LEN-09` | The code of the `session` | Search it for the places that set the end time | There is one, and it is reached from two places only: the start of the clock, and `key` `y` in `Extending` |
 
 ## `connection`
 
@@ -547,6 +645,7 @@ It knows no address and no road of its own: `network` gives it what opens a conn
 | The controller | Messages of `architecture.md`, one JSON object each, over the websocket at the path `/host/v1` |
 | The loop | The `connection` calls a handler, one call for each message that counts. The handler hands the call over to the loop and comes back at once |
 | `gate`, `runner`, the loop | They call the `connection` to send: `started`, `refused`, `output`, `still_running`, `ended`, and `session_end` at the close |
+| `session` | It calls the `connection` to send `time_up` and `extended` |
 
 ### States
 
@@ -599,7 +698,7 @@ Each test runs the real `connection` against a controller inside the test: a sma
 
 | Test | Requirement | Start | Action | Expect |
 |---|---|---|---|---|
-| UNIT-CONNECTION-01 | `SES-06` | A controller that answers `session_ok` | Dial with a hash, a host name and limits | The controller's first message is `session_start` at the path `/host/v1`, with that hash, name and limits, and with no key in it. The dial comes back with no error |
+| UNIT-CONNECTION-01 | `SES-06` | A controller that answers `session_ok` | Dial with a hash, a host name, limits and a length | The controller's first message is `session_start` at the path `/host/v1`, with that hash, name, limits and length, and with no key in it. The dial comes back with no error |
 | UNIT-CONNECTION-02 | `SES-01` | A controller whose first message is, in turn: a `request`, text that is not JSON, a message that is not text | Dial | An error each time. The loop gets no event |
 | UNIT-CONNECTION-03 | `SES-01` | In turn: a controller that closes with no answer, a controller that never answers, no controller at all | Dial | An error each time, the second one when the time limit of the dial passes |
 | UNIT-CONNECTION-04 | `GATE-05` | Live | The controller sends a `request` whose command has three lines, quotes and Greek letters | One request event, with the same `id` and the same command, byte for byte |
@@ -620,6 +719,8 @@ Each test runs the real `connection` against a controller inside the test: a sma
 | UNIT-CONNECTION-19 | `LIM-10` | Live, a controller that reads nothing. Once with nothing waiting to be sent, once with far more than the network takes | Close. While it is under way, the controller sends a `request` | The close comes back within its short wait both times. The loop gets no request event and no lost event |
 | UNIT-CONNECTION-20 | `KEY-10` | A controller that answers `session_ok` with an API address. Again with none, and with one that holds a cursor code | Dial | The dial gives the address back as it came. It is not checked here: `session` checks it |
 | UNIT-CONNECTION-21 | `HOST-08` | A road that counts its calls | Dial over that road | The one call to the controller went over it |
+| UNIT-CONNECTION-22 | `LEN-01`, `LEN-03` | Live | Send `time_up`, then `extended` with 600 seconds | The controller gets both, in that order, the second with 600 seconds left |
+| UNIT-CONNECTION-23 | `LEN-09` | Live | The controller sends `extended` with seconds, `time_up`, `extend`, and `session_ok` with a length. Then a `request` | No event for the first four. The request event comes |
 
 ## `settings`
 
@@ -630,7 +731,7 @@ Each test runs the real `connection` against a controller inside the test: a sma
 1. The starting values, fixed in the code. They are the ones in the "Settings" table of `requirements.md`.
 2. The user's file, `~/.config/gangway/settings`, if it is there. A value in it takes the place of the starting value. If `XDG_CONFIG_HOME` is set, the file is `gangway/settings` under that folder.
 
-The admin file in `/etc/gangway/` and the start options are not in the MVP.
+The admin file in `/etc/gangway/` is not built yet. One start option is: `--length`, which `start` reads. It takes the place of `SESSION_LENGTH` for one session.
 
 ### The file
 
@@ -656,6 +757,8 @@ MAX_WAITING_REQUESTS = 10
 | `PROMPT_MIN_SHOW` | Time | Zero or more |
 | `DOUBLE_CTRL_C_WINDOW` | Time | More than zero |
 | `MAX_WAITING_REQUESTS` | Number | One or more |
+| `SESSION_LENGTH` | Time | More than zero |
+| `EXTEND_WAIT` | Time | More than zero |
 
 ### Rules the code must keep
 
@@ -680,6 +783,7 @@ MAX_WAITING_REQUESTS = 10
 | UNIT-SETTINGS-11 | `GATE-14` | A file where `PROMPT_MIN_SHOW` is `0s` | Read | No error. The value is zero |
 | UNIT-SETTINGS-12 | `HOST-06` | A file where `CONTROLLER_TAILSCALE_NAME` is, one by one: empty, with a capital, with a space, an address, a name with a dot, a name that starts or ends with `-` | Read | An error each time |
 | UNIT-SETTINGS-13 | `HOST-08` | A file that sets `CONTROLLER_ADDRESS` | Read | An error that names the line and the name: the cli-tool has no such setting any more |
+| UNIT-SETTINGS-14 | `LEN-01`, `LEN-04` | A file where `SESSION_LENGTH` is `10m` and `EXTEND_WAIT` is `20s`. Then, for each of the two: `0s`, a time below zero, a number with no unit | Read | Ten minutes and twenty seconds. Then an error each time |
 
 ## `loop`
 
@@ -689,6 +793,7 @@ The `loop` ties the pieces of the cli-tool together. Every event is handed to it
 
 - The pieces: `terminal`, `line`, `gate`, `runner`, the `session` and the `connection`.
 - Its state, and why the session ended.
+- The length the session starts with: the one asked for at start, or `SESSION_LENGTH`. It starts the `session`'s clock with it.
 
 ### States
 
@@ -711,15 +816,28 @@ stateDiagram-v2
 
 | Event | From | In `Live` it goes to |
 |---|---|---|
-| A request | `connection` | `checks`. Refused there: `refused` is sent and the reason is shown. Else `line`. Full: `refused` with `line_full` is sent and shown. Else the `gate` is told one waits |
+| A request | `connection` | The `session` first. Its time is up: `refused` with `time_up` is sent and shown. Else `checks`. Refused there: `refused` is sent and the reason is shown. Else `line`. Full: `refused` with `line_full` is sent and shown. Else the `gate` is told one waits |
 | `wait`, `stop` | `connection` | The `runner`, when the `id` is the one that runs. Else nowhere |
 | `cancel` | `connection` | `line` first: a request found there is removed, and `refused` with `ai_gone` is sent. Else the `gate` and the `runner`, which act only on their own `id` |
 | Bytes from the keyboard | The keyboard | `terminal`, which makes `key`, `ctrl_c` and `quit` of them |
-| `key` | `terminal` | The `gate` |
-| `ctrl_c` | `terminal` | The `gate` when a prompt waits. The `runner` when a command runs. With nothing in front, the session ends |
+| `key` | `terminal` | The `session` while the question to extend waits. Else the `gate` |
+| `ctrl_c` | `terminal` | The `session` while the question to extend waits. The `gate` when a prompt waits. The `runner` when a command runs. With nothing in front, the session ends |
 | `quit` | `terminal` | The session ends |
-| Output, the end of the shell, a timer | The starter, the timers | The `runner`, in every state |
+| Output, the end of the shell, a timer | The starter, the timers | The `runner`, in every state. After the end of the shell, the `session` is told that no command runs |
+| A session timer | The session's timers | The `session`. Then, when no command runs, the `session` is told so |
 | The controller ends the session, or the connection is lost | `connection` | The session ends |
+
+### When the session's time is up
+
+The `session` decides it, and the loop does this, in order:
+
+1. Every request in the `line` is refused with `time_up`.
+2. The `gate` is told. A prompt that waits is refused with `time_up`, and nothing has run.
+3. The `runner` is told. A command that runs is not killed. It gets no more time.
+4. When a command still runs, the screen says that the time is up and that the command gets no more time.
+5. When no command runs, now or later, the `session` is told, and it shows the question to extend.
+
+From here on a new request is refused with `time_up`, until the user extends. When the user does not, the `session` tells the loop, and the session ends with the reason `time_up`.
 
 ### Ending the session
 
@@ -737,10 +855,11 @@ In this order, once:
 - **After the end, nothing is taken.** In `Ending` and `Over`, a request, a `cancel`, a key and a second end do nothing. Only what the stopping command still needs gets through: its output, its end and its timers.
 - **The program does not end while a command runs.** The loop is `Over` only when the `runner` is idle, so no command is left behind by a session that ended. (`SES-05`)
 - **The loop decides nothing about a request.** It only passes it on. The yes comes from the `gate` alone.
+- **The loop decides nothing about the time.** It hands the `session` its timers, its keys and the news that no command runs. No event from the `connection` reaches the `session`'s clock. (`LEN-09`)
 
 ### Unit tests
 
-The pieces are the real ones. The test holds the edges: the keyboard, the screen, the clock, the starter, the timers and the connection. The integration tests `PIE-01`, `PIE-02`, `PIE-04`, `PIE-06`, `PIE-12`, `PIE-13` and `PIE-14` of `architecture.md` run in the same way, as Go tests that carry those names.
+The pieces are the real ones. The test holds the edges: the keyboard, the screen, the clock, the starter, the timers and the connection. The integration tests `PIE-01`, `PIE-02`, `PIE-04`, `PIE-05`, `PIE-06`, `PIE-12`, `PIE-13` and `PIE-14` of `architecture.md` run in the same way, as Go tests that carry those names.
 
 | Test | Requirement | Start | Action | Expect |
 |---|---|---|---|---|
@@ -758,6 +877,17 @@ The pieces are the real ones. The test holds the edges: the keyboard, the screen
 | UNIT-LOOP-12 | `KEY-04` | Live | Begin | The screen shows the paste line with the address and the key |
 | UNIT-LOOP-13 | `SES-05` | A prompt waits | The controller ends the session | The request is refused with `session_ended`. The prompt is not shown again. The connection is closed with the controller's reason |
 | UNIT-LOOP-14 | `GATE-01`, `GATE-07` | A prompt waits | `wait`, `stop`, timers, output, the end of a shell, and the same request again | Nothing was started. No `started` was sent |
+| UNIT-LOOP-15 | `LEN-01`, `LEN-03` | Live, nothing in front | The session timer. Then, after `PROMPT_MIN_SHOW`, `y`. Then a request | `time_up` is sent, and the question to extend is the last thing on screen. After `y`: `extended` is sent with the length, and the request gets a prompt |
+| UNIT-LOOP-16 | `LEN-06` | The question to extend waits | A request. Then a request with a control character | Each is refused with `time_up`. No prompt is shown. The screen says why, and the question is again the last thing on it |
+| UNIT-LOOP-17 | `LEN-07`, `LEN-03` | A prompt waits | The session timer. Then `y` with no time passed | The request is refused with `time_up` and nothing ran. The screen says the time is up, then shows the question. The `y` did not extend: no `extended` was sent |
+| UNIT-LOOP-18 | `LEN-08` | A command runs | The session timer. Then the command's timer. Then the command ends | `time_up` is sent and the command is not asked to stop. No question yet. At its timer it is asked to stop, and no `still_running` is sent. `ended` with `killed_time_up`. Only then the question is shown |
+| UNIT-LOOP-19 | `LEN-08` | A command runs | The session timer. Then the command writes and ends by itself | The output and `ended` with `exit` are sent as usual. Then the question is shown, under the output |
+| UNIT-LOOP-20 | `LEN-04`, `KEY-03` | The question to extend waits, three times | `n`. Ctrl+C. The session timer of `EXTEND_WAIT` | Each time: `Over`, the session is ended, and the connection is closed with the reason `time_up` |
+| UNIT-LOOP-21 | `LEN-03` | The question to extend waits | `Y`, Enter, an arrow key, `x` | The question still waits. Nothing was sent |
+| UNIT-LOOP-22 | `LEN-09` | Live | Every event the connection can hand over: a request, `wait`, `stop`, `cancel`. Then the same while the question to extend waits | No session timer was started by any of them, and `extended` was not sent. The question still waits |
+| UNIT-LOOP-23 | `LEN-06` | Live. The clock is moved past the end time, and no session timer comes | A request | It is refused with `time_up`, and the question to extend is shown |
+| UNIT-LOOP-24 | `LEN-03` | A session that was extended once | The session timers of before the extension. Then the new one | The old ones do nothing. The new one: `time_up` is sent again, and the question is shown again |
+| UNIT-LOOP-25 | `LEN-01`, `LEN-02` | A loop with no length asked for. Again with a length of ten minutes | Begin | The session timer was started with `SESSION_LENGTH`, and with ten minutes. The screen says how long the session lasts |
 
 ## `start`
 
@@ -765,7 +895,7 @@ The pieces are the real ones. The test holds the edges: the keyboard, the screen
 
 ### In order
 
-The words after the program's name pick what runs: none for a session over Tailscale, `login` for the `login` piece, `--local` with or without an address for a session in the one-machine mode. Anything else stops with a short text on how to start. (`HOST-04`, `HOST-08`)
+The words after the program's name pick what runs: none for a session over Tailscale, `login` for the `login` piece, `--local` with or without an address for a session in the one-machine mode. A session takes one more option, before or after `--local`: `--length` and a time, such as `--length 45m`. It is the length of this one session, in place of `SESSION_LENGTH`. (`LEN-02`) Anything else stops with a short text on how to start. (`HOST-04`, `HOST-08`)
 
 A session, in order:
 
@@ -775,7 +905,7 @@ A session, in order:
 4. Pick the road: Tailscale with the auth key of `login`, or localhost. With no auth key, say to run `login` and stop. (`HOST-06`)
 5. `network` joins. On failure, say so and stop.
 6. Make the session and its key.
-7. Connect to the controller over that road. On failure, say so and stop.
+7. Connect to the controller over that road, and tell it the session's length. On failure, say so and stop.
 8. Give the API address from `session_ok` to `session`. A bad one stops here, and no paste line is shown. (`KEY-10`)
 9. Set the terminal to raw mode.
 10. Run the loop until it is `Over`.
@@ -798,6 +928,7 @@ A session, in order:
 | UNIT-START-04 | `HOST-01` | The user is root and there is no terminal | Check | The error is the one about root |
 | UNIT-START-05 | `HOST-04`, `HOST-08` | | Read the words after the program's name: none, `login`, `--local`, `--local` with an address | A session over Tailscale, the login, a session in the one-machine mode, the same with that address |
 | UNIT-START-06 | `HOST-04` | | Read words that make no sense, such as `start`, `login now`, `-local`, `--help` | An error each time, with the text on how to start |
+| UNIT-START-07 | `LEN-02` | | Read: `--length 45m`. `--local --length 90s`. `--length 2h --local` with an address. Then: `--length` with no time, with `0s`, with a time below zero, with a word, with a number that has no unit, given twice, and after `login` | 45 minutes over Tailscale. 90 seconds in the one-machine mode. 2 hours in the one-machine mode with that address. Then an error each time, with the text on how to start |
 
 ## `secrets`
 
@@ -943,6 +1074,8 @@ The Tailscale form is tried with the library pointed at a stand-in for Tailscale
 
 For each live session: the hash of its key, the host's name, the limits the host gave, the session's `relay`, and, once a caller has claimed the key, the hash of the caller token. It never holds a key or a caller token.
 
+It also holds what the host said about its time: when the time will be up, and whether it is up now. And it holds the controller's clock, which a test replaces.
+
 ### What it can be asked
 
 | Ask | Does | Gives back |
@@ -952,6 +1085,10 @@ For each live session: the hash of its key, the host's name, the limits the host
 | `remove`, with a session | Takes the session out | |
 | `claim`, on a session | Makes the caller the owner of the key | A new caller token the first time. Nothing every time after |
 | `owns`, on a session, with a token | Hashes the token and compares | Yes or no |
+| `counts`, on a session, with the time now and a length | Notes that the session's time is up after that length | |
+| `time is up`, on a session | Notes that the host said so | |
+| `extended`, on a session, with the time now and the time left | Notes the new end, and that the time is no longer up | |
+| `time`, on a session, with the time now | Reads | The whole seconds left, rounded up, and whether the time is up |
 
 ### Rules the code must keep
 
@@ -966,6 +1103,8 @@ For each live session: the hash of its key, the host's name, the limits the host
 - **Only the token's hash is held.** The token itself leaves in the answer to `claim` and is kept nowhere. `owns` hashes what it is shown and compares the two hashes in a time that does not depend on how much of a guess was right. (`KEY-05`, `SES-06`)
 - **No claim, no owner.** Before a `claim`, `owns` says no to everything, an empty token too. (`KEY-05`)
 - **The token dies with the session.** It is part of the session and of nothing else. A new session with the same key hash starts with no owner. (`KEY-05`, `KEY-03`)
+- **The time is only noted.** The end time and "the time is up" are what the host said. `sessions` refuses nothing and ends nothing because of them: the cli-tool does both, and only its user extends. (`LEN-09`)
+- **The time is up only when the host says so.** When the end time passes with no word from the host, the seconds left are 0 and the time is not yet up.
 
 ### Unit tests
 
@@ -984,6 +1123,9 @@ For each live session: the hash of its key, the host's name, the limits the host
 | UNIT-SESSIONS-11 | `KEY-05` | A live session | 100 `claim` at the same moment | Exactly one gets a token, and that token owns the session |
 | UNIT-SESSIONS-12 | `KEY-05`, `SES-06` | A session after `claim` | Look at every field of the session | The token is in none of them, as text or as bytes |
 | UNIT-SESSIONS-13 | `KEY-05`, `KEY-03` | A session after `claim` | `remove` it. `add` a new session with the same hash | The old token does not own the new session. The new session gives a token of its own |
+| UNIT-SESSIONS-14 | `LEN-01` | A session that `counts` 30 minutes | `time` at once, 10 minutes later, half a second before the end, at the end, and an hour after it | 1800, 1200, 1, 0 and 0 seconds. The time is not up in any of them |
+| UNIT-SESSIONS-15 | `LEN-03`, `LEN-06` | State after UNIT-SESSIONS-14 | `time is up`, then `time`. `extended` with 600 seconds, then `time`. `extended` with a time below zero, then `time` | 0 seconds, and the time is up. 600 seconds, and it is not up. 0 seconds, and it is not up |
+| UNIT-SESSIONS-16 | `LEN-09` | Two sessions that each count 30 minutes | `extended` with an hour on one. `time is up` on the same one | The time of the other has not moved, and is not up |
 
 ## `relay` (controller)
 
@@ -1095,10 +1237,11 @@ Start: a relay whose messages to the host are gathered in a list.
 
 ### Rules the code must keep
 
-- **First `session_start`, or nothing.** The first message must be `session_start` with a key hash and the limits, and it must come within ten seconds. Anything else closes the connection and makes no session.
+- **First `session_start`, or nothing.** The first message must be `session_start` with a key hash, the limits and a length above zero, and it must come within ten seconds. Anything else closes the connection and makes no session.
 - **`session_ok` only after the session is live.** The host gets `session_ok` once `sessions` has taken the session. A hash that `sessions` refuses closes the connection. (`KEY-09`)
 - **The end of the connection is the end of the session.** A lost connection, a `session_end` from the host, a message that is not JSON, or a message that is too large: each ends the session at once. The key dies first, then every open call is answered. (`KEY-03`, `SES-03`)
-- **A host can only answer and end.** The door passes `refused`, `started`, `output`, `still_running` and `ended` to the session's own `relay`, and takes `session_end`. Every other type is dropped.
+- **A host can only answer, tell its time and end.** The door passes `refused`, `started`, `output`, `still_running` and `ended` to the session's own `relay`, notes `time_up` and `extended` on the session of that connection, and takes `session_end`. Every other type is dropped. (`LEN-01`, `LEN-03`)
+- **The door sends nothing about the time.** It has no message that extends a session or moves its end. (`LEN-09`)
 - **A slow host is cut off.** Messages to a host wait in a short queue. When the queue is full, the connection is closed and the session ends.
 - **No web page.** A connection that a browser opens from another site is refused.
 - **Shutting down tells the hosts.** Each host gets `session_end` with `controller_stopped`.
@@ -1114,7 +1257,7 @@ Start: a door behind a test server, and a websocket client in the test that play
 | Test | Requirement | Start | Action | Expect |
 |---|---|---|---|---|
 | UNIT-HOSTDOOR-01 | `SES-01` | A door | Connect. Send `session_start` with the hash of key K | `session_ok` comes back. `sessions` finds the session with K, with the host's name and limits |
-| UNIT-HOSTDOOR-02 | `SES-01` | A door | Connect. Send, as the first message: `started`. Then on new connections: an `output` that carries a key hash and limits, text that is not JSON, `session_start` with no limits, and `session_start` with no key hash | Each connection is closed. No session is live |
+| UNIT-HOSTDOOR-02 | `SES-01` | A door | Connect. Send, as the first message: `started`. Then on new connections: an `output` that carries a key hash and limits, text that is not JSON, `session_start` with no limits, `session_start` with no key hash, and `session_start` with no length | Each connection is closed. No session is live |
 | UNIT-HOSTDOOR-03 | `KEY-09` | A live session with the hash of K | A second connection sends `session_start` with the same hash | It is closed with no `session_ok`. The first session still works |
 | UNIT-HOSTDOOR-04 | `KEY-03`, `SES-03` | A live session, with one call open on its relay | The client drops the connection | The call gets `refused` with `session_ended`. `sessions` no longer finds K |
 | UNIT-HOSTDOOR-05 | `KEY-03` | A live session, with one call open | The client sends `session_end` | The same as above. The connection is closed |
@@ -1126,6 +1269,9 @@ Start: a door behind a test server, and a websocket client in the test that play
 | UNIT-HOSTDOOR-11 | `CTL-01` | A door | Connect with the `Origin` of another web site | Refused. No session is live |
 | UNIT-HOSTDOOR-12 | `KEY-03` | A live session | The client sends one message larger than the largest allowed | The connection is closed and the session is no longer live |
 | UNIT-HOSTDOOR-13 | `KEY-10` | A door with an API address | Connect. Send `session_start` | `session_ok` holds that address |
+| UNIT-HOSTDOOR-14 | `LEN-01` | A door whose clock the test holds | Connect. Send `session_start` with a length of 600 seconds. Then on new connections: a length of 0, and a length below zero | The session has 600 seconds left. The other two connections are closed and make no session |
+| UNIT-HOSTDOOR-15 | `LEN-03`, `LEN-06` | A live session | The client sends `time_up`. Then `extended` with 300 seconds | The session says its time is up. Then it says 300 seconds are left and the time is not up. It is still live after both |
+| UNIT-HOSTDOOR-16 | `LEN-09` | Two live sessions | The client of one sends `extended` with an hour, then `time_up`. Read everything the other client was sent | The time of the other session has not moved. Its client got `session_ok` and nothing else |
 
 ## `api` (controller)
 
@@ -1140,7 +1286,8 @@ Start: a door behind a test server, and a websocket client in the test that play
 - **Only the command goes on.** From the body of a new request the API takes the kind and the command. Any other field is left behind, so the host never sees it. (`GATE-07`)
 - **A body it does not know is turned away.** A body that is not JSON, has no command, is too large, or has a kind other than `command` gets 400, and nothing reaches the host. (`CTL-11`)
 - **A call stays open** until the `relay` has an answer. When the AI closes it first, the `relay` is told. (`GATE-12`, `LIM-07`)
-- **`session` only reads.** It gives the host's name, the limits, and the counts of requests. `hello` gives the same body with the caller token in front, and changes nothing but the owner of the key.
+- **`session` only reads.** It gives the host's name, the seconds left, whether the time is up, the limits, and the counts of requests. `hello` gives the same body with the caller token in front, and changes nothing but the owner of the key.
+- **The API tells the time and cannot change it.** The seconds left and "the time is up" come from `sessions`, which holds what the host said. No call, no header and no body moves them. (`LEN-09`)
 
 ### Unit tests
 
@@ -1167,6 +1314,8 @@ Start: the API over a store with one live session of key K. The test plays the h
 | UNIT-API-17 | `KEY-05` | A live session, no `hello` yet | Each of the four other calls with K, with no token and with a made-up one. Then `hello` | 401 each time. Nothing was sent to the host. `hello` still gets the caller token |
 | UNIT-API-18 | `KEY-05` | A live session | With K and the token: `GET /v1/session`, `wait` and `stop` on a made-up `id`, and `POST /v1/requests` | 200, then 404 twice, and the host gets the request |
 | UNIT-API-19 | `KEY-05` | A live session, no `hello` yet | 40 `hello` with K at the same moment | Exactly one gets 200 with a caller token. Every other gets 401 |
+| UNIT-API-20 | `LEN-01`, `LEN-06` | A live session that counts 30 minutes, with a clock the test holds | `hello`. Ten minutes pass: `GET /v1/session`. The host's time is up: `GET /v1/session`. The host's user extends by 600 seconds: `GET /v1/session` | `seconds_left` 1800 and `time_up` false. Then 1200. Then 0 and `time_up` true. Then 600 and `time_up` false |
+| UNIT-API-21 | `LEN-09` | A live session, with a clock the test holds | Read `seconds_left`. Then, with K and the token: `POST` to `/v1/session/extend`, `/v1/extend` and `/v1/session`, a `GET /v1/session` with a body and a header that ask for an hour more, and a second `hello`. Read `seconds_left` again | 404, 405 or 401 for each, and the `GET` answers as if nothing was asked. Nothing was sent to the host. `seconds_left` is the same as before |
 
 ## `start` (controller)
 

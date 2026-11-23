@@ -27,6 +27,8 @@ type Settings struct {
 	PromptMinShow      time.Duration // PROMPT_MIN_SHOW
 	DoubleCtrlCWindow  time.Duration // DOUBLE_CTRL_C_WINDOW
 	MaxWaitingRequests int           // MAX_WAITING_REQUESTS
+	SessionLength      time.Duration // SESSION_LENGTH
+	ExtendWait         time.Duration // EXTEND_WAIT
 }
 
 // Default gives the starting values. They are the ones in the "Settings"
@@ -42,6 +44,8 @@ func Default() Settings {
 		PromptMinShow:      500 * time.Millisecond,
 		DoubleCtrlCWindow:  2 * time.Second,
 		MaxWaitingRequests: 20,
+		SessionLength:      30 * time.Minute,
+		ExtendWait:         60 * time.Second,
 	}
 }
 
@@ -124,6 +128,10 @@ func (s *Settings) set(name, value string) error {
 		return setTime(&s.PromptMinShow, name, value, true)
 	case "DOUBLE_CTRL_C_WINDOW":
 		return setTime(&s.DoubleCtrlCWindow, name, value, false)
+	case "SESSION_LENGTH":
+		return setTime(&s.SessionLength, name, value, false)
+	case "EXTEND_WAIT":
+		return setTime(&s.ExtendWait, name, value, false)
 	case "MAX_WAITING_REQUESTS":
 		n, err := strconv.Atoi(value)
 		if err != nil || n < 1 {
@@ -137,7 +145,7 @@ func (s *Settings) set(name, value string) error {
 }
 
 func setTime(target *time.Duration, name, value string, zeroOK bool) error {
-	d, err := time.ParseDuration(value)
+	d, err := Time(value)
 	if err != nil {
 		return fmt.Errorf("%s must be a time with a unit, such as 90s or 500ms", name)
 	}
@@ -146,6 +154,12 @@ func setTime(target *time.Duration, name, value string, zeroOK bool) error {
 	}
 	*target = d
 	return nil
+}
+
+// Time reads a time the way the settings file writes one: a number with a
+// unit, such as 90s, 30m or 500ms.
+func Time(value string) (time.Duration, error) {
+	return time.ParseDuration(value)
 }
 
 // deviceName tells whether s can be a name on the Tailscale network.

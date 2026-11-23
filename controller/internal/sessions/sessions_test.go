@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kdop/gangway/controller/internal/relay"
 	"github.com/kdop/gangway/shared/designcheck"
@@ -253,6 +254,54 @@ func TestUNITSESSIONS13_TheTokenDiesWithTheSession(t *testing.T) {
 	if fresh, ok := s.Find(keyK).Claim(); !ok || fresh == token {
 		t.Fatal("the new session has no claim of its own to give")
 	}
+}
+
+// wantTime checks what the session tells about its time.
+func wantTime(t *testing.T, sess *Session, now time.Time, seconds int, up bool) {
+	t.Helper()
+	if gotSeconds, gotUp := sess.Time(now); gotSeconds != seconds || gotUp != up {
+		t.Fatalf("the session has %d seconds left and time up is %v, want %d and %v", gotSeconds, gotUp, seconds, up)
+	}
+}
+
+// UNIT-SESSIONS-14. Requirement: LEN-01.
+func TestUNITSESSIONS14_TheSecondsLeftCountDown(t *testing.T) {
+	_, sess := withK(t)
+	start := time.Unix(1000, 0)
+	sess.Counts(start, 30*time.Minute)
+	wantTime(t, sess, start, 1800, false)
+	wantTime(t, sess, start.Add(10*time.Minute), 1200, false)
+	wantTime(t, sess, start.Add(30*time.Minute-500*time.Millisecond), 1, false)
+	wantTime(t, sess, start.Add(30*time.Minute), 0, false)
+	wantTime(t, sess, start.Add(90*time.Minute), 0, false)
+}
+
+// UNIT-SESSIONS-15. Requirement: LEN-03, LEN-06.
+func TestUNITSESSIONS15_TimeUpAndExtended(t *testing.T) {
+	_, sess := withK(t)
+	start := time.Unix(1000, 0)
+	sess.Counts(start, 30*time.Minute)
+	now := start.Add(30 * time.Minute)
+	sess.TimeIsUp()
+	wantTime(t, sess, now, 0, true)
+	wantTime(t, sess, start, 0, true)
+	sess.Extended(now, 600*time.Second)
+	wantTime(t, sess, now, 600, false)
+	sess.Extended(now, -600*time.Second)
+	wantTime(t, sess, now, 0, false)
+}
+
+// UNIT-SESSIONS-16. Requirement: LEN-09.
+func TestUNITSESSIONS16_TheTimeOfOneSessionIsNotTheTimeOfAnother(t *testing.T) {
+	_, one := withK(t)
+	other := session(keyK)
+	start := time.Unix(1000, 0)
+	one.Counts(start, 30*time.Minute)
+	other.Counts(start, 30*time.Minute)
+	one.Extended(start, time.Hour)
+	wantTime(t, other, start, 1800, false)
+	one.TimeIsUp()
+	wantTime(t, other, start, 1800, false)
 }
 
 func TestDesignAndGoTestsMatch(t *testing.T) {

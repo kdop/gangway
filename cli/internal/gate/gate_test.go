@@ -275,6 +275,7 @@ var events = []struct {
 	{"cancel front", func(w *world) { w.g.Cancel("a") }},
 	{"cancel other", func(w *world) { w.g.Cancel("zz") }},
 	{"done", func(w *world) { w.g.Done() }},
+	{"time_up", func(w *world) { w.g.TimeUp() }},
 	{"end", func(w *world) { w.g.End() }},
 }
 
@@ -329,7 +330,7 @@ func TestUNITGATE16_RandomWalk(t *testing.T) {
 		if len(w.prompts) > 0 {
 			front = w.prompts[len(w.prompts)-1]
 		}
-		switch rng.Intn(10) {
+		switch rng.Intn(11) {
 		case 0, 1:
 			if len(w.queue) < 5 {
 				next++
@@ -366,6 +367,10 @@ func TestUNITGATE16_RandomWalk(t *testing.T) {
 			w.g.Done()
 		case 9:
 			w.pass(time.Duration(rng.Int63n(int64(2 * minShow))))
+		case 10:
+			if rng.Intn(4) == 0 {
+				w.g.TimeUp()
+			}
 		}
 		if len(w.runs) != wantYes {
 			t.Fatalf("step %d: %d runner calls, want %d", step, len(w.runs), wantYes)
@@ -457,6 +462,45 @@ func TestUNITGATE21_YAfterACancelDoesNotAnswerTheNext(t *testing.T) {
 		t.Fatalf("the prompt is for %v, want %v", last, reqB)
 	}
 	wantRuns(t, w, 0)
+}
+
+// UNIT-GATE-22. Requirement: LEN-07.
+func TestUNITGATE22_TheTimeBeingUpRefusesThePrompt(t *testing.T) {
+	w := asking(reqB)
+	w.g.TimeUp()
+	wantState(t, w, Free)
+	wantRefused(t, w, refusal{"a", ReasonTimeUp})
+	if len(w.answers) != 1 || w.answers[0] != (answered{reqA, TimeUp}) {
+		t.Fatalf("the screen was told %v, want that the time is up for %v", w.answers, reqA)
+	}
+	w.g.Key(key("y"))
+	wantState(t, w, Free)
+	wantRuns(t, w, 0)
+	if len(w.prompts) != 1 || len(w.queue) != 1 || w.queue[0] != reqB {
+		t.Fatalf("the next request was taken from the line: %d prompts, the line holds %v", len(w.prompts), w.queue)
+	}
+	if w.sent() != 1 {
+		t.Fatalf("%d messages were sent, want one", w.sent())
+	}
+}
+
+// UNIT-GATE-23. Requirement: LEN-07, LEN-08.
+func TestUNITGATE23_TheTimeBeingUpDoesNothingElsewhere(t *testing.T) {
+	for name, c := range map[string]struct {
+		make func() *world
+		want State
+	}{
+		"Free": {func() *world { return free() }, Free},
+		"Busy": {func() *world { return busy() }, Busy},
+	} {
+		w := c.make()
+		answers, sent := len(w.answers), w.sent()
+		w.g.TimeUp()
+		wantState(t, w, c.want)
+		if len(w.answers) != answers || w.sent() != sent {
+			t.Fatalf("in %s the time being up showed or sent something", name)
+		}
+	}
 }
 
 func TestDesignAndGoTestsMatch(t *testing.T) {

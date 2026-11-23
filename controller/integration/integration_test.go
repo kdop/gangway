@@ -37,6 +37,9 @@ type world struct {
 	tokens map[string]string // the caller token of each key that said hello
 }
 
+// The controller's clock stands still, so the seconds left can be compared.
+var fixedTime = time.Unix(1000, 0)
+
 func newWorld(t *testing.T) *world {
 	t.Helper()
 	c := start.New()
@@ -44,6 +47,7 @@ func newWorld(t *testing.T) *world {
 	t.Cleanup(server.Close)
 	// Runs before the server closes: calls left open would hold it up.
 	t.Cleanup(func() { c.Door.EndAll(messages.EndControllerStopped) })
+	c.Store.Clock = func() time.Time { return fixedTime }
 	return &world{t: t, c: c, url: server.URL}
 }
 
@@ -66,7 +70,7 @@ func (w *world) startSession(key, name string) *host {
 	w.t.Cleanup(func() { conn.CloseNow() })
 	h := &host{t: w.t, conn: conn}
 	l := limits
-	h.send(messages.Message{Type: messages.TypeSessionStart, KeyHash: messages.KeyHash(key), Host: name, Limits: &l})
+	h.send(messages.Message{Type: messages.TypeSessionStart, KeyHash: messages.KeyHash(key), Host: name, Limits: &l, LengthSeconds: 1800})
 	if msg := h.read(); msg.Type != messages.TypeSessionOK {
 		w.t.Fatalf("the host got %+v, want session_ok", msg)
 	}
@@ -248,7 +252,7 @@ func TestAPI01_Hello(t *testing.T) {
 	w.startSession(keyK, "web-3")
 	r := w.hello(keyK)
 	token, _ := r.fields["caller_token"].(string)
-	want := `{"caller_token":"` + token + `","host":"web-3","limits":{"command_seconds":45,"answer_seconds":30},"requests":{"waiting":0,"max_waiting":7,"running":null}}`
+	want := `{"caller_token":"` + token + `","host":"web-3","seconds_left":1800,"time_up":false,"limits":{"command_seconds":45,"answer_seconds":30},"requests":{"waiting":0,"max_waiting":7,"running":null}}`
 	if r.status != http.StatusOK || !strings.HasPrefix(token, messages.CallerPrefix) || strings.TrimSpace(r.body) != want {
 		t.Fatalf("hello gave %d %s, want %s", r.status, r.body, want)
 	}
@@ -312,13 +316,45 @@ func TestAPI04_SessionTellsWhatTheHostGave(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	want := `{"host":"web-3","limits":{"command_seconds":45,"answer_seconds":30},"requests":{"waiting":1,"max_waiting":7,"running":"` + req.ID + `"}}`
+	want := `{"host":"web-3","seconds_left":1800,"time_up":false,"limits":{"command_seconds":45,"answer_seconds":30},"requests":{"waiting":1,"max_waiting":7,"running":"` + req.ID + `"}}`
 	if r.status != http.StatusOK || strings.TrimSpace(r.body) != want {
 		t.Fatalf("session gave %d %s, want %s", r.status, r.body, want)
 	}
 	if r := w.get("/v1/session", keyL); !strings.Contains(r.body, `"host":"db-1"`) || !strings.Contains(r.body, `"waiting":0`) {
 		t.Fatalf("the other session gave %s", r.body)
 	}
+}
+
+func TestAPI05_TimeUpThenExtended(t *testing.T) {
+	w := newWorld(t)
+	h := w.startSession(keyK, "web-3")
+	other := w.startSession(keyL, "db-1")
+
+	// The news travels on another connection than the API call, so wait
+	// until the controller has it.
+	wantTime := func(seconds string, up string) {
+		t.Helper()
+		want := `"seconds_left":` + seconds + `,"time_up":` + up + `,`
+		var r reply
+		for i := 0; i < 500; i++ {
+			if r = w.get("/v1/session", keyK); strings.Contains(r.body, want) {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Fatalf("session gave %d %s, want %s", r.status, r.body, want)
+	}
+	wantTime("1800", "false")
+	h.send(messages.Message{Type: messages.TypeTimeUp})
+	wantTime("0", "true")
+	h.send(messages.Message{Type: messages.TypeExtended, SecondsLeft: 600})
+	wantTime("600", "false")
+
+	if r := w.get("/v1/session", keyL); !strings.Contains(r.body, `"seconds_left":1800,"time_up":false,`) {
+		t.Fatalf("the time of the other session moved: %s", r.body)
+	}
+	other.wantSilence()
+	h.wantSilence()
 }
 
 func TestAPI06_ARequestReachesTheHostLetterForLetter(t *testing.T) {

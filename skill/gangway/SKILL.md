@@ -32,7 +32,7 @@ For example: `/gangway http://127.0.0.1:8642 gw_4f9c…`
    curl -sS -X POST "$GW/v1/hello" -H "Authorization: Bearer $KEY"
    ```
 
-   The answer holds a `caller_token`, the host's name and the limits.
+   The answer holds a `caller_token`, the host's name, the limits, and `seconds_left`: how long the session still lasts. Only the person at the host can make it longer.
 
 5. Keep the caller token like the key: out of your replies and out of files. Put it in a third shell variable, and send it with every later call as a second header:
 
@@ -75,6 +75,7 @@ Every answer is JSON with a `state`.
 | `user` | The person said no | Do not send the same command again. Tell the user what you wanted and why, and ask how to go on |
 | `control_character` | The command holds a character that is not allowed | Fix the command, see "What a command may hold" |
 | `line_full` | Too many of your requests wait | Wait for the ones you sent |
+| `time_up` | The session's time is up. The person at the host is asked whether to extend it | Do not send it again at once. Tell the user. If they extend, ask again. If they do not, the session ends |
 | `session_ended` | The session is over | Stop. Tell the user. They can start a new session and paste a new line |
 
 ### `ended`: the command ran and is over
@@ -89,6 +90,7 @@ Every answer is JSON with a `state`.
 | `killed_by_user` | The person stopped it with Ctrl+C. Take that as a no: ask before you try again |
 | `killed_by_ai` | You said stop |
 | `killed_no_answer` | You did not answer "wait or stop" in time |
+| `killed_time_up` | The session's time was up, so the command got no more time at its time limit. You were not asked |
 | `start_failed` | It could not be started. `output` says why |
 
 - `output` holds normal and error output together, in order.

@@ -69,6 +69,8 @@ func TestUNITSETTINGS01_TheStartingValues(t *testing.T) {
 		"MAX_WAITING_REQUESTS":      "20",
 		"CONTROLLER_TAILSCALE_NAME": got.ControllerName,
 		"JOIN_TIMEOUT":              words(got.JoinTimeout),
+		"SESSION_LENGTH":            strconv.FormatFloat(got.SessionLength.Minutes(), 'f', -1, 64) + " minutes",
+		"EXTEND_WAIT":               words(got.ExtendWait),
 	} {
 		if table[name] != have {
 			t.Errorf("%s starts at %q in the code and %q in requirements.md", name, have, table[name])
@@ -95,6 +97,8 @@ KILL_WAIT=5s
 PROMPT_MIN_SHOW=250ms
 DOUBLE_CTRL_C_WINDOW=3s
 MAX_WAITING_REQUESTS=7
+SESSION_LENGTH=45m
+EXTEND_WAIT=20s
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -109,6 +113,8 @@ MAX_WAITING_REQUESTS=7
 		PromptMinShow:      250 * time.Millisecond,
 		DoubleCtrlCWindow:  3 * time.Second,
 		MaxWaitingRequests: 7,
+		SessionLength:      45 * time.Minute,
+		ExtendWait:         20 * time.Second,
 	}
 	if got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
@@ -202,6 +208,22 @@ func TestUNITSETTINGS12_TheControllersNameMustBeAName(t *testing.T) {
 // UNIT-SETTINGS-13. Requirement: HOST-08.
 func TestUNITSETTINGS13_TheControllersAddressIsNoSettingAnyMore(t *testing.T) {
 	wantError(t, "CONTROLLER_ADDRESS=http://127.0.0.1:8642\n", "line 1", "CONTROLLER_ADDRESS")
+}
+
+// UNIT-SETTINGS-14. Requirement: LEN-01, LEN-04.
+func TestUNITSETTINGS14_TheSessionLengthAndTheExtendWait(t *testing.T) {
+	got, err := Load(write(t, "SESSION_LENGTH = 10m\nEXTEND_WAIT = 20s\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SessionLength != 10*time.Minute || got.ExtendWait != 20*time.Second {
+		t.Fatalf("got %s and %s, want ten minutes and twenty seconds", got.SessionLength, got.ExtendWait)
+	}
+	for _, name := range []string{"SESSION_LENGTH", "EXTEND_WAIT"} {
+		for _, bad := range []string{"0s", "-5m", "30"} {
+			wantError(t, name+" = "+bad+"\n", "line 1", name)
+		}
+	}
 }
 
 func TestDesignAndGoTestsMatch(t *testing.T) {

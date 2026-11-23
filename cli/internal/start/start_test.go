@@ -3,6 +3,7 @@ package start
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kdop/gangway/shared/designcheck"
 )
@@ -52,9 +53,9 @@ func TestUNITSTART05_TheWordsAfterTheName(t *testing.T) {
 		{[]string{"--local"}, doLocal, ""},
 		{[]string{"--local", "http://127.0.0.1:9000"}, doLocal, "http://127.0.0.1:9000"},
 	} {
-		what, address, err := Plan(c.args)
-		if err != nil || what != c.what || address != c.address {
-			t.Fatalf("%v gave %d, %q, %v", c.args, what, address, err)
+		got, err := Plan(c.args)
+		if err != nil || got != (Choice{What: c.what, Address: c.address}) {
+			t.Fatalf("%v gave %+v, %v", c.args, got, err)
 		}
 	}
 }
@@ -64,9 +65,40 @@ func TestUNITSTART06_WordsThatMakeNoSense(t *testing.T) {
 	for _, args := range [][]string{
 		{"start"}, {"login", "now"}, {"-local"}, {"--local", "a", "b"}, {"--help"}, {"Login"}, {""}, {"login", "--local"},
 	} {
-		_, _, err := Plan(args)
+		_, err := Plan(args)
 		if err == nil || !strings.Contains(err.Error(), "gangway login") || !strings.Contains(err.Error(), "gangway --local") {
 			t.Fatalf("%v gave %v, want the text on how to start", args, err)
+		}
+	}
+}
+
+// UNIT-START-07. Requirement: LEN-02.
+func TestUNITSTART07_TheLengthAskedForAtStart(t *testing.T) {
+	for _, c := range []struct {
+		args []string
+		want Choice
+	}{
+		{[]string{"--length", "45m"}, Choice{What: doSession, Length: 45 * time.Minute}},
+		{[]string{"--local", "--length", "90s"}, Choice{What: doLocal, Length: 90 * time.Second}},
+		{[]string{"--length", "2h", "--local", "http://127.0.0.1:9000"}, Choice{What: doLocal, Address: "http://127.0.0.1:9000", Length: 2 * time.Hour}},
+		{[]string{"--local", "http://127.0.0.1:9000", "--length", "10m"}, Choice{What: doLocal, Address: "http://127.0.0.1:9000", Length: 10 * time.Minute}},
+	} {
+		got, err := Plan(c.args)
+		if err != nil || got != c.want {
+			t.Fatalf("%v gave %+v, %v, want %+v", c.args, got, err, c.want)
+		}
+	}
+	for _, args := range [][]string{
+		{"--length"}, {"--length", "0s"}, {"--length", "-5m"}, {"--length", "soon"}, {"--length", "30"},
+		{"--length", "5m", "--length", "5m"}, {"login", "--length", "5m"}, {"--length", "5m", "login"},
+		{"--local", "--length"}, {"--length", "--local"},
+	} {
+		got, err := Plan(args)
+		if err == nil || !strings.Contains(err.Error(), "gangway login") || !strings.Contains(err.Error(), "--length") {
+			t.Fatalf("%v gave %+v, %v, want the text on how to start", args, got, err)
+		}
+		if got != (Choice{}) {
+			t.Fatalf("%v gave %+v with its error", args, got)
 		}
 	}
 }

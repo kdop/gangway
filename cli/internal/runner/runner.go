@@ -42,6 +42,7 @@ const (
 	HowKilledByUser       = messages.HowKilledByUser
 	HowKilledByAI         = messages.HowKilledByAI
 	HowKilledNoAnswer     = messages.HowKilledNoAnswer
+	HowKilledTimeUp       = messages.HowKilledTimeUp
 	HowKilledAIGone       = messages.HowKilledAIGone
 	HowKilledSessionEnded = messages.HowKilledSessionEnded
 	HowStartFailed        = messages.HowStartFailed
@@ -116,6 +117,10 @@ type Runner struct {
 	how   string
 	text  text
 	timer int
+
+	// timeUp says the session's time ran out while this command ran: it
+	// gets no more time.
+	timeUp bool
 }
 
 // New makes a runner in the Idle state.
@@ -177,6 +182,11 @@ func (r *Runner) Timer(number int) {
 	}
 	switch r.state {
 	case Running:
+		if r.timeUp {
+			// The AI is not asked: there is no more time to give.
+			r.kill(HowKilledTimeUp)
+			return
+		}
 		r.sender.StillRunning(r.req.ID)
 		r.state = Asked
 		r.startTimer(r.settings.QuestionWait)
@@ -189,6 +199,10 @@ func (r *Runner) Timer(number int) {
 
 // Wait is the AI's answer "wait more".
 func (r *Runner) Wait() {
+	if r.state == Asked && r.timeUp {
+		r.kill(HowKilledTimeUp)
+		return
+	}
 	if r.state == Asked {
 		r.state = Running
 		r.startTimer(r.settings.TimeLimit)
@@ -205,6 +219,15 @@ func (r *Runner) CtrlC() { r.kill(HowKilledByUser) }
 func (r *Runner) Cancel(id string) {
 	if id == r.req.ID {
 		r.kill(HowKilledAIGone)
+	}
+}
+
+// TimeUp tells the runner that the session's time is up. A command that
+// runs is not killed now. It gets no more "wait more": it is killed at its
+// next time limit, or when the AI answers "wait".
+func (r *Runner) TimeUp() {
+	if r.state == Running || r.state == Asked {
+		r.timeUp = true
 	}
 }
 
@@ -241,6 +264,7 @@ func (r *Runner) finish(result Result) {
 	r.req = request.Request{}
 	r.proc = nil
 	r.how = ""
+	r.timeUp = false
 	r.timer++
 	r.state = Idle
 	r.screen.Ended(req, result)

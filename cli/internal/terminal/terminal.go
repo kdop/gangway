@@ -4,6 +4,7 @@ package terminal
 
 import (
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/kdop/gangway/cli/internal/gate"
 	"github.com/kdop/gangway/cli/internal/request"
 	"github.com/kdop/gangway/cli/internal/runner"
+	"github.com/kdop/gangway/cli/internal/session"
 	"github.com/kdop/gangway/shared/messages"
 )
 
@@ -54,6 +56,7 @@ type Terminal struct {
 
 	midLine bool             // the cursor is not at the start of a line
 	prompt  *request.Request // the request whose prompt waits on screen
+	extend  *time.Duration   // the length of the question to extend that waits on screen
 }
 
 // New makes a terminal that writes to out. window is DOUBLE_CTRL_C_WINDOW.
@@ -106,7 +109,59 @@ func (t *Terminal) Answer(req request.Request, answer gate.Answer) {
 		t.write("n\n")
 	case gate.AIGone:
 		t.line("The AI hung up. Nothing ran.")
+	case gate.TimeUp:
+		t.line("The session's time is up. Nothing ran.")
 	}
+}
+
+// ExtendQuestion says that the session's time is up and asks whether to
+// extend it by this length.
+func (t *Terminal) ExtendQuestion(length time.Duration) {
+	t.extend = &length
+	t.drawExtend()
+}
+
+func (t *Terminal) drawExtend() {
+	t.line("")
+	t.line("The session's time is up.")
+	t.write("Extend it by " + Length(*t.extend) + "? y/n ")
+}
+
+// ExtendAnswer shows how the question to extend was closed.
+func (t *Terminal) ExtendAnswer(answer session.Answer) {
+	if t.extend == nil {
+		return
+	}
+	length := *t.extend
+	t.extend = nil
+	switch answer {
+	case session.Yes:
+		t.write("y\n")
+		t.line("The session goes on for " + Length(length) + ".")
+	case session.No:
+		t.write("n\n")
+	case session.NoAnswer:
+		t.line("No answer in time.")
+	}
+}
+
+// Length writes a time in words, such as "30 minutes".
+func Length(d time.Duration) string {
+	count := func(n time.Duration, one string) string {
+		if n == 1 {
+			return "1 " + one
+		}
+		return strconv.FormatInt(int64(n), 10) + " " + one + "s"
+	}
+	switch {
+	case d >= time.Hour && d%time.Hour == 0:
+		return count(d/time.Hour, "hour")
+	case d >= time.Minute && d%time.Minute == 0:
+		return count(d/time.Minute, "minute")
+	case d >= time.Second && d%time.Second == 0:
+		return count(d/time.Second, "second")
+	}
+	return d.String()
 }
 
 // Output shows a piece of what a command wrote, cleaned, with the output
@@ -141,6 +196,8 @@ func (t *Terminal) Ended(req request.Request, result runner.Result) {
 		t.line("Killed: the AI said stop.")
 	case messages.HowKilledNoAnswer:
 		t.line("Killed: the time limit passed and the AI gave no answer.")
+	case messages.HowKilledTimeUp:
+		t.line("Killed: the time limit passed and the session's time was up.")
 	case messages.HowKilledAIGone:
 		t.line("Killed: the AI hung up.")
 	case messages.HowKilledSessionEnded:
@@ -160,6 +217,8 @@ func (t *Terminal) Refused(reason string) {
 		t.Note("Refused a request with no prompt: it holds a character that is not allowed.")
 	case messages.ReasonLineFull:
 		t.Note("Refused a request with no prompt: too many requests wait.")
+	case messages.ReasonTimeUp:
+		t.Note("Refused a request with no prompt: the session's time is up.")
 	default:
 		t.Note("Refused a request with no prompt: " + reason + ".")
 	}
@@ -179,6 +238,9 @@ func (t *Terminal) Note(text string) {
 	t.line(clean(strings.ReplaceAll(text, "\n", " ")))
 	if t.prompt != nil {
 		t.drawPrompt()
+	}
+	if t.extend != nil {
+		t.drawExtend()
 	}
 }
 
@@ -209,11 +271,13 @@ func clean(s string) string {
 	}, s)
 }
 
-// Forget drops the prompt that waits on screen, when the session ends
-// with no answer to it. A later note then does not show it again.
+// Forget drops the prompt or the question that waits on screen, when the
+// session ends with no answer to it. A later note then does not show it
+// again.
 func (t *Terminal) Forget() {
-	if t.prompt != nil {
+	if t.prompt != nil || t.extend != nil {
 		t.prompt = nil
+		t.extend = nil
 		t.line("")
 	}
 }

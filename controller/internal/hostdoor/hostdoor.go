@@ -79,7 +79,7 @@ func (d *Door) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	startCtx, stop := context.WithTimeout(ctx, startWait)
 	first, err := read(startCtx, conn)
 	stop()
-	if err != nil || first.Type != messages.TypeSessionStart || first.Limits == nil {
+	if err != nil || first.Type != messages.TypeSessionStart || first.Limits == nil || first.LengthSeconds <= 0 {
 		refuse(conn, "the first message must be session_start")
 		return
 	}
@@ -89,6 +89,7 @@ func (d *Door) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Limits:  *first.Limits,
 		Relay:   relay.New(h.send),
 	}
+	sess.Counts(d.Store.Now(), seconds(first.LengthSeconds))
 	if err := d.Store.Add(sess); err != nil {
 		refuse(conn, err.Error())
 		return
@@ -117,11 +118,18 @@ func (d *Door) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case messages.TypeRefused, messages.TypeStarted, messages.TypeOutput,
 			messages.TypeStillRunning, messages.TypeEnded:
 			sess.Relay.FromHost(msg)
+		case messages.TypeTimeUp:
+			sess.TimeIsUp()
+		case messages.TypeExtended:
+			sess.Extended(d.Store.Now(), seconds(msg.SecondsLeft))
 		}
 		// Any other type is dropped. No message from a host can do more
-		// than answer its own requests or end its own session.
+		// than answer its own requests, tell its own time or end its own
+		// session.
 	}
 }
+
+func seconds(n int) time.Duration { return time.Duration(n) * time.Second }
 
 func (h *host) write(ctx context.Context) {
 	for {

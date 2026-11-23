@@ -10,6 +10,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/kdop/gangway/controller/internal/relay"
 	"github.com/kdop/gangway/shared/messages"
@@ -26,6 +27,52 @@ type Session struct {
 	// callerHash is the SHA-256 of the caller token. Nil: no caller has
 	// claimed the key yet. Guarded by callerMu.
 	callerHash []byte
+
+	// The session's time, as the host told it. Guarded by timeMu.
+	endsAt time.Time
+	timeUp bool
+}
+
+// timeMu guards the time of every session. It is held for a moment only.
+var timeMu sync.Mutex
+
+// Counts starts the count of the session's time: the host said the
+// session lasts this long from now.
+func (sess *Session) Counts(now time.Time, length time.Duration) {
+	timeMu.Lock()
+	defer timeMu.Unlock()
+	sess.endsAt = now.Add(length)
+}
+
+// TimeIsUp notes that the host said its time is up.
+func (sess *Session) TimeIsUp() {
+	timeMu.Lock()
+	defer timeMu.Unlock()
+	sess.timeUp = true
+}
+
+// Extended notes that the host said its user extended the session, and
+// that it has this long left from now.
+func (sess *Session) Extended(now time.Time, left time.Duration) {
+	timeMu.Lock()
+	defer timeMu.Unlock()
+	sess.endsAt = now.Add(max(left, 0))
+	sess.timeUp = false
+}
+
+// Time tells how many seconds the session has left, and whether its time
+// is up. Both are what the host said: the controller decides neither.
+func (sess *Session) Time(now time.Time) (secondsLeft int, timeUp bool) {
+	timeMu.Lock()
+	defer timeMu.Unlock()
+	if sess.timeUp {
+		return 0, true
+	}
+	left := sess.endsAt.Sub(now)
+	if left <= 0 {
+		return 0, false
+	}
+	return int((left + time.Second - 1) / time.Second), false
 }
 
 // callerBits is how many random bits a caller token holds: as many as a
@@ -76,12 +123,24 @@ var (
 // Store is safe for use from many goroutines. Nothing in it is ever
 // written to disk.
 type Store struct {
+	// Clock tells the time. Nil: the system's time. A test puts its own
+	// clock here.
+	Clock func() time.Time
+
 	mu     sync.Mutex
 	byHash map[string]*Session
 }
 
 func NewStore() *Store {
 	return &Store{byHash: map[string]*Session{}}
+}
+
+// Now tells the time by the store's clock.
+func (s *Store) Now() time.Time {
+	if s.Clock != nil {
+		return s.Clock()
+	}
+	return time.Now()
 }
 
 // Add makes the session live.

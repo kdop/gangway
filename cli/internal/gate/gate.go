@@ -40,6 +40,7 @@ const (
 	Yes    Answer = iota // the user pressed y
 	No                   // the user pressed n or Ctrl+C
 	AIGone               // the AI hung up
+	TimeUp               // the session's time ran out
 )
 
 // The reasons sent with a refusal. They are part of the contract in
@@ -48,6 +49,7 @@ const (
 	ReasonUser         = messages.ReasonUser
 	ReasonAIGone       = messages.ReasonAIGone
 	ReasonSessionEnded = messages.ReasonSessionEnded
+	ReasonTimeUp       = messages.ReasonTimeUp
 )
 
 // Line holds the requests that wait.
@@ -163,6 +165,20 @@ func (g *Gate) Done() {
 	if g.state == Busy {
 		g.free()
 	}
+}
+
+// TimeUp tells the gate that the session's time is up. A prompt that
+// waits is refused. The gate takes no next request by itself: the line is
+// emptied by the loop, and nothing new comes until the user extends.
+func (g *Gate) TimeUp() {
+	if g.state != Asking {
+		return
+	}
+	req := g.front
+	g.screen.Answer(req, TimeUp)
+	g.sender.Refused(req.ID, ReasonTimeUp)
+	g.front = request.Request{}
+	g.state = Free
 }
 
 // End tells the gate that the session is over.

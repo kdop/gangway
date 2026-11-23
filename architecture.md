@@ -279,6 +279,11 @@ The first three ask or narrow. The address gives a controller that was taken ove
 
 These two only inform. The controller uses them for `GET /v1/session` and for the dashboard. It cannot answer them.
 
+- `session_start` carries the length in whole seconds, as `length_seconds`. A `session_start` with no length above zero is refused: every session has an end.
+- The controller counts `seconds_left` by its own clock, from the length in `session_start` and from the seconds in the last `extended`.
+- `time_up` in the answers of the API is true only after the host said so. The controller never decides it.
+- When the user does not extend, the cli-tool ends the session with `session_end` and the reason `time_up`.
+
 ### Ending a session
 
 | From | Message | Holds | Meaning |

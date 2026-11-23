@@ -32,7 +32,7 @@ func newStandIn(t *testing.T) *standIn {
 // standInGiving is newStandIn with a stand-in that gives the API address
 // of the test's choice. With badStart, the cli-tool is not expected to
 // reach the paste line.
-func standInGiving(t *testing.T, apiAddress func(host string) string, badStart bool) *standIn {
+func standInGiving(t *testing.T, apiAddress func(host string) string, badStart bool, settings ...string) *standIn {
 	t.Helper()
 	s := &standIn{t: t}
 	connected := make(chan *websocket.Conn, 1)
@@ -66,7 +66,7 @@ func standInGiving(t *testing.T, apiAddress func(host string) string, badStart b
 	t.Cleanup(func() { server.Close() })
 
 	s.world = &world{t: t, home: t.TempDir(), listen: ln.Addr().String(), address: "http://" + ln.Addr().String(), noPasteLine: badStart}
-	s.startCli(nil)
+	s.startCli(settings)
 	select {
 	case s.conn = <-connected:
 	case <-time.After(soon):
@@ -134,7 +134,7 @@ func (w *world) fakeHost(keyHash string) bool {
 	}
 	w.t.Cleanup(func() { conn.CloseNow() })
 	limits := messages.Limits{CommandSeconds: 60, AnswerSeconds: 60, MaxWaiting: 20}
-	first, _ := json.Marshal(messages.Message{Type: messages.TypeSessionStart, KeyHash: keyHash, Host: "fake", Limits: &limits})
+	first, _ := json.Marshal(messages.Message{Type: messages.TypeSessionStart, KeyHash: keyHash, Host: "fake", Limits: &limits, LengthSeconds: 1800})
 	if err := conn.Write(ctx, websocket.MessageText, first); err != nil {
 		w.t.Fatal(err)
 	}

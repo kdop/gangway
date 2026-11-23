@@ -162,7 +162,7 @@ func apiAddress(t *testing.T, address string) string {
 	}
 	defer conn.CloseNow()
 	limits := messages.Limits{CommandSeconds: 60, AnswerSeconds: 60, MaxWaiting: 20}
-	first, _ := json.Marshal(messages.Message{Type: messages.TypeSessionStart, KeyHash: messages.KeyHash("gw_" + strings.Repeat("a", 64)), Host: "h", Limits: &limits})
+	first, _ := json.Marshal(messages.Message{Type: messages.TypeSessionStart, KeyHash: messages.KeyHash("gw_" + strings.Repeat("a", 64)), Host: "h", Limits: &limits, LengthSeconds: 1800})
 	if err := conn.Write(ctx, websocket.MessageText, first); err != nil {
 		t.Fatal(err)
 	}

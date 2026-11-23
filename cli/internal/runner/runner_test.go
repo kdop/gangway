@@ -481,6 +481,90 @@ func TestUNITRUNNER20_IdleDropsEverythingAndStopWorksWhileRunning(t *testing.T) 
 	wantEnded(t, w, HowKilledByAI)
 }
 
+// UNIT-RUNNER-32. Requirement: LEN-08.
+func TestUNITRUNNER32_TimeUpKillsAtTheNextTimeLimit(t *testing.T) {
+	w := running()
+	w.r.TimeUp()
+	wantState(t, w, Running)
+	if w.stops+w.kills != 0 || len(w.log) != 0 {
+		t.Fatalf("the time being up killed or sent something: %v", w.log)
+	}
+	w.lastTimer()
+	wantState(t, w, Stopping)
+	if w.stops != 1 {
+		t.Fatalf("the program was asked to stop %d times, want 1", w.stops)
+	}
+	if w.count("still_running:a") != 0 {
+		t.Fatalf("the AI was asked to wait or stop: %v", w.log)
+	}
+	w.r.Exited(143)
+	wantEnded(t, w, HowKilledTimeUp)
+}
+
+// UNIT-RUNNER-33. Requirement: LEN-08.
+func TestUNITRUNNER33_NoMoreWaitAfterTimeUp(t *testing.T) {
+	w := asked()
+	timers := len(w.timers)
+	w.r.TimeUp()
+	wantState(t, w, Asked)
+	if w.stops+w.kills != 0 {
+		t.Fatal("the time being up killed the command at once")
+	}
+	w.r.Wait()
+	wantState(t, w, Stopping)
+	if w.stops != 1 {
+		t.Fatalf("the program was asked to stop %d times, want 1", w.stops)
+	}
+	if len(w.timers) != timers+1 || w.timers[len(w.timers)-1].d != settings.KillWait {
+		t.Fatalf("the wait gave a new time limit: %v", w.timers[timers:])
+	}
+	w.r.Exited(143)
+	wantEnded(t, w, HowKilledTimeUp)
+
+	w = asked()
+	w.r.TimeUp()
+	w.lastTimer()
+	wantState(t, w, Stopping)
+	w.r.Exited(143)
+	wantEnded(t, w, HowKilledNoAnswer)
+}
+
+// UNIT-RUNNER-34. Requirement: LEN-08.
+func TestUNITRUNNER34_ACommandThatEndsByItselfAfterTimeUp(t *testing.T) {
+	w := running()
+	w.r.TimeUp()
+	w.r.Exited(0)
+	if res := wantEnded(t, w, HowExit); res.ExitCode != 0 {
+		t.Fatalf("exit code is %d, want 0", res.ExitCode)
+	}
+	if w.stops+w.kills != 0 {
+		t.Fatal("something was killed")
+	}
+	// The note is gone with the command.
+	w.r.Run(approve(request.Request{ID: "b", Command: "echo b"}))
+	w.lastTimer()
+	wantState(t, w, Asked)
+	if w.count("still_running:b") != 1 || w.stops+w.kills != 0 {
+		t.Fatalf("the next command was not asked as usual: %v", w.log)
+	}
+}
+
+// UNIT-RUNNER-35. Requirement: LEN-08.
+func TestUNITRUNNER35_TimeUpWithNothingRunning(t *testing.T) {
+	w := idle()
+	w.r.TimeUp()
+	wantState(t, w, Idle)
+	if len(w.log)+len(w.timers)+w.stops+w.kills != 0 {
+		t.Fatalf("the time being up did something in Idle: %v", w.log)
+	}
+	w.r.Run(approve(reqA))
+	w.lastTimer()
+	wantState(t, w, Asked)
+	if w.count("still_running:a") != 1 || w.stops+w.kills != 0 {
+		t.Fatalf("the command was not asked as usual: %v", w.log)
+	}
+}
+
 func TestDesignAndGoTestsMatch(t *testing.T) {
 	designcheck.Match(t, "UNIT-RUNNER", "runner_test.go", "starter_test.go")
 }

@@ -73,6 +73,8 @@ const (
 	TypeOutput       = "output"
 	TypeStillRunning = "still_running"
 	TypeEnded        = "ended"
+	TypeTimeUp       = "time_up"  // the session's time is up
+	TypeExtended     = "extended" // the user extended the session
 
 	// From the controller.
 	TypeSessionOK = "session_ok"
@@ -94,6 +96,7 @@ const (
 	ReasonControlCharacter = "control_character"
 	ReasonLineFull         = "line_full"
 	ReasonSessionEnded     = "session_ended"
+	ReasonTimeUp           = "time_up"      // the session's time is up
 	ReasonUnknownKind      = "unknown_kind" // the cli-tool does not know this kind of request
 	ReasonAIGone           = "ai_gone"      // never shown to an AI
 )
@@ -104,6 +107,7 @@ const (
 	HowKilledByUser       = "killed_by_user"
 	HowKilledByAI         = "killed_by_ai"
 	HowKilledNoAnswer     = "killed_no_answer"
+	HowKilledTimeUp       = "killed_time_up" // the session's time was up at the command's time limit
 	HowStartFailed        = "start_failed"
 	HowKilledAIGone       = "killed_ai_gone"       // never shown to an AI
 	HowKilledSessionEnded = "killed_session_ended" // never shown to an AI
@@ -114,6 +118,7 @@ const (
 	EndUser              = "user"               // the user ended the cli-tool
 	EndConnectionLost    = "connection_lost"    // noted by the side that saw it
 	EndControllerStopped = "controller_stopped" // the controller is shutting down
+	EndTimeUp            = "time_up"            // the time ran out and the user did not extend
 )
 
 // Limits are the limits of a session, told to the AI up front.
@@ -154,6 +159,12 @@ type Message struct {
 	KeyHash string  `json:"key_hash,omitempty"`
 	Host    string  `json:"host,omitempty"`
 	Limits  *Limits `json:"limits,omitempty"`
+
+	// session_start: the length the session starts with, in seconds
+	LengthSeconds int `json:"length_seconds,omitempty"`
+
+	// extended: the time the session has left, in seconds
+	SecondsLeft int `json:"seconds_left,omitempty"`
 }
 
 // MaxMessageBytes is the largest message either side sends or takes. A
