@@ -43,6 +43,18 @@ The controller and each host join your Tailscale network from inside the program
 
 Until pairing is built, any device that your Tailscale rules let reach the controller can start a session of its own. The rules are the guard.
 
+## The controller as a container
+
+GitHub builds an image of the controller on every merge to `main`: `ghcr.io/kdop/gangway-controller`. The versions are `latest`, the short commit id, and each version tag.
+
+```
+docker run --network host --user "$(id -u):$(id -g)" -v /some/folder:/data \
+  ghcr.io/kdop/gangway-controller -public-address https://…
+```
+
+- `/data` keeps the key file (`/data/config/gangway-controller/tailscale-auth-key`, readable by its owner only) and the Tailscale identity. Without the folder, the controller is a new device after every restart.
+- The host's network is used because the API listens on `127.0.0.1` only. Put a web server with HTTPS in front of it.
+
 ## Run the tests
 
 ```
