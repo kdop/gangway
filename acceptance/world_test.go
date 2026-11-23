@@ -101,6 +101,12 @@ type world struct {
 	cliArgs []string // the words the cli-tool is started with
 	env     []string // more of the surroundings of both programs
 	cliKey  string   // the Tailscale auth key stored for the cli-tool
+
+	cliConfig   string  // the cli-tool's settings folder. Empty: a new one is made
+	noPasteLine bool    // do not wait for the paste line: the start is meant to fail
+	ctlOut      *screen // what the controller printed
+	cliHome     string  // the home folder of the cli-tool. Empty: home
+	cliEnv      []string
 }
 
 // newWorld starts both programs and waits for the paste line. Each of
@@ -125,13 +131,26 @@ func newWorld(t *testing.T, settings ...string) *world {
 // join starts one more cli-tool on the same controller.
 func (w *world) join(settings ...string) *world {
 	w.t.Helper()
-	more := &world{t: w.t, home: w.home, listen: w.listen, address: w.address, ctl: w.ctl, cliArgs: w.cliArgs, env: w.env, cliKey: w.cliKey}
+	more := &world{t: w.t, home: w.home, listen: w.listen, address: w.address, ctl: w.ctl, cliArgs: w.cliArgs, env: w.env, cliKey: w.cliKey, cliConfig: w.cliConfig, ctlOut: w.ctlOut, cliHome: w.cliHome, cliEnv: w.cliEnv}
 	more.startCli(settings)
 	return more
 }
 
 // startController starts the controller and waits until it listens.
 func (w *world) startController() {
+	w.t.Helper()
+	w.launchController()
+	w.until("the controller listens", func() bool {
+		c, err := net.Dial("tcp", w.listen)
+		if err == nil {
+			c.Close()
+		}
+		return err == nil
+	})
+}
+
+// launchController starts the controller and does not wait for it.
+func (w *world) launchController() {
 	w.t.Helper()
 	args := w.ctlArgs
 	if args == nil {
@@ -140,17 +159,12 @@ func (w *world) startController() {
 	ctl := exec.Command(controllerBin, args...)
 	ctl.Dir = w.home
 	ctl.Env = append(append(os.Environ(), "HOME="+w.home), w.env...)
+	w.ctlOut = &screen{}
+	ctl.Stderr = w.ctlOut
 	if err := ctl.Start(); err != nil {
 		w.t.Fatal(err)
 	}
 	*w.ctl = ctl
-	w.until("the controller listens", func() bool {
-		c, err := net.Dial("tcp", w.listen)
-		if err == nil {
-			c.Close()
-		}
-		return err == nil
-	})
 }
 
 // stopController kills the controller, as a crash would.
@@ -166,9 +180,15 @@ func (w *world) startCli(settings []string) {
 	t := w.t
 	w.dir, w.screen, w.cliDone = t.TempDir(), &screen{}, make(chan struct{})
 
-	config, err := os.MkdirTemp(w.home, "config")
-	if err != nil {
-		t.Fatal(err)
+	if w.cliHome == "" {
+		w.cliHome = w.home
+	}
+	config := w.cliConfig
+	if config == "" {
+		var err error
+		if config, err = os.MkdirTemp(w.cliHome, "config"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	var lines []string
 	if !hasSetting(settings, "PROMPT_MIN_SHOW") {
@@ -195,9 +215,9 @@ func (w *world) startCli(settings []string) {
 		}
 	}
 	w.cli = exec.Command(cliBin, args...)
-	w.cli.Dir = w.home
+	w.cli.Dir = w.cliHome
 	w.cli.Stdin, w.cli.Stdout, w.cli.Stderr = slave, slave, slave
-	w.cli.Env = append(append(append(os.Environ(), "HOME="+w.home), w.env...), "XDG_CONFIG_HOME="+config)
+	w.cli.Env = w.cliEnviron(config)
 	if err := w.cli.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -210,11 +230,22 @@ func (w *world) startCli(settings []string) {
 		<-done
 		master.Close()
 		if t.Failed() {
-			t.Logf("the screen:\n%s", strings.ReplaceAll(w.screen.text(), w.key, "gw_<key>"))
+			text := w.screen.text()
+			if w.key != "" {
+				text = strings.ReplaceAll(text, w.key, "gw_<key>")
+			}
+			t.Logf("the screen:\n%s", text)
 		}
 	})
 
-	w.until("the paste line shows", func() bool {
+	if w.noPasteLine {
+		return
+	}
+	wait := soon
+	if w.env != nil {
+		wait = joinWait
+	}
+	eventually(t, wait, "the paste line shows", func() bool {
 		for _, l := range strings.Split(w.screen.text(), "\n") {
 			if f := strings.Fields(l); len(f) == 3 && f[0] == "/gangway" {
 				w.key = f[2]
@@ -223,6 +254,11 @@ func (w *world) startCli(settings []string) {
 		}
 		return false
 	})
+}
+
+// cliEnviron gives the surroundings the cli-tool runs with.
+func (w *world) cliEnviron(config string) []string {
+	return append(append(append(append(os.Environ(), "HOME="+w.cliHome), w.env...), w.cliEnv...), "XDG_CONFIG_HOME="+config)
 }
 
 // ended waits until the cli-tool has ended.
