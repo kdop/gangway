@@ -94,7 +94,7 @@ func Join(ctx context.Context, c Config) (*Network, error) {
 		case strings.Contains(strings.ToLower(text), "key"):
 			// The library gives the refusal as text only, such as
 			// "invalid authkey".
-			return nil, ErrKeyRefused
+			return nil, fmt.Errorf("%w. Tailscale said: %s", ErrKeyRefused, authkey.Plain(text))
 		default:
 			return nil, fmt.Errorf("could not get onto the Tailscale network: %s", text)
 		}

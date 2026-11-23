@@ -2,6 +2,7 @@ package network
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http/httptest"
@@ -240,7 +241,7 @@ func TestUNITCTLNETWORK06_TheKeyAndTheIdentityAreForTheOwnerOnly(t *testing.T) {
 func TestUNITCTLNETWORK07_ARefusedKey(t *testing.T) {
 	s := newStandIn(t)
 	n, err := Join(context.Background(), s.config(t, "tskey-auth-kBADKEY11CNTRL-zzzzzzzzzzzz"))
-	if err != ErrKeyRefused || n != nil {
+	if !errors.Is(err, ErrKeyRefused) || !strings.Contains(err.Error(), "Tailscale said: ") || n != nil {
 		t.Fatalf("got %v, want the error about a refused key", err)
 	}
 	if strings.Contains(err.Error(), "zzzz") || !strings.Contains(err.Error(), "gangway-controller login") {

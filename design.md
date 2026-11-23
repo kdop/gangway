@@ -835,6 +835,7 @@ A session, in order:
 | UNIT-SECRETS-05 | `HOST-05` | Nothing | `save`, one by one: an empty key, a key with a space, one with a control character, one that does not start with `tskey-auth-` | An error each time. No file is made |
 | UNIT-SECRETS-06 | `HOST-05` | A file with a key | `load` fails, and `save` fails on a folder that cannot be written | Neither error holds the key |
 | UNIT-SECRETS-07 | `KEY-08` | A file with a key | `protected` with: the file's path, a path to it through `..`, a link to it, another file in the same folder | Yes, yes, yes, no |
+| UNIT-SECRETS-08 | `HOST-06` | A text with a cursor code, a line break and a letter that is not plain; a text of 500 letters | `plain` | Each of the three is replaced by `?`. The long text is cut to 200 with `...` at the end |
 
 ## `network`
 
@@ -898,7 +899,7 @@ The Tailscale form is tried with the library pointed at a stand-in for Tailscale
 | UNIT-NETWORK-06 | `HOST-06` | State after UNIT-NETWORK-05 | `dialer` | The address is `http://`, `CONTROLLER_TAILSCALE_NAME` and the hosts' port |
 | UNIT-NETWORK-07 | `HOST-09` | The same stand-in | `join`, `leave`, then a new `network` and `join` again | The stand-in saw two devices with two identities |
 | UNIT-NETWORK-08 | `HOST-09`, `SES-08` | State after UNIT-NETWORK-05 | `leave` | The folder of this start is gone. The device no longer answers |
-| UNIT-NETWORK-09 | `HOST-06` | Tailscale form, a stand-in that refuses the key | `join` | An error that says Tailscale refused the key and to run `login` again. The error does not hold the key |
+| UNIT-NETWORK-09 | `HOST-06` | Tailscale form, a stand-in that refuses the key | `join` | An error that says Tailscale refused the key and to run `login` again, with what Tailscale said. The error does not hold the key |
 | UNIT-NETWORK-10 | `HOST-06` | Tailscale form, a stand-in that never answers | `join` | An error after `JOIN_TIMEOUT`. The folder of this start is gone |
 | UNIT-NETWORK-11 | `HOST-03` | State after UNIT-NETWORK-05 | List the TCP ports this program listens on | Each is on a localhost address or tied to the loopback device. A port the test opens to all is seen by the same check |
 | UNIT-NETWORK-12 | `SES-08` | A stand-in that never answers `leave` | `leave` | It comes back within a few seconds |

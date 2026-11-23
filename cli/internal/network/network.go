@@ -20,6 +20,7 @@ import (
 	"tailscale.com/tsnet"
 	"tailscale.com/types/logger"
 
+	"github.com/kdop/gangway/shared/authkey"
 	"github.com/kdop/gangway/shared/messages"
 )
 
@@ -123,7 +124,7 @@ func (t *tailscale) Join(ctx context.Context) error {
 	case strings.Contains(strings.ToLower(text), "key"):
 		// The library gives the refusal as text only, such as
 		// "invalid authkey".
-		return ErrKeyRefused
+		return fmt.Errorf("%w. Tailscale said: %s", ErrKeyRefused, authkey.Plain(text))
 	default:
 		return fmt.Errorf("could not get onto the Tailscale network: %s", text)
 	}

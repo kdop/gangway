@@ -160,3 +160,22 @@ func ReadHidden(keys io.Reader) (string, error) {
 		}
 	}
 }
+
+// Plain makes a text from outside safe to show: only plain letters, digits
+// and signs stay, and a long text is cut.
+func Plain(text string) string {
+	const most = 200
+	var b strings.Builder
+	for _, r := range text {
+		if b.Len() == most {
+			b.WriteString("...")
+			break
+		}
+		if r >= ' ' && r <= '~' {
+			b.WriteRune(r)
+		} else {
+			b.WriteByte('?')
+		}
+	}
+	return b.String()
+}

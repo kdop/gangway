@@ -239,3 +239,14 @@ func TestReadHidden(t *testing.T) {
 		}
 	}
 }
+
+// UNIT-SECRETS-08. Requirement: HOST-06.
+func TestUNITSECRETS08_PlainMakesATextSafeToShow(t *testing.T) {
+	if got := Plain("invalid key\x1b[2J\r\nnot found é"); got != "invalid key?[2J??not found ?" {
+		t.Fatalf("got %q", got)
+	}
+	long := Plain(strings.Repeat("a", 500))
+	if len(long) != 203 || !strings.HasSuffix(long, "...") {
+		t.Fatalf("a long text came out %d long", len(long))
+	}
+}
