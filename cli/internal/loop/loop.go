@@ -57,6 +57,9 @@ type Parts struct {
 	// Length is the length this session starts with, when the user asked
 	// for one at start. Zero: SESSION_LENGTH.
 	Length time.Duration
+	// Admin holds the bounds of the admin file. A length above its
+	// maximum is cut here, and the screen says so.
+	Admin settings.Admin
 }
 
 // Loop holds the pieces. It is not safe for use from more than one
@@ -72,6 +75,9 @@ type Loop struct {
 	state  State
 	reason string
 	length time.Duration
+	max    time.Duration // SESSION_MAX. Zero: no maximum
+	asked  time.Duration // the length before the maximum cut it. Zero: it was not cut
+	admin  string        // the admin file, for the screen
 }
 
 // New puts the pieces together.
@@ -79,6 +85,10 @@ func New(p Parts) *Loop {
 	l := &Loop{conn: p.Conn, session: p.Session, length: p.Length}
 	if l.length <= 0 {
 		l.length = p.Settings.SessionLength
+	}
+	l.max, l.admin = p.Admin.SessionMax, p.Admin.File
+	if length, cut := p.Admin.Length(l.length); cut {
+		l.asked, l.length = l.length, length
 	}
 	l.term = terminal.New(p.Screen, p.Clock, p.Settings.DoubleCtrlCWindow, keys{l})
 	l.line = line.New(p.Settings.MaxWaitingRequests)
@@ -96,6 +106,7 @@ func New(p Parts) *Loop {
 		Sender:     p.Conn,
 		Loop:       clockEvents{l},
 		Length:     l.length,
+		Max:        l.max,
 		ExtendWait: p.Settings.ExtendWait,
 		MinShow:    p.Settings.PromptMinShow,
 	})
@@ -121,6 +132,10 @@ func (c clockEvents) TimeUp() {
 
 func (c clockEvents) NotExtended() {
 	c.l.End(messages.EndTimeUp, "The session was not extended: the session ends.")
+}
+
+func (c clockEvents) MaxReached() {
+	c.l.End(messages.EndTimeUp, "The session has lasted "+terminal.Length(c.l.max)+", the maximum: the session ends.")
 }
 
 // gateDone lets the runner reach the gate, which is made after it.
@@ -167,7 +182,17 @@ func (l *Loop) Begin() {
 	l.term.Note("Connected. The session is live.")
 	l.term.PasteLine(l.session.Address(), l.session.Key())
 	l.term.Note("Each request is shown here. Press y to run it, n to refuse. Ctrl+C ends the session.")
-	l.term.Note("The session lasts " + terminal.Length(l.length) + ". Then you are asked whether to extend it.")
+	if l.asked > 0 {
+		l.term.Note(terminal.Length(l.asked) + " is above the maximum of " + terminal.Length(l.max) + ", set in " + l.admin + ". It was cut to " + terminal.Length(l.max) + ".")
+	}
+	switch {
+	case l.max > 0 && l.length >= l.max:
+		l.term.Note("The session lasts " + terminal.Length(l.length) + ". That is the maximum: then it ends.")
+	case l.max > 0:
+		l.term.Note("The session lasts " + terminal.Length(l.length) + ". Then you are asked whether to extend it, up to the maximum of " + terminal.Length(l.max) + ".")
+	default:
+		l.term.Note("The session lasts " + terminal.Length(l.length) + ". Then you are asked whether to extend it.")
+	}
 }
 
 // Input takes bytes read from the keyboard.

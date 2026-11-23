@@ -118,7 +118,7 @@ const (
 	EndUser              = "user"               // the user ended the cli-tool
 	EndConnectionLost    = "connection_lost"    // noted by the side that saw it
 	EndControllerStopped = "controller_stopped" // the controller is shutting down
-	EndTimeUp            = "time_up"            // the time ran out and the user did not extend
+	EndTimeUp            = "time_up"            // the time ran out: the user did not extend, or the maximum was reached
 )
 
 // Limits are the limits of a session, told to the AI up front.

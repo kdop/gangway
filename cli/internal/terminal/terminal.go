@@ -56,7 +56,7 @@ type Terminal struct {
 
 	midLine bool             // the cursor is not at the start of a line
 	prompt  *request.Request // the request whose prompt waits on screen
-	extend  *time.Duration   // the length of the question to extend that waits on screen
+	extend  *extend          // the question to extend that waits on screen
 }
 
 // New makes a terminal that writes to out. window is DOUBLE_CTRL_C_WINDOW.
@@ -114,35 +114,59 @@ func (t *Terminal) Answer(req request.Request, answer gate.Answer) {
 	}
 }
 
+// extend is one question to extend.
+type extend struct {
+	length time.Duration
+	toMax  bool
+}
+
 // ExtendQuestion says that the session's time is up and asks whether to
-// extend it by this length.
-func (t *Terminal) ExtendQuestion(length time.Duration) {
-	t.extend = &length
+// extend it by this length. toMax: that stretch ends at the maximum.
+func (t *Terminal) ExtendQuestion(length time.Duration, toMax bool) {
+	t.extend = &extend{length, toMax}
 	t.drawExtend()
 }
 
 func (t *Terminal) drawExtend() {
 	t.line("")
 	t.line("The session's time is up.")
-	t.write("Extend it by " + Length(*t.extend) + "? y/n ")
+	if t.extend.toMax {
+		t.write("Extend it by " + Length(wholeSeconds(t.extend.length)) + ", up to the maximum? y/n ")
+		return
+	}
+	t.write("Extend it by " + Length(t.extend.length) + "? y/n ")
 }
 
-// ExtendAnswer shows how the question to extend was closed.
-func (t *Terminal) ExtendAnswer(answer session.Answer) {
+// ExtendAnswer shows how the question to extend was closed. With Yes,
+// length is the stretch the session got, and toMax tells that it ends at
+// the maximum.
+func (t *Terminal) ExtendAnswer(answer session.Answer, length time.Duration, toMax bool) {
 	if t.extend == nil {
 		return
 	}
-	length := *t.extend
 	t.extend = nil
 	switch answer {
 	case session.Yes:
 		t.write("y\n")
+		if toMax {
+			t.line("The session goes on for " + Length(wholeSeconds(length)) + ". That reaches the maximum: then it ends.")
+			return
+		}
 		t.line("The session goes on for " + Length(length) + ".")
+	case session.AtMax:
+		if t.midLine {
+			t.write("\n")
+		}
 	case session.No:
 		t.write("n\n")
 	case session.NoAnswer:
 		t.line("No answer in time.")
 	}
+}
+
+// wholeSeconds rounds a time up to whole seconds.
+func wholeSeconds(d time.Duration) time.Duration {
+	return (d + time.Second - 1) / time.Second * time.Second
 }
 
 // Length writes a time in words, such as "30 minutes".

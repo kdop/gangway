@@ -82,6 +82,13 @@ func newWorld(t *testing.T, change func(*settings.Settings)) *world {
 // Zero: no length was asked for.
 func newWorldOf(t *testing.T, change func(*settings.Settings), length time.Duration) *world {
 	t.Helper()
+	return newWorldMax(t, change, length, 0)
+}
+
+// newWorldMax is newWorldOf on a host whose admin file sets this
+// SESSION_MAX. Zero: none.
+func newWorldMax(t *testing.T, change func(*settings.Settings), length, max time.Duration) *world {
+	t.Helper()
 	s := settings.Default()
 	if change != nil {
 		change(&s)
@@ -95,7 +102,8 @@ func newWorldOf(t *testing.T, change func(*settings.Settings), length time.Durat
 	}
 	w := &world{now: time.Unix(1000, 0)}
 	w.l = New(Parts{Settings: s, Session: sess, Conn: w, Screen: &w.screen, Clock: w, Starter: w, Timers: timers{w},
-		SessionTimers: sessionTimers{w}, Length: length})
+		SessionTimers: sessionTimers{w}, Length: length,
+		Admin: settings.Admin{SessionMax: max, File: "/etc/gangway/settings"}})
 	return w
 }
 
@@ -758,6 +766,128 @@ func TestUNITLOOP25_TheLengthTheSessionStartsWith(t *testing.T) {
 	if !strings.Contains(w.screen.String(), "The session lasts 10 minutes.") {
 		t.Fatalf("the screen does not say how long the session lasts: %q", w.screen.String())
 	}
+}
+
+// PIE-07: a length above SESSION_MAX reaches the session cut, and the
+// terminal says so.
+func TestPIE07_TheCutLengthReachesTheSessionAndTheScreen(t *testing.T) {
+	w := newWorldMax(t, nil, 45*time.Minute, 20*time.Minute)
+	w.l.Begin()
+	if !strings.Contains(w.screen.String(), "45 minutes is above the maximum of 20 minutes, set in /etc/gangway/settings. It was cut to 20 minutes.\n") {
+		t.Fatalf("the terminal does not show that the length was cut: %q", w.screen.String())
+	}
+	w.pass(20*time.Minute - time.Second)
+	w.ask("a")
+	if w.prompts("a") != 1 {
+		t.Fatal("a request before the maximum got no prompt")
+	}
+	w.press("n")
+	w.l.Request(req("b"))
+	if w.prompts("b") != 0 || !w.sentHas("refused b time_up") {
+		t.Fatalf("a request at the maximum was not refused: %q", w.sent)
+	}
+	if w.l.State() != Over {
+		t.Fatalf("at the maximum the loop is %v, want Over", w.l.State())
+	}
+}
+
+// UNIT-LOOP-26. Requirement: SET-01, SET-04.
+func TestUNITLOOP26_ALengthAboveTheMaximumIsCutAndTheScreenSaysSo(t *testing.T) {
+	const cut = "50 minutes is above the maximum of 20 minutes, set in /etc/gangway/settings. It was cut to 20 minutes.\n"
+	for name, w := range map[string]*world{
+		"asked for at start": newWorldMax(t, nil, 50*time.Minute, 20*time.Minute),
+		"the user's file":    newWorldMax(t, func(s *settings.Settings) { s.SessionLength = 50 * time.Minute }, 0, 20*time.Minute),
+	} {
+		w.l.Begin()
+		if len(w.stimers) != 1 || w.stimers[0].d != 20*time.Minute {
+			t.Fatalf("%s: the session timers are %v, want one of 20 minutes", name, w.stimers)
+		}
+		if !strings.Contains(w.screen.String(), cut) {
+			t.Fatalf("%s: the screen does not say that the length was cut: %q", name, w.screen.String())
+		}
+		if !strings.Contains(w.screen.String(), "The session lasts 20 minutes. That is the maximum: then it ends.\n") {
+			t.Fatalf("%s: the screen does not say how long the session lasts: %q", name, w.screen.String())
+		}
+	}
+
+	w := newWorldMax(t, nil, 10*time.Minute, 20*time.Minute)
+	w.l.Begin()
+	if len(w.stimers) != 1 || w.stimers[0].d != 10*time.Minute {
+		t.Fatalf("with ten minutes asked for the session timers are %v", w.stimers)
+	}
+	if strings.Contains(w.screen.String(), "above the maximum") {
+		t.Fatalf("the screen says that a length below the maximum was cut: %q", w.screen.String())
+	}
+	if !strings.Contains(w.screen.String(), "The session lasts 10 minutes. Then you are asked whether to extend it, up to the maximum of 20 minutes.\n") {
+		t.Fatalf("the screen does not name the maximum: %q", w.screen.String())
+	}
+
+	w = live(t)
+	w.l.Begin()
+	if strings.Contains(w.screen.String(), "maximum") {
+		t.Fatalf("the screen names a maximum with none set: %q", w.screen.String())
+	}
+}
+
+// UNIT-LOOP-27. Requirement: LEN-05.
+func TestUNITLOOP27_AtTheMaximumTheSessionEndsWithNoQuestion(t *testing.T) {
+	w := newWorldMax(t, nil, 0, 40*time.Minute)
+	w.timeUp()
+	w.pass(time.Second)
+	if !strings.HasSuffix(w.screen.String(), "\nThe session's time is up.\nExtend it by 10 minutes, up to the maximum? y/n ") {
+		t.Fatalf("the question does not name what is left to the maximum: %q", w.screen.String())
+	}
+	w.press("y")
+	w.wantSent(t, "time_up", "extended 599")
+	if !strings.HasSuffix(w.screen.String(), "y\nThe session goes on for 599 seconds. That reaches the maximum: then it ends.\n") {
+		t.Fatalf("the screen does not say that the maximum comes next: %q", w.screen.String())
+	}
+	if got := w.stimers[len(w.stimers)-1].d; got != 599*time.Second {
+		t.Fatalf("the new stretch is %v, want what is left to the maximum", got)
+	}
+
+	w.pass(599 * time.Second)
+	w.sessionTimer()
+	if w.l.State() != Over || w.l.session.State() != session.Ended {
+		t.Fatalf("at the maximum the loop is %v and the session %s", w.l.State(), w.l.session.State())
+	}
+	if fmt.Sprint(w.closed) != "[time_up]" {
+		t.Fatalf("closed %q, want [time_up]", w.closed)
+	}
+	if strings.Count(w.screen.String(), "Extend it") != 1 {
+		t.Fatalf("a question was shown at the maximum: %q", w.screen.String())
+	}
+	if !strings.Contains(w.screen.String(), "The session has lasted 40 minutes, the maximum: the session ends.\n") {
+		t.Fatalf("the screen does not say why the session ends: %q", w.screen.String())
+	}
+	w.l.Request(req("late"))
+	w.press("y")
+	w.wantSent(t, "time_up", "extended 599", "time_up")
+}
+
+// UNIT-LOOP-28. Requirement: LEN-05, LEN-08.
+func TestUNITLOOP28_AtTheMaximumARunningCommandIsNotKilled(t *testing.T) {
+	w := newWorldMax(t, nil, 0, 20*time.Minute)
+	w.ask("a")
+	w.press("y")
+	w.ask("b")
+	w.pass(20 * time.Minute)
+	w.sessionTimer()
+	w.wantSent(t, "started a", "time_up", "refused b time_up")
+	if w.stops+w.kills != 0 || w.l.State() != Live {
+		t.Fatalf("at the maximum the command was stopped, or the session ended while it ran: %v", w.l.State())
+	}
+	w.l.Request(req("c"))
+	w.wantSent(t, "started a", "time_up", "refused b time_up", "refused c time_up")
+
+	w.l.Exited(0)
+	if w.l.State() != Over || fmt.Sprint(w.closed) != "[time_up]" {
+		t.Fatalf("after the command the loop is %v, closed %q", w.l.State(), w.closed)
+	}
+	if strings.Contains(w.screen.String(), "Extend it") {
+		t.Fatalf("a question was shown at the maximum: %q", w.screen.String())
+	}
+	w.wantStarts(t, "echo a")
 }
 
 func TestDesignAndGoTestsMatch(t *testing.T) {

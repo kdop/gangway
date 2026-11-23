@@ -1036,6 +1036,16 @@ When a value asked for is wider than an admin bound, the cli-tool must start wit
 | SET-04.2 | `SESSION_MAX` is 20 minutes. The user's settings ask for 60 | Start a session | The same |
 | SET-04.3 | `SESSION_MAX` is 20 minutes. The user asks for 10 | Start a session | The session starts with 10 minutes. No such message is shown |
 
+### SET-05
+
+The cli-tool must refuse to start a session when the admin file cannot be trusted or read: when `/etc/gangway/` or the file in it is not owned by root, can be written by anyone but root, cannot be read, or holds a mistake. It must not go on as if there were no bound. Step 4.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| SET-05.1 | The admin file holds a line that is not a setting of that file | Start a session | The cli-tool names the file and the line, and ends. No paste line is shown, and the controller is not asked for a session |
+| SET-05.2 | The admin file can be written by users other than its owner | Start a session | The cli-tool says that only its owner may be able to write the file, and ends. The same |
+| SET-05.3 | The admin file cannot be read by the user | Start a session | The cli-tool says that it cannot read the file, and ends. The same |
+
 ## LOG: the log
 
 ### LOG-01

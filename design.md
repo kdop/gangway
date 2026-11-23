@@ -448,6 +448,7 @@ The wording is in `ux.md`.
 - **The prompt shows the request as it is.** Each line of the command is shown on a line of its own, after `  > `. (`GATE-05`)
 - **The prompt is the last thing on screen.** A note that comes while a prompt waits is written, and the prompt is then shown again under it. The same holds for the question to extend.
 - **A time is written in words.** The question to extend names the length as `30 minutes`, `1 hour` or `90 seconds`. (`LEN-03`)
+- **The maximum is named.** When the stretch a `y` would give ends at the maximum, the question says so, and the line after the `y` says that the session then ends. Such a stretch is rounded up to whole seconds. (`LEN-05`)
 - **A refusal with no prompt shows the reason only.** The screen is never handed the refused text. (`GATE-10`, `GATE-16`)
 
 Known limit: a line of output longer than the window is folded by the terminal, and the folded part has no mark. The real prompt still comes last, under it.
@@ -496,10 +497,11 @@ Tests 01 to 10 are for the keys, 11 to 23 and 28 to 31 for the screen, with a bu
 | UNIT-TERMINAL-29 | `LEN-03`, `LEN-06` | The question to extend on screen | A refusal with no prompt, for the time being up. Then the question is forgotten, and a note comes | The note says a request was refused because the time is up, and the same question is again the last thing on screen. After it is forgotten, a note does not bring it back |
 | UNIT-TERMINAL-30 | `LEN-03` | | Write in words: 30 minutes, 1 minute, 2 hours, 1 hour, 90 seconds, 1 second, and a time and a half second | `30 minutes`, `1 minute`, `2 hours`, `1 hour`, `90 seconds`, `1 second`, and for the last one a form with its unit |
 | UNIT-TERMINAL-31 | `LEN-07`, `LEN-08` | A prompt on screen | The answer "the time is up". Then the end of a command that was killed because the time was up | A line that says the time is up and nothing ran. A line that says the command was killed and why, unlike the line of every other way to end |
+| UNIT-TERMINAL-32 | `LEN-05` | | The question to extend, for 5 minutes, up to the maximum. Then the answer yes with a stretch a little shorter. Again: a question for a second and a half, closed because the maximum came. Then a note | The question says "up to the maximum". After `y`, a line with the stretch in whole seconds, rounded up, that says the maximum is reached then. The second question names 2 seconds, is closed with a line break only, and the note does not bring it back |
 
 ## `session`
 
-The `session` makes the session key and the paste line, and runs the session's clock: when the time is up, the question to extend, and the end. The maximum, `SESSION_MAX`, is added here when it is built.
+The `session` makes the session key and the paste line, and runs the session's clock: when the time is up, the question to extend, the maximum, and the end.
 
 ### What it holds
 
@@ -508,6 +510,8 @@ The `session` makes the session key and the paste line, and runs the session's c
 - Its state.
 - The length the session started with: `SESSION_LENGTH`, or the length asked for at start.
 - The end time, and the number of the timer it waits for.
+- The maximum's time: the moment the clock started plus `SESSION_MAX`. With no `SESSION_MAX` there is none. It is set once, when the clock starts.
+- Whether the stretch that counts ends at the maximum.
 - The time the question to extend was shown.
 
 ### What it talks to
@@ -518,7 +522,7 @@ The `session` makes the session key and the paste line, and runs the session's c
 | The timers | Call back after a time. They are the session's own, apart from the ones of the `runner` |
 | `terminal` | Show the question to extend, and show the answer |
 | `connection` | Send `time_up` and `extended` |
-| The loop | Refuse what waits, when the time is up. End the session, when it is not extended |
+| The loop | Refuse what waits, when the time is up. End the session, when it is not extended, and when the maximum is reached |
 
 ### States
 
@@ -533,9 +537,10 @@ The `session` makes the session key and the paste line, and runs the session's c
 stateDiagram-v2
   [*] --> Live: the key is made
   Live --> TimeUp: the time is up
-  TimeUp --> Extending: no command runs
+  TimeUp --> Extending: no command runs, below the maximum
+  TimeUp --> Ended: no command runs, at the maximum
   Extending --> Live: y
-  Extending --> Ended: n, Ctrl+C, or no answer in time
+  Extending --> Ended: n, Ctrl+C, no answer in time, or the maximum comes
   Live --> Ended: end
   TimeUp --> Ended: end
   Ended --> Ended: end
@@ -557,7 +562,7 @@ There is no event that leads from `Ended` to another state. A new start of the c
 
 ### The table
 
-An empty "Does" means the event is dropped. "Time up" means: send `time_up`, and tell the loop to refuse what waits.
+An empty "Does" means the event is dropped. "Time up" means: send `time_up`, and tell the loop to refuse what waits. "The next stretch" is the length the session started with, or what is left to the maximum when that is less.
 
 | State | Event | Does | Next |
 |---|---|---|---|
@@ -566,15 +571,18 @@ An empty "Does" means the event is dropped. "Time up" means: send `time_up`, and
 | `Live` | `request`, at or after the end time | Time up. Says no | `TimeUp` |
 | `Live` | `idle`, `key`, `ctrl_c` | | `Live` |
 | `TimeUp` | `request` | Says no | `TimeUp` |
-| `TimeUp` | `idle` | Shows the question. Notes the time. Starts a timer of `EXTEND_WAIT` | `Extending` |
+| `TimeUp` | `idle`, the stretch that ran out ended at the maximum, or nothing is left to it | Tells the loop that the maximum is reached | `Ended` |
+| `TimeUp` | `idle`, below the maximum | Shows the question, with the next stretch. Notes the time. Starts a timer of `EXTEND_WAIT`, or of what is left to the maximum when that is less | `Extending` |
 | `TimeUp` | `timer`, `key`, `ctrl_c` | | `TimeUp` |
 | `Extending` | `request` | Says no | `Extending` |
 | `Extending` | any `key`, less than `PROMPT_MIN_SHOW` after the question was shown | | `Extending` |
-| `Extending` | `key` `y` | Shows the answer. Sets the end time to now plus the length the session started with. Starts a timer of that length. Sends `extended` with that length | `Live` |
+| `Extending` | `key` `y`, below the maximum | Sets the end time to now plus the next stretch. Starts a timer of that stretch. Shows the answer, and sends `extended`, both with that stretch | `Live` |
+| `Extending` | `key` `y`, nothing is left to the maximum | Closes the question. Tells the loop that the maximum is reached | `Ended` |
 | `Extending` | `key` `n` | Shows the answer. Tells the loop to end the session | `Ended` |
 | `Extending` | any other `key` | | `Extending` |
 | `Extending` | `ctrl_c` | Shows the answer, as for `n`. Tells the loop to end the session | `Ended` |
-| `Extending` | `timer`, the one it waits for | Shows that no answer came. Tells the loop to end the session | `Ended` |
+| `Extending` | `timer`, the one it waits for, of `EXTEND_WAIT` | Shows that no answer came. Tells the loop to end the session | `Ended` |
+| `Extending` | `timer`, the one it waits for, of what was left to the maximum | Closes the question. Tells the loop that the maximum is reached | `Ended` |
 | `Extending` | `idle` | | `Extending` |
 | any | `timer`, another number | | the same |
 | any | `end` | | `Ended` |
@@ -594,12 +602,15 @@ An empty "Does" means the event is dropped. "Time up" means: send `time_up`, and
 - **The same length again.** A `y` gives one more stretch of the length the session started with, counted from the moment of the `y`. (`LEN-03`)
 - **No answer is a no.** When `EXTEND_WAIT` passes with no answer, the session ends. (`LEN-04`)
 - **The question waits for a running command.** A command that runs when the time is up is left alone, and the question is shown when it is over. (`LEN-08`)
+- **The maximum caps the whole session.** A stretch that would pass the maximum ends at the maximum, the first one too. When such a stretch runs out there is no question: the session ends. A command that runs then is waited for, as at every time up. (`LEN-05`)
+- **The maximum never moves.** It is set in one place, when the clock starts, from the value `settings` read in the admin file. No key, no message and no later event changes it. (`LEN-05`, `LEN-09`)
+- **The question does not wait past the maximum.** When less than `EXTEND_WAIT` is left to the maximum, the question waits only that long, and then the session ends. (`LEN-05`)
 - **A late timer lets nothing in.** The end time is also checked each time a request comes, by the time of day. A timer that comes late, as on a machine that slept, cannot let a request through after the end time. (`LEN-06`)
 - **A timer that is no longer waited for does nothing.** Each timer carries a number, as in the `runner`. The timer of a stretch that was ended early, and the timer of a question that was answered, are dropped.
 
 ### Unit tests
 
-Tests 10 to 20 are for the clock: a session with a clock the test moves, fake timers, and a fake `terminal`, `connection` and loop that record what they were asked.
+Tests 10 to 25 are for the clock: a session with a clock the test moves, fake timers, and a fake `terminal`, `connection` and loop that record what they were asked.
 
 | Test | Requirement | Start | Action | Expect |
 |---|---|---|---|---|
@@ -623,6 +634,11 @@ Tests 10 to 20 are for the clock: a session with a clock the test moves, fake ti
 | UNIT-SESSION-18 | `LEN-06` | `Live`, the clock moved past the end time, and no timer has come | `request` | The request may not go on. `TimeUp`, `time_up` was sent, and the loop was told to refuse what waits. The late `timer` then does nothing more |
 | UNIT-SESSION-19 | `SES-03`, `LEN-04` | `Live`, `TimeUp` and `Extending`, in turn | `end`. Then every event | `Ended`. Nothing more was shown, sent or started, and a request may not go on |
 | UNIT-SESSION-20 | `LEN-09` | The code of the `session` | Search it for the places that set the end time | There is one, and it is reached from two places only: the start of the clock, and `key` `y` in `Extending` |
+| UNIT-SESSION-21 | `LEN-05` | A session of 10 minutes with a maximum of 25 minutes | Let each stretch run out and press `y`, twice. Then let the last stretch run out | The second question names what is left to the maximum, and says so. The third stretch is that long, `extended` carries it, and the end time is the maximum. Then the loop was told that the maximum is reached. No third question |
+| UNIT-SESSION-22 | `LEN-05`, `SET-01` | A maximum of 20 minutes. A session with a length of 20 minutes, of 30 minutes and of one hour | A `request` just before the maximum. The `timer`, then `idle` | One timer of 20 minutes was started. The request may go on. Then `time_up` was sent, the loop was told that the maximum is reached, and no question was shown |
+| UNIT-SESSION-23 | `LEN-05`, `LEN-08` | A session whose length is its maximum. A command runs | The `timer`. `key` `y` and `ctrl_c`. Then `idle` | `TimeUp`, and the loop was not told that the maximum is reached. The keys do nothing. After `idle` it was told, and no question was shown |
+| UNIT-SESSION-24 | `LEN-05` | The question is shown with 30 seconds left to the maximum. Again with more left than `EXTEND_WAIT` | The `timer` of the question. Again: `key` `y` when the maximum has come and the timer has not. Again: the `timer` | The question waits 30 seconds, then the loop was told that the maximum is reached, not that no answer came. The `y` extends nothing and the same was told. With more left, the question waits `EXTEND_WAIT` and no answer is a no |
+| UNIT-SESSION-25 | `LEN-05`, `LEN-09`, `SET-03` | The code of the `session`. A session with a maximum, extended twice. A session with no maximum, extended fifty times | Search the code for the places that set the maximum. Compare the maximum before and after | It is set in one place, at the start of the clock, and it has not moved. With no maximum every stretch is the full length and no maximum is named |
 
 ## `connection`
 
@@ -730,8 +746,10 @@ Each test runs the real `connection` against a controller inside the test: a sma
 
 1. The starting values, fixed in the code. They are the ones in the "Settings" table of `requirements.md`.
 2. The user's file, `~/.config/gangway/settings`, if it is there. A value in it takes the place of the starting value. If `XDG_CONFIG_HOME` is set, the file is `gangway/settings` under that folder.
+3. The start option `--length`, which `start` reads. It takes the place of `SESSION_LENGTH` for one session.
+4. The admin file, `/etc/gangway/settings`, if it is there. It holds bounds, not values: what the layers above ask for is cut to them.
 
-The admin file in `/etc/gangway/` is not built yet. One start option is: `--length`, which `start` reads. It takes the place of `SESSION_LENGTH` for one session.
+The folders that may be granted are not built yet, so the admin file holds one bound: `SESSION_MAX`.
 
 ### The file
 
@@ -743,6 +761,18 @@ MAX_WAITING_REQUESTS = 10
 
 - One setting on a line: the name, `=`, the value. Spaces around them do not count. Empty lines are skipped.
 - A time is a number with a unit: `500ms`, `90s`, `2m`.
+
+### The admin file
+
+```
+# The longest a session may last, extensions included.
+SESSION_MAX = 2h
+```
+
+- It is written like the user's file. Only `SESSION_MAX` may be in it: a time, more than zero.
+- With no `/etc/gangway/` folder, or no file in it, there is no bound. (`SET-03`)
+- The folder and the file must be owned by root, and nobody but root may be able to write them. The folder must be a real folder, not a link, and the file must be a plain file.
+- A length above `SESSION_MAX` is cut to it, and `settings` tells that it was cut, so the screen can say so. A length at or below it is left alone. (`SET-01`, `SET-04`)
 
 ### The settings of the MVP
 
@@ -764,7 +794,11 @@ MAX_WAITING_REQUESTS = 10
 
 - **A file with a mistake stops the start.** An unknown name, a name set twice, a line with no `=`, or a value that does not fit is an error that names the line. The cli-tool does not start on a guess: a mistyped name would otherwise leave a limit at a value the user did not mean.
 - **All or nothing.** When the file has a mistake, no value from it is used.
-- **The file is only read.** `settings` never writes it and never makes it.
+- **The file is only read.** `settings` never writes it and never makes it. The same holds for the admin file and its folder: the code that reads them opens one file, for reading, and uses nothing that can write. (`SET-02`)
+- **The place of the admin file is fixed in the program.** No setting, no start option and nothing in the surroundings of the program moves it or switches it off. An approved command runs as the user and could set any of those. (`SET-01`)
+- **The user's file cannot hold `SESSION_MAX`.** It is an error there, with the line, and the error names the admin file. (`SET-01`)
+- **An admin file that cannot be trusted or read stops the start.** A wrong owner, a folder or file that others can write, a file that cannot be read, and a mistake in the file are each an error. The cli-tool does not go on as if there were no bound: the file may hold one. (`SET-05`)
+- **The acceptance tests use a build of their own.** They cannot write `/etc/gangway/` and do not run as root. A program built with the tag `gangwaytest` takes the folder from `GANGWAY_TEST_ADMIN_FOLDER` and takes the user who runs it as the owner. No other build holds that code. Such a build must never be put on a host.
 
 ### Unit tests
 
@@ -784,6 +818,14 @@ MAX_WAITING_REQUESTS = 10
 | UNIT-SETTINGS-12 | `HOST-06` | A file where `CONTROLLER_TAILSCALE_NAME` is, one by one: empty, with a capital, with a space, an address, a name with a dot, a name that starts or ends with `-` | Read | An error each time |
 | UNIT-SETTINGS-13 | `HOST-08` | A file that sets `CONTROLLER_ADDRESS` | Read | An error that names the line and the name: the cli-tool has no such setting any more |
 | UNIT-SETTINGS-14 | `LEN-01`, `LEN-04` | A file where `SESSION_LENGTH` is `10m` and `EXTEND_WAIT` is `20s`. Then, for each of the two: `0s`, a time below zero, a number with no unit | Read | Ten minutes and twenty seconds. Then an error each time |
+| UNIT-SETTINGS-15 | `SET-01`, `LEN-05` | An admin folder whose file has a note, an empty line and `SESSION_MAX = 20m` with spaces around it | Read | A maximum of 20 minutes, and the path of the file |
+| UNIT-SETTINGS-16 | `SET-03` | No admin folder. A folder with no file. A file with a note only | Read. Ask for a length of 100 hours | No error and no maximum each time. The length is not cut |
+| UNIT-SETTINGS-17 | `SET-05` | In turn, an admin file with: `SESSION_LENGTH`, a setting of the user's file after a good line, an unknown name, a maximum of zero, below zero, with no unit, with no value, a line with no `=`, `SESSION_MAX` twice | Read | An error each time that names the file and the line. No maximum from the file is used |
+| UNIT-SETTINGS-18 | `SET-05` | An admin folder and file owned by the user who runs the test | Read, with another user as the owner that is asked for, and with root. Check the file alone the same way | An error each time that names the path and says who must own it. With the user itself as owner, no error |
+| UNIT-SETTINGS-19 | `SET-05` | In turn: the folder writable by its group, by others, by both. The file the same. The file readable by all, by its owner only, and writable by nobody. The file with no rights. A folder in the place of the file. A link in the place of the folder | Read | An error for the first six, that names the path. No error for the next three. An error for a file that cannot be read, for a file that is not a plain file, and for a folder that is a link |
+| UNIT-SETTINGS-20 | `SET-01`, `SET-04` | A maximum of 20 minutes | Ask for one hour, for a nanosecond above 20 minutes, for 20 minutes, for 10 minutes | 20 minutes and "cut" for the first two. The length asked for and "not cut" for the others |
+| UNIT-SETTINGS-21 | `SET-01` | A user's file that sets `SESSION_MAX` | Read | An error that names the line, the name and the admin file |
+| UNIT-SETTINGS-22 | `SET-01`, `SET-02` | `GANGWAY_TEST_ADMIN_FOLDER` is set. The code of `settings` | Ask where the admin folder is. Search the code that reads it | `/etc/gangway`, owned by root, whatever the surroundings say. The file that fixes the place uses no package, and the test build's file is in the test build only. The reading code does not read the surroundings, opens one file for reading, and uses nothing that can write, make, remove, rename or change the rights of a file |
 
 ## `loop`
 
@@ -793,7 +835,8 @@ The `loop` ties the pieces of the cli-tool together. Every event is handed to it
 
 - The pieces: `terminal`, `line`, `gate`, `runner`, the `session` and the `connection`.
 - Its state, and why the session ended.
-- The length the session starts with: the one asked for at start, or `SESSION_LENGTH`. It starts the `session`'s clock with it.
+- The length the session starts with: the one asked for at start, or `SESSION_LENGTH`. A length above `SESSION_MAX` is cut to it. It starts the `session`'s clock with the length and the maximum.
+- The length before it was cut, and the admin file's path, for the screen.
 
 ### States
 
@@ -835,9 +878,9 @@ The `session` decides it, and the loop does this, in order:
 2. The `gate` is told. A prompt that waits is refused with `time_up`, and nothing has run.
 3. The `runner` is told. A command that runs is not killed. It gets no more time.
 4. When a command still runs, the screen says that the time is up and that the command gets no more time.
-5. When no command runs, now or later, the `session` is told, and it shows the question to extend.
+5. When no command runs, now or later, the `session` is told. It shows the question to extend, or at the maximum it tells the loop to end the session.
 
-From here on a new request is refused with `time_up`, until the user extends. When the user does not, the `session` tells the loop, and the session ends with the reason `time_up`.
+From here on a new request is refused with `time_up`, until the user extends. When the user does not, or when the maximum is reached, the `session` tells the loop, and the session ends with the reason `time_up`. The screen says which of the two it was.
 
 ### Ending the session
 
@@ -888,6 +931,9 @@ The pieces are the real ones. The test holds the edges: the keyboard, the screen
 | UNIT-LOOP-23 | `LEN-06` | Live. The clock is moved past the end time, and no session timer comes | A request | It is refused with `time_up`, and the question to extend is shown |
 | UNIT-LOOP-24 | `LEN-03` | A session that was extended once | The session timers of before the extension. Then the new one | The old ones do nothing. The new one: `time_up` is sent again, and the question is shown again |
 | UNIT-LOOP-25 | `LEN-01`, `LEN-02` | A loop with no length asked for. Again with a length of ten minutes | Begin | The session timer was started with `SESSION_LENGTH`, and with ten minutes. The screen says how long the session lasts |
+| UNIT-LOOP-26 | `SET-01`, `SET-04` | A maximum of 20 minutes. A loop with 50 minutes asked for at start. Again with 50 minutes as `SESSION_LENGTH`. Again with 10 minutes asked for. Again with no maximum | Begin | The first two: the session timer was started with 20 minutes, and the screen says that 50 minutes is above the maximum, names the admin file, and says it was cut to 20. With 10 minutes: a timer of 10 minutes, no such line, and the screen names the maximum. With no maximum the screen names none |
+| UNIT-LOOP-27 | `LEN-05` | A maximum of 40 minutes, a length of 30 | The session timer. `y`. The session timer again. Then a request and `y` | The question names the 10 minutes left and the maximum. After `y`, `extended` carries what is left. At the maximum: `Over`, closed with `time_up`, no second question, and the screen says the session has lasted its maximum. Nothing more is sent |
+| UNIT-LOOP-28 | `LEN-05`, `LEN-08` | A session whose length is its maximum. A command runs and a request waits behind it | The session timer. A new request. Then the command ends | The request that waits and the new one are refused with `time_up`. The command is not stopped, and the session is not over while it runs. When it ends: `Over`, closed with `time_up`, and no question was shown |
 
 ## `start`
 
@@ -901,11 +947,11 @@ A session, in order:
 
 1. Refuse to go on as root. Say why. (`HOST-01`)
 2. Refuse to go on when the input or the output is not a terminal. Say why. (`HOST-02`)
-3. Read the settings. A mistake in the file stops here, with the line.
+3. Read the settings: the user's file, then the admin file. A mistake in either stops here, with the line. So does an admin file that cannot be trusted or read. (`SET-05`)
 4. Pick the road: Tailscale with the auth key of `login`, or localhost. With no auth key, say to run `login` and stop. (`HOST-06`)
 5. `network` joins. On failure, say so and stop.
 6. Make the session and its key.
-7. Connect to the controller over that road, and tell it the session's length. On failure, say so and stop.
+7. Connect to the controller over that road, and tell it the session's length, cut to the maximum if there is one. On failure, say so and stop.
 8. Give the API address from `session_ok` to `session`. A bad one stops here, and no paste line is shown. (`KEY-10`)
 9. Set the terminal to raw mode.
 10. Run the loop until it is `Over`.

@@ -337,9 +337,9 @@ func TestUNITTERMINAL28_TheQuestionToExtend(t *testing.T) {
 		session.NoAnswer: "\nNo answer in time.\n",
 	} {
 		w := newWorld()
-		w.t.ExtendQuestion(30 * time.Minute)
+		w.t.ExtendQuestion(30*time.Minute, false)
 		w.wantScreen(t, extendQuestion)
-		w.t.ExtendAnswer(answer)
+		w.t.ExtendAnswer(answer, 30*time.Minute, false)
 		w.wantScreen(t, extendQuestion+want)
 	}
 }
@@ -347,7 +347,7 @@ func TestUNITTERMINAL28_TheQuestionToExtend(t *testing.T) {
 // UNIT-TERMINAL-29. Requirement: LEN-03, LEN-06.
 func TestUNITTERMINAL29_TheQuestionToExtendStaysLast(t *testing.T) {
 	w := newWorld()
-	w.t.ExtendQuestion(30 * time.Minute)
+	w.t.ExtendQuestion(30*time.Minute, false)
 	w.t.Refused(messages.ReasonTimeUp)
 	got := w.screen.String()
 	if !strings.HasSuffix(got, extendQuestion) || strings.Count(got, extendQuestion) != 2 {
@@ -362,7 +362,7 @@ func TestUNITTERMINAL29_TheQuestionToExtendStaysLast(t *testing.T) {
 	if strings.Contains(w.screen.String(), "Extend it") {
 		t.Fatal("a forgotten question was shown again")
 	}
-	w.t.ExtendAnswer(session.Yes)
+	w.t.ExtendAnswer(session.Yes, 30*time.Minute, false)
 	if strings.Contains(w.screen.String(), "goes on") {
 		t.Fatal("an answer was shown for a question that is not on screen")
 	}
@@ -385,6 +385,28 @@ func TestUNITTERMINAL30_ATimeInWords(t *testing.T) {
 	}
 	if got := Length(1500 * time.Millisecond); got != "1.5s" {
 		t.Fatalf("a time and a half second is written %q, want a form with its unit", got)
+	}
+}
+
+// UNIT-TERMINAL-32. Requirement: LEN-05.
+func TestUNITTERMINAL32_TheQuestionToExtendNamesTheMaximum(t *testing.T) {
+	const question = "\nThe session's time is up.\nExtend it by 5 minutes, up to the maximum? y/n "
+	w := newWorld()
+	w.t.ExtendQuestion(5*time.Minute, true)
+	w.wantScreen(t, question)
+	w.t.ExtendAnswer(session.Yes, 4*time.Minute+58*time.Second+200*time.Millisecond, true)
+	w.wantScreen(t, question+"y\nThe session goes on for 299 seconds. That reaches the maximum: then it ends.\n")
+
+	w = newWorld()
+	w.t.ExtendQuestion(1500*time.Millisecond, true)
+	w.wantScreen(t, "\nThe session's time is up.\nExtend it by 2 seconds, up to the maximum? y/n ")
+	w.t.ExtendAnswer(session.AtMax, 0, false)
+	if got := w.screen.String(); !strings.HasSuffix(got, "y/n \n") {
+		t.Fatalf("the question was not closed with a line break only: %q", got)
+	}
+	w.t.Note("The session ends.")
+	if strings.Count(w.screen.String(), "Extend it") != 1 {
+		t.Fatal("a closed question was shown again")
 	}
 }
 

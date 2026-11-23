@@ -1,5 +1,6 @@
 // Package session makes the session key and the paste line, and runs the
-// session's clock: the time is up, the question to extend, the end.
+// session's clock: the time is up, the question to extend, the maximum,
+// the end.
 // Nothing here is written to disk. The design is in design.md.
 package session
 
@@ -45,6 +46,7 @@ const (
 	Yes      Answer = iota // the user pressed y
 	No                     // the user pressed n or Ctrl+C
 	NoAnswer               // nobody answered within EXTEND_WAIT
+	AtMax                  // the maximum was reached while the question was shown
 )
 
 // Clock tells the time.
@@ -59,9 +61,12 @@ type Timers interface {
 
 // Screen is the terminal, as far as the session needs it.
 type Screen interface {
-	// ExtendQuestion asks whether to extend by this length.
-	ExtendQuestion(length time.Duration)
-	ExtendAnswer(Answer)
+	// ExtendQuestion asks whether to extend by this length. toMax: that
+	// stretch ends at the maximum.
+	ExtendQuestion(length time.Duration, toMax bool)
+	// ExtendAnswer closes the question. With Yes, length is the stretch
+	// the session got, and toMax tells that it ends at the maximum.
+	ExtendAnswer(answer Answer, length time.Duration, toMax bool)
 }
 
 // Sender tells the controller about the session's time. The controller
@@ -78,6 +83,8 @@ type Loop interface {
 	TimeUp()
 	// NotExtended ends the session.
 	NotExtended()
+	// MaxReached ends the session: it has lasted SESSION_MAX.
+	MaxReached()
 }
 
 // Edges are what the clock is handed from outside.
@@ -89,6 +96,7 @@ type Edges struct {
 	Loop   Loop
 
 	Length     time.Duration // the length this session starts with
+	Max        time.Duration // SESSION_MAX. Zero: no maximum
 	ExtendWait time.Duration // EXTEND_WAIT
 	MinShow    time.Duration // PROMPT_MIN_SHOW
 }
@@ -106,10 +114,14 @@ type Session struct {
 
 	state   State
 	edges   Edges
-	clocked bool      // StartClock was called
-	end     time.Time // when the time is up
-	timer   int       // the number of the timer that counts
-	shownAt time.Time // when the question was shown
+	clocked bool          // StartClock was called
+	end     time.Time     // when the time is up
+	maxEnd  time.Time     // when SESSION_MAX is reached. Zero: no maximum
+	stretch time.Duration // the length of the stretch that counts
+	toMax   bool          // the stretch that counts ends at the maximum
+	maxWait bool          // the question's timer ends at the maximum, before EXTEND_WAIT
+	timer   int           // the number of the timer that counts
+	shownAt time.Time     // when the question was shown
 }
 
 // New makes a live session with a fresh key from the system's random
@@ -173,13 +185,36 @@ func (s *Session) StartClock(e Edges) {
 	}
 	s.clocked = true
 	s.edges = e
+	if e.Max > 0 {
+		// The only place the maximum is set. Nothing moves it later.
+		s.maxEnd = s.today().Add(e.Max)
+	}
 	s.count()
 }
 
-// count starts a new stretch of the session's length.
+// count starts a new stretch of the session's length. A stretch that
+// would pass the maximum ends at the maximum.
 func (s *Session) count() {
-	s.end = s.today().Add(s.edges.Length)
-	s.startTimer(s.edges.Length)
+	now := s.today()
+	s.stretch, s.toMax = s.next(now)
+	s.end = now.Add(s.stretch)
+	s.startTimer(s.stretch)
+}
+
+// next gives the stretch a session would get at this moment, and whether
+// it ends at the maximum.
+func (s *Session) next(now time.Time) (time.Duration, bool) {
+	if s.maxEnd.IsZero() {
+		return s.edges.Length, false
+	}
+	left := s.maxEnd.Sub(now)
+	if left < 0 {
+		left = 0
+	}
+	if left <= s.edges.Length {
+		return left, true
+	}
+	return s.edges.Length, false
 }
 
 // today gives the time of day. Go's own way of measuring a stretch of
@@ -212,7 +247,12 @@ func (s *Session) Timer(number int) {
 	case Live:
 		s.timeUp()
 	case Extending:
-		s.edges.Screen.ExtendAnswer(NoAnswer)
+		if s.maxWait {
+			s.edges.Screen.ExtendAnswer(AtMax, 0, false)
+			s.edges.Loop.MaxReached()
+			return
+		}
+		s.edges.Screen.ExtendAnswer(NoAnswer, 0, false)
 		s.edges.Loop.NotExtended()
 	}
 }
@@ -225,15 +265,27 @@ func (s *Session) timeUp() {
 }
 
 // Idle tells the session that no command runs. The question to extend is
-// shown only then.
+// shown only then. At the maximum there is no question: the session ends.
 func (s *Session) Idle() {
 	if s.state != TimeUp {
 		return
 	}
+	now := s.today()
+	length, toMax := s.next(now)
+	if s.toMax || length <= 0 {
+		s.edges.Loop.MaxReached()
+		return
+	}
 	s.state = Extending
-	s.edges.Screen.ExtendQuestion(s.edges.Length)
+	s.edges.Screen.ExtendQuestion(length, toMax)
 	s.shownAt = s.edges.Clock.Now()
-	s.startTimer(s.edges.ExtendWait)
+	// The question does not wait past the maximum.
+	wait := s.edges.ExtendWait
+	s.maxWait = toMax && length < wait
+	if s.maxWait {
+		wait = length
+	}
+	s.startTimer(wait)
 }
 
 // Press is one key press, as the bytes the key sent. Only the question to
@@ -250,11 +302,16 @@ func (s *Session) Press(key []byte) {
 	}
 	switch key[0] {
 	case 'y':
+		if length, _ := s.next(s.today()); length <= 0 {
+			s.edges.Screen.ExtendAnswer(AtMax, 0, false)
+			s.edges.Loop.MaxReached()
+			return
+		}
 		// The only place a session gets more time.
-		s.edges.Screen.ExtendAnswer(Yes)
 		s.state = Live
 		s.count()
-		s.edges.Sender.Extended(Seconds(s.edges.Length))
+		s.edges.Screen.ExtendAnswer(Yes, s.stretch, s.toMax)
+		s.edges.Sender.Extended(Seconds(s.stretch))
 	case 'n':
 		s.no()
 	}
@@ -269,7 +326,7 @@ func (s *Session) CtrlC() {
 }
 
 func (s *Session) no() {
-	s.edges.Screen.ExtendAnswer(No)
+	s.edges.Screen.ExtendAnswer(No, 0, false)
 	s.edges.Loop.NotExtended()
 }
 
