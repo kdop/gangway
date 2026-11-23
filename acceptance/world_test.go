@@ -110,11 +110,21 @@ type world struct {
 	ctlOut      *screen // what the controller printed
 	cliHome     string  // the home folder of the cli-tool. Empty: home
 	cliEnv      []string
+
+	length  string    // the length asked for at the start of the cli-tool. Empty: none
+	started time.Time // when the test saw the paste line: just after the session began
 }
 
 // newWorld starts both programs and waits for the paste line. Each of
 // settings is one line of the cli-tool's settings file.
 func newWorld(t *testing.T, settings ...string) *world {
+	t.Helper()
+	return newWorldOf(t, "", settings...)
+}
+
+// newWorldOf is newWorld with a session length asked for at start, such as
+// "3s". Empty: none is asked for.
+func newWorldOf(t *testing.T, length string, settings ...string) *world {
 	t.Helper()
 	beside(t)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -124,7 +134,7 @@ func newWorld(t *testing.T, settings ...string) *world {
 	listen := ln.Addr().String()
 	ln.Close()
 
-	w := &world{t: t, home: t.TempDir(), listen: listen, address: "http://" + listen, ctl: new(*exec.Cmd)}
+	w := &world{t: t, home: t.TempDir(), listen: listen, address: "http://" + listen, ctl: new(*exec.Cmd), length: length}
 	w.startController()
 	t.Cleanup(w.stopController)
 	w.startCli(settings)
@@ -216,6 +226,9 @@ func (w *world) startCli(settings []string) {
 	args := w.cliArgs
 	if args == nil {
 		args = []string{"--local", w.address}
+		if w.length != "" {
+			args = append(args, "--length", w.length)
+		}
 	}
 	if w.cliKey != "" {
 		if err := os.WriteFile(filepath.Join(config, "gangway", "tailscale-auth-key"), []byte(w.cliKey+"\n"), 0o600); err != nil {
@@ -257,6 +270,7 @@ func (w *world) startCli(settings []string) {
 		for _, l := range strings.Split(w.screen.text(), "\n") {
 			if f := strings.Fields(l); len(f) == 3 && f[0] == "/gangway" {
 				w.key = f[2]
+				w.started = time.Now()
 				return true
 			}
 		}

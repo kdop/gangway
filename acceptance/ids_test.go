@@ -18,6 +18,14 @@ var stepsBuilt = map[string]bool{"2": true}
 // stepsBuilt and its requirements come off this list.
 var builtOfAStepInWork = map[string]bool{
 	"KEY-05": true, // step 4
+	"LEN-01": true, // step 4
+	"LEN-02": true, // step 4
+	"LEN-03": true, // step 4
+	"LEN-04": true, // step 4
+	"LEN-06": true, // step 4
+	"LEN-07": true, // step 4
+	"LEN-08": true, // step 6, built with the session's clock of step 4
+	"LEN-09": true, // step 4
 }
 
 // noGoTest holds the tests of a built requirement that have no Go test,

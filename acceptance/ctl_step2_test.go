@@ -102,7 +102,7 @@ func hostDoorAnswer(client *http.Client, address string) (status int, taken bool
 	}
 	defer conn.CloseNow()
 	limits := messages.Limits{CommandSeconds: 60, AnswerSeconds: 60, MaxWaiting: 20}
-	first, _ := json.Marshal(messages.Message{Type: messages.TypeSessionStart, KeyHash: messages.KeyHash("gw_a-key-of-the-test"), Host: "fake", Limits: &limits})
+	first, _ := json.Marshal(messages.Message{Type: messages.TypeSessionStart, KeyHash: messages.KeyHash("gw_a-key-of-the-test"), Host: "fake", Limits: &limits, LengthSeconds: 1800})
 	if conn.Write(ctx, websocket.MessageText, first) != nil {
 		return status, false
 	}
