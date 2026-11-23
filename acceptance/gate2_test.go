@@ -13,7 +13,7 @@ const refusedCharacter = "Refused a request with no prompt: it holds a character
 // live fails the test unless the session still takes calls.
 func (w *world) live() {
 	w.t.Helper()
-	got, err := w.call(context.Background(), "POST", "/v1/hello", "")
+	got, err := w.call(context.Background(), "GET", "/v1/session", "")
 	if err != nil || got.Status != 200 {
 		w.t.Fatalf("the session is not live: %d %s %v", got.Status, got.Body, err)
 	}
