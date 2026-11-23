@@ -1,6 +1,8 @@
 package sessions
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"testing"
@@ -144,6 +146,112 @@ func TestUNITSESSIONS08_TheKeyIsNotHeld(t *testing.T) {
 	secret := strings.TrimPrefix(keyK, messages.KeyPrefix)
 	if all := fmt.Sprintf("%+v", *sess); strings.Contains(all, secret) {
 		t.Fatalf("the session holds the key: %s", all)
+	}
+}
+
+// UNIT-SESSIONS-09. Requirement: KEY-05.
+func TestUNITSESSIONS09_TheFirstClaimGetsTheToken(t *testing.T) {
+	_, a := withK(t)
+	token, ok := a.Claim()
+	raw, err := hex.DecodeString(strings.TrimPrefix(token, messages.CallerPrefix))
+	if !ok || !strings.HasPrefix(token, messages.CallerPrefix) || err != nil || len(raw)*8 != 256 {
+		t.Fatalf("the first claim gave %q, %v: want the prefix and 256 bits in hex", token, ok)
+	}
+	if again, ok := a.Claim(); ok || again != "" {
+		t.Fatalf("a second claim gave %q, %v: want nothing", again, ok)
+	}
+	if !a.Owns(token) {
+		t.Fatal("the second claim changed the owner")
+	}
+	b := session(keyK)
+	if other, _ := b.Claim(); other == token {
+		t.Fatal("two sessions got the same token")
+	}
+}
+
+// UNIT-SESSIONS-10. Requirement: KEY-05.
+func TestUNITSESSIONS10_OwnsOnlyWithTheWholeToken(t *testing.T) {
+	_, a := withK(t)
+	for _, guess := range []string{"", messages.CallerPrefix, messages.CallerPrefix + strings.Repeat("0", 64)} {
+		if a.Owns(guess) {
+			t.Fatalf("before a claim, %q owns the session", guess)
+		}
+	}
+	token, _ := a.Claim()
+	b := session(keyK)
+	other, _ := b.Claim()
+	if !a.Owns(token) {
+		t.Fatal("the token does not own its session")
+	}
+	sum := sha256.Sum256([]byte(token))
+	for _, guess := range []string{
+		"",
+		token[:len(token)-1],
+		token + "0",
+		strings.TrimPrefix(token, messages.CallerPrefix),
+		strings.ToUpper(token),
+		other,
+		keyK,
+		hex.EncodeToString(sum[:]),
+	} {
+		if a.Owns(guess) {
+			t.Fatalf("%q owns the session", guess)
+		}
+	}
+}
+
+// UNIT-SESSIONS-11. Requirement: KEY-05.
+func TestUNITSESSIONS11_ManyClaimsAtOnceGiveOneToken(t *testing.T) {
+	_, a := withK(t)
+	const callers = 100
+	got := make(chan string, callers)
+	start := make(chan struct{})
+	for i := 0; i < callers; i++ {
+		go func() {
+			<-start
+			token, _ := a.Claim()
+			got <- token
+		}()
+	}
+	close(start)
+	var tokens []string
+	for i := 0; i < callers; i++ {
+		if token := <-got; token != "" {
+			tokens = append(tokens, token)
+		}
+	}
+	if len(tokens) != 1 || !a.Owns(tokens[0]) {
+		t.Fatalf("%d callers got a token, want exactly one, and it must own the session", len(tokens))
+	}
+}
+
+// UNIT-SESSIONS-12. Requirement: KEY-05, SES-06.
+func TestUNITSESSIONS12_TheTokenIsNotHeld(t *testing.T) {
+	_, sess := withK(t)
+	token, _ := sess.Claim()
+	secret := strings.TrimPrefix(token, messages.CallerPrefix)
+	raw, _ := hex.DecodeString(secret)
+	// Every field as text, and the one field of bytes as it is and in hex.
+	all := fmt.Sprintf("%+v %s %x", *sess, sess.callerHash, sess.callerHash)
+	if strings.Contains(all, secret) || strings.Contains(all, string(raw)) {
+		t.Fatalf("the session holds the caller token: %s", all)
+	}
+}
+
+// UNIT-SESSIONS-13. Requirement: KEY-05, KEY-03.
+func TestUNITSESSIONS13_TheTokenDiesWithTheSession(t *testing.T) {
+	s, a := withK(t)
+	token, _ := a.Claim()
+	s.Remove(a)
+	b := session(keyK)
+	if err := s.Add(b); err != nil {
+		t.Fatal(err)
+	}
+	if s.Find(keyK).Owns(token) {
+		t.Fatal("the token of an ended session owns the new session with the same key hash")
+	}
+	if fresh, ok := s.Find(keyK).Claim(); !ok || fresh == token {
+		t.Fatal("the new session has no claim of its own to give")
 	}
 }
 

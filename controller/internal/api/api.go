@@ -21,11 +21,11 @@ const maxBody = messages.MaxMessageBytes / 2
 func New(store *sessions.Store) http.Handler {
 	a := &api{store: store}
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /v1/hello", a.auth(a.session))
-	mux.HandleFunc("GET /v1/session", a.auth(a.session))
-	mux.HandleFunc("POST /v1/requests", a.auth(a.requests))
-	mux.HandleFunc("POST /v1/requests/{id}/wait", a.auth(a.wait))
-	mux.HandleFunc("POST /v1/requests/{id}/stop", a.auth(a.stop))
+	mux.HandleFunc("POST /v1/hello", a.key(a.hello))
+	mux.HandleFunc("GET /v1/session", a.owner(a.session))
+	mux.HandleFunc("POST /v1/requests", a.owner(a.requests))
+	mux.HandleFunc("POST /v1/requests/{id}/wait", a.owner(a.wait))
+	mux.HandleFunc("POST /v1/requests/{id}/stop", a.owner(a.stop))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found")
 	})
@@ -38,9 +38,9 @@ type api struct {
 
 type handler func(http.ResponseWriter, *http.Request, *sessions.Session)
 
-// auth lets a call in only with the key of a live session. Every refusal
+// key lets a call in only with the key of a live session. Every refusal
 // looks the same, so a guesser learns nothing from it.
-func (a *api) auth(next handler) http.HandlerFunc {
+func (a *api) key(next handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		key, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		var sess *sessions.Session
@@ -48,11 +48,28 @@ func (a *api) auth(next handler) http.HandlerFunc {
 			sess = a.store.Find(key)
 		}
 		if sess == nil {
-			writeError(w, http.StatusUnauthorized, "unauthorized")
+			unauthorized(w)
 			return
 		}
 		next(w, r, sess)
 	}
+}
+
+// owner lets a call in only with the key of a live session and the caller
+// token that the first hello with that key got. The refusal is the same
+// as for a wrong key.
+func (a *api) owner(next handler) http.HandlerFunc {
+	return a.key(func(w http.ResponseWriter, r *http.Request, sess *sessions.Session) {
+		if !sess.Owns(r.Header.Get(messages.CallerHeader)) {
+			unauthorized(w)
+			return
+		}
+		next(w, r, sess)
+	})
+}
+
+func unauthorized(w http.ResponseWriter) {
+	writeError(w, http.StatusUnauthorized, "unauthorized")
 }
 
 type limitsBody struct {
@@ -72,7 +89,25 @@ type sessionBody struct {
 	Requests requestsBody `json:"requests"`
 }
 
+// hello makes the caller the owner of the key and hands over the caller
+// token. Only the first hello with a key gets one.
+func (a *api) hello(w http.ResponseWriter, r *http.Request, sess *sessions.Session) {
+	token, ok := sess.Claim()
+	if !ok {
+		unauthorized(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		CallerToken string `json:"caller_token"`
+		sessionBody
+	}{token, stateOf(sess)})
+}
+
 func (a *api) session(w http.ResponseWriter, r *http.Request, sess *sessions.Session) {
+	writeJSON(w, http.StatusOK, stateOf(sess))
+}
+
+func stateOf(sess *sessions.Session) sessionBody {
 	waiting, running := sess.Relay.Counts()
 	body := sessionBody{
 		Host:     sess.Host,
@@ -82,7 +117,7 @@ func (a *api) session(w http.ResponseWriter, r *http.Request, sess *sessions.Ses
 	if running != "" {
 		body.Requests.Running = &running
 	}
-	writeJSON(w, http.StatusOK, body)
+	return body
 }
 
 func (a *api) requests(w http.ResponseWriter, r *http.Request, sess *sessions.Session) {

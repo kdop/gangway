@@ -3,6 +3,10 @@
 package sessions
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"sync"
@@ -11,12 +15,57 @@ import (
 	"github.com/kdop/gangway/shared/messages"
 )
 
-// Session is one live session. It holds the hash of its key, never the key.
+// Session is one live session. It holds the hash of its key, never the
+// key, and the hash of its caller token, never the token.
 type Session struct {
 	KeyHash string
 	Host    string
 	Limits  messages.Limits
 	Relay   *relay.Relay
+
+	// callerHash is the SHA-256 of the caller token. Nil: no caller has
+	// claimed the key yet. Guarded by callerMu.
+	callerHash []byte
+}
+
+// callerBits is how many random bits a caller token holds: as many as a
+// session key (SESSION_KEY_BITS).
+const callerBits = 256
+
+// callerMu guards the callerHash of every session. A claim is rare and
+// short, so one lock for all is enough.
+var callerMu sync.Mutex
+
+// Claim makes the caller the owner of the key. The first claim on a
+// session gives a new random token. Every later one gives nothing: the
+// token cannot be handed out twice.
+func (sess *Session) Claim() (token string, ok bool) {
+	callerMu.Lock()
+	defer callerMu.Unlock()
+	if sess.callerHash != nil {
+		return "", false
+	}
+	raw := make([]byte, callerBits/8)
+	if _, err := rand.Read(raw); err != nil {
+		return "", false
+	}
+	token = messages.CallerPrefix + hex.EncodeToString(raw)
+	sum := sha256.Sum256([]byte(token))
+	sess.callerHash = sum[:]
+	return token, true
+}
+
+// Owns tells whether this is the caller token of the session. Before a
+// claim, no token is.
+func (sess *Session) Owns(token string) bool {
+	sum := sha256.Sum256([]byte(token))
+	callerMu.Lock()
+	defer callerMu.Unlock()
+	if sess.callerHash == nil {
+		return false
+	}
+	// The time this takes must not tell how much of a guess was right.
+	return subtle.ConstantTimeCompare(sum[:], sess.callerHash) == 1
 }
 
 var (
