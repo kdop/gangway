@@ -10,14 +10,16 @@ import (
 	"github.com/kdop/gangway/cli/internal/gate"
 	"github.com/kdop/gangway/cli/internal/request"
 	"github.com/kdop/gangway/cli/internal/runner"
+	"github.com/kdop/gangway/cli/internal/session"
 	"github.com/kdop/gangway/shared/designcheck"
 	"github.com/kdop/gangway/shared/messages"
 )
 
-// The gate and the runner write to the terminal.
+// The gate, the runner and the session write to the terminal.
 var (
-	_ gate.Screen   = (*Terminal)(nil)
-	_ runner.Screen = (*Terminal)(nil)
+	_ gate.Screen    = (*Terminal)(nil)
+	_ runner.Screen  = (*Terminal)(nil)
+	_ session.Screen = (*Terminal)(nil)
 )
 
 const window = 2 * time.Second
@@ -322,6 +324,97 @@ func TestUNITTERMINAL23_EverythingIsCleaned(t *testing.T) {
 	w.t.Ended(reqA, runner.Result{How: "odd\x1b[2J"})
 	if strings.ContainsRune(w.screen.String(), 0x1b) {
 		t.Fatalf("an Escape reached the screen: %q", w.screen.String())
+	}
+}
+
+const extendQuestion = "\nThe session's time is up.\nExtend it by 30 minutes? y/n "
+
+// UNIT-TERMINAL-28. Requirement: LEN-03.
+func TestUNITTERMINAL28_TheQuestionToExtend(t *testing.T) {
+	for answer, want := range map[session.Answer]string{
+		session.Yes:      "y\nThe session goes on for 30 minutes.\n",
+		session.No:       "n\n",
+		session.NoAnswer: "\nNo answer in time.\n",
+	} {
+		w := newWorld()
+		w.t.ExtendQuestion(30 * time.Minute)
+		w.wantScreen(t, extendQuestion)
+		w.t.ExtendAnswer(answer)
+		w.wantScreen(t, extendQuestion+want)
+	}
+}
+
+// UNIT-TERMINAL-29. Requirement: LEN-03, LEN-06.
+func TestUNITTERMINAL29_TheQuestionToExtendStaysLast(t *testing.T) {
+	w := newWorld()
+	w.t.ExtendQuestion(30 * time.Minute)
+	w.t.Refused(messages.ReasonTimeUp)
+	got := w.screen.String()
+	if !strings.HasSuffix(got, extendQuestion) || strings.Count(got, extendQuestion) != 2 {
+		t.Fatalf("the screen shows %q, want the question again at the end", got)
+	}
+	if !strings.Contains(got, "\nRefused a request with no prompt: the session's time is up.\n") {
+		t.Fatalf("the note does not say why, on a line of its own: %q", got)
+	}
+	w.t.Forget()
+	w.screen.Reset()
+	w.t.Note("The session ends.")
+	if strings.Contains(w.screen.String(), "Extend it") {
+		t.Fatal("a forgotten question was shown again")
+	}
+	w.t.ExtendAnswer(session.Yes)
+	if strings.Contains(w.screen.String(), "goes on") {
+		t.Fatal("an answer was shown for a question that is not on screen")
+	}
+}
+
+// UNIT-TERMINAL-30. Requirement: LEN-03.
+func TestUNITTERMINAL30_ATimeInWords(t *testing.T) {
+	for d, want := range map[time.Duration]string{
+		30 * time.Minute: "30 minutes",
+		time.Minute:      "1 minute",
+		2 * time.Hour:    "2 hours",
+		time.Hour:        "1 hour",
+		90 * time.Second: "90 seconds",
+		time.Second:      "1 second",
+		90 * time.Minute: "90 minutes",
+	} {
+		if got := Length(d); got != want {
+			t.Fatalf("%v is written %q, want %q", d, got, want)
+		}
+	}
+	if got := Length(1500 * time.Millisecond); got != "1.5s" {
+		t.Fatalf("a time and a half second is written %q, want a form with its unit", got)
+	}
+}
+
+// UNIT-TERMINAL-31. Requirement: LEN-07, LEN-08.
+func TestUNITTERMINAL31_TheTimeIsUpAtAPromptAndAtACommand(t *testing.T) {
+	w := newWorld()
+	w.t.Prompt(reqA)
+	w.t.Answer(reqA, gate.TimeUp)
+	w.wantScreen(t, promptA+"\nThe session's time is up. Nothing ran.\n")
+	w.screen.Reset()
+	w.t.Note("a note")
+	if strings.Contains(w.screen.String(), "Run it?") {
+		t.Fatal("the refused prompt was shown again")
+	}
+
+	w = newWorld()
+	w.t.Ended(reqA, runner.Result{How: messages.HowKilledTimeUp})
+	line := w.screen.String()
+	if strings.Count(line, "\n") != 1 || !strings.HasPrefix(line, "Killed: ") || !strings.Contains(line, "session's time was up") {
+		t.Fatalf("the end shows %q, want one line that says it was killed and why", line)
+	}
+	for _, how := range []string{
+		messages.HowKilledByUser, messages.HowKilledByAI, messages.HowKilledNoAnswer,
+		messages.HowKilledAIGone, messages.HowKilledSessionEnded, messages.HowStartFailed,
+	} {
+		other := newWorld()
+		other.t.Ended(reqA, runner.Result{How: how})
+		if other.screen.String() == line {
+			t.Fatalf("%s shows the same line: %q", how, line)
+		}
 	}
 }
 

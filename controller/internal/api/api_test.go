@@ -37,6 +37,19 @@ type fixture struct {
 
 	mu   sync.Mutex
 	sent []messages.Message
+	now  time.Time // the controller's clock, in the test's hands
+}
+
+func (f *fixture) clock() time.Time {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.now
+}
+
+func (f *fixture) pass(d time.Duration) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.now = f.now.Add(d)
 }
 
 // newFixture gives a live session whose key has been claimed by a hello.
@@ -54,7 +67,8 @@ func newFixture(t *testing.T) *fixture {
 // newUnclaimed gives a live session that no caller has said hello to.
 func newUnclaimed(t *testing.T) *fixture {
 	t.Helper()
-	f := &fixture{t: t, store: sessions.NewStore()}
+	f := &fixture{t: t, store: sessions.NewStore(), now: time.Unix(1000, 0)}
+	f.store.Clock = f.clock
 	f.sess = &sessions.Session{
 		KeyHash: messages.KeyHash(keyK),
 		Host:    "web-3",
@@ -65,6 +79,7 @@ func newUnclaimed(t *testing.T) *fixture {
 			f.sent = append(f.sent, m)
 		}),
 	}
+	f.sess.Counts(f.clock(), 30*time.Minute)
 	if err := f.store.Add(f.sess); err != nil {
 		t.Fatal(err)
 	}
@@ -418,7 +433,7 @@ func TestUNITAPI11_HangingUpCancels(t *testing.T) {
 // UNIT-API-12. Requirement: GATE-06.
 func TestUNITAPI12_HelloAndSession(t *testing.T) {
 	f := newFixture(t)
-	empty := `{"host":"web-3","limits":{"command_seconds":45,"answer_seconds":30},"requests":{"waiting":0,"max_waiting":7,"running":null}}`
+	empty := `{"host":"web-3","seconds_left":1800,"time_up":false,"limits":{"command_seconds":45,"answer_seconds":30},"requests":{"waiting":0,"max_waiting":7,"running":null}}`
 	session := f.call("GET", "/v1/session", "Bearer "+keyK, "")
 	if session.status != http.StatusOK || strings.TrimSpace(session.body) != empty {
 		t.Fatalf("session gave %d %s, want %s", session.status, session.body, empty)
@@ -430,7 +445,7 @@ func TestUNITAPI12_HelloAndSession(t *testing.T) {
 	f.open("waits")
 	runs, _ := f.open("runs")
 	f.sess.Relay.FromHost(messages.Message{Type: messages.TypeStarted, ID: runs})
-	want := `{"host":"web-3","limits":{"command_seconds":45,"answer_seconds":30},"requests":{"waiting":1,"max_waiting":7,"running":"` + runs + `"}}`
+	want := `{"host":"web-3","seconds_left":1800,"time_up":false,"limits":{"command_seconds":45,"answer_seconds":30},"requests":{"waiting":1,"max_waiting":7,"running":"` + runs + `"}}`
 	if r := f.call("GET", "/v1/session", "Bearer "+keyK, ""); strings.TrimSpace(r.body) != want {
 		t.Fatalf("the body is %s, want %s", r.body, want)
 	}
@@ -580,6 +595,72 @@ func TestUNITAPI19_ManyFirstHellosAtOnceGiveOneToken(t *testing.T) {
 	if tokens != 1 {
 		t.Fatalf("%d callers got a token, want exactly one", tokens)
 	}
+}
+
+// wantTime checks what a call tells about the session's time.
+func wantTime(t *testing.T, r reply, seconds float64, up bool) {
+	t.Helper()
+	if r.status != http.StatusOK || r.fields["seconds_left"] != seconds || r.fields["time_up"] != up {
+		t.Fatalf("got %d %s, want seconds_left %v and time_up %v", r.status, r.body, seconds, up)
+	}
+}
+
+// UNIT-API-20. Requirement: LEN-01, LEN-06.
+func TestUNITAPI20_TheTimeLeftAndTimeUp(t *testing.T) {
+	f := newFixture(t)
+	wantTime(t, f.hello, 1800, false)
+	f.pass(10 * time.Minute)
+	wantTime(t, f.call("GET", "/v1/session", "Bearer "+keyK, ""), 1200, false)
+	f.sess.TimeIsUp()
+	wantTime(t, f.call("GET", "/v1/session", "Bearer "+keyK, ""), 0, true)
+	f.sess.Extended(f.clock(), 600*time.Second)
+	wantTime(t, f.call("GET", "/v1/session", "Bearer "+keyK, ""), 600, false)
+}
+
+// UNIT-API-21. Requirement: LEN-09.
+func TestUNITAPI21_NoCallMovesTheTime(t *testing.T) {
+	f := newFixture(t)
+	f.pass(10 * time.Minute)
+	wantTime(t, f.call("GET", "/v1/session", "Bearer "+keyK, ""), 1200, false)
+
+	more := `{"seconds_left":3600,"extend":true,"length_seconds":3600,"time_up":false}`
+	for _, c := range []struct{ method, path string }{
+		{"POST", "/v1/session/extend"},
+		{"POST", "/v1/extend"},
+		{"POST", "/v1/session"},
+		{"PUT", "/v1/session"},
+		{"PATCH", "/v1/session"},
+		{"POST", "/v1/session?seconds_left=3600"},
+	} {
+		r := f.call(c.method, c.path, "Bearer "+keyK, more)
+		if r.status != http.StatusNotFound && r.status != http.StatusMethodNotAllowed {
+			t.Errorf("%s %s gave %d, want 404 or 405", c.method, c.path, r.status)
+		}
+	}
+	if r := f.call("POST", "/v1/hello", "Bearer "+keyK, more); r.status != http.StatusUnauthorized {
+		t.Errorf("a second hello that asks for more time gave %d, want 401", r.status)
+	}
+	// A GET that carries the wish in a body, in the address and in a
+	// header answers as if nothing was asked.
+	req, err := http.NewRequest("GET", f.url+"/v1/session?seconds_left=3600&extend=1", strings.NewReader(more))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+keyK)
+	req.Header.Set(messages.CallerHeader, f.token)
+	req.Header.Set("Gangway-Extend", "3600")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	got := reply{status: resp.StatusCode, body: string(b)}
+	json.Unmarshal(b, &got.fields)
+	wantTime(t, got, 1200, false)
+
+	f.wantNothingSent()
+	wantTime(t, f.call("GET", "/v1/session", "Bearer "+keyK, ""), 1200, false)
 }
 
 func TestDesignAndGoTestsMatch(t *testing.T) {

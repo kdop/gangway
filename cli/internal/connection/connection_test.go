@@ -16,14 +16,16 @@ import (
 	"github.com/kdop/gangway/cli/internal/gate"
 	"github.com/kdop/gangway/cli/internal/request"
 	"github.com/kdop/gangway/cli/internal/runner"
+	"github.com/kdop/gangway/cli/internal/session"
 	"github.com/kdop/gangway/shared/designcheck"
 	"github.com/kdop/gangway/shared/messages"
 )
 
-// The gate and the runner send through the connection.
+// The gate, the runner and the session send through the connection.
 var (
-	_ gate.Sender   = (*Conn)(nil)
-	_ runner.Sender = (*Conn)(nil)
+	_ gate.Sender    = (*Conn)(nil)
+	_ runner.Sender  = (*Conn)(nil)
+	_ session.Sender = (*Conn)(nil)
 )
 
 const patience = 5 * time.Second
@@ -32,6 +34,8 @@ var startA = Start{
 	KeyHash: messages.KeyHash("gw_test"),
 	Host:    "web-3",
 	Limits:  messages.Limits{CommandSeconds: 60, AnswerSeconds: 30, MaxWaiting: 20},
+
+	LengthSeconds: 1800,
 }
 
 // recorder is the loop's side: it notes each event as one line of text.
@@ -222,7 +226,7 @@ func TestUNITCONNECTION01_DialStartsTheSession(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &m); err != nil {
 		t.Fatal(err)
 	}
-	if m.Type != messages.TypeSessionStart || m.KeyHash != startA.KeyHash || m.Host != "web-3" || m.Limits == nil || *m.Limits != startA.Limits {
+	if m.Type != messages.TypeSessionStart || m.KeyHash != startA.KeyHash || m.Host != "web-3" || m.Limits == nil || *m.Limits != startA.Limits || m.LengthSeconds != 1800 {
 		t.Fatalf("session_start is %s", raw)
 	}
 	select {
@@ -625,6 +629,32 @@ func TestUNITCONNECTION21_TheDialGoesOverTheRoadItIsGiven(t *testing.T) {
 	if road.calls.Load() != 1 {
 		t.Fatalf("%d calls went over the road that was given, want 1", road.calls.Load())
 	}
+}
+
+// UNIT-CONNECTION-22. Requirement: LEN-01, LEN-03.
+func TestUNITCONNECTION22_TimeUpAndExtended(t *testing.T) {
+	conn, ws, _ := live(t)
+	conn.TimeUp()
+	conn.Extended(600)
+	if got := readRaw(t, ws); got != `{"type":"time_up"}` {
+		t.Fatalf("the controller got %s", got)
+	}
+	if got := readRaw(t, ws); got != `{"type":"extended","seconds_left":600}` {
+		t.Fatalf("the controller got %s", got)
+	}
+}
+
+// UNIT-CONNECTION-23. Requirement: LEN-09.
+func TestUNITCONNECTION23_NoMessageExtends(t *testing.T) {
+	_, ws, rec := live(t)
+	write(t, ws, `{"type":"extended","seconds_left":9999}`)
+	write(t, ws, `{"type":"time_up"}`)
+	write(t, ws, `{"type":"extend","seconds_left":9999,"length_seconds":9999}`)
+	write(t, ws, `{"type":"session_ok","length_seconds":9999,"seconds_left":9999}`)
+	rec.none(t)
+	write(t, ws, `{"type":"request","id":"r2","kind":"command","command":"ls","length_seconds":9999}`)
+	rec.want(t, "request r2 ls")
+	rec.none(t)
 }
 
 func TestDesignAndGoTestsMatch(t *testing.T) {

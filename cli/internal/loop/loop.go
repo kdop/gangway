@@ -31,6 +31,7 @@ const (
 type Conn interface {
 	gate.Sender
 	runner.Sender
+	session.Sender
 	// Close tells the controller that the session ends, and why.
 	Close(reason string)
 }
@@ -50,6 +51,12 @@ type Parts struct {
 	Clock    Clock
 	Starter  runner.Starter
 	Timers   runner.Timers
+
+	// SessionTimers calls SessionTimer with the same number after a time.
+	SessionTimers session.Timers
+	// Length is the length this session starts with, when the user asked
+	// for one at start. Zero: SESSION_LENGTH.
+	Length time.Duration
 }
 
 // Loop holds the pieces. It is not safe for use from more than one
@@ -64,11 +71,15 @@ type Loop struct {
 
 	state  State
 	reason string
+	length time.Duration
 }
 
 // New puts the pieces together.
 func New(p Parts) *Loop {
-	l := &Loop{conn: p.Conn, session: p.Session}
+	l := &Loop{conn: p.Conn, session: p.Session, length: p.Length}
+	if l.length <= 0 {
+		l.length = p.Settings.SessionLength
+	}
 	l.term = terminal.New(p.Screen, p.Clock, p.Settings.DoubleCtrlCWindow, keys{l})
 	l.line = line.New(p.Settings.MaxWaitingRequests)
 	l.runner = runner.New(p.Starter, p.Timers, l.term, p.Conn, gateDone{l}, runner.Settings{
@@ -78,7 +89,38 @@ func New(p Parts) *Loop {
 		KillWait:     p.Settings.KillWait,
 	})
 	l.gate = gate.New(l.line, l.term, p.Conn, l.runner, p.Clock, p.Settings.PromptMinShow)
+	l.session.StartClock(session.Edges{
+		Clock:      p.Clock,
+		Timers:     p.SessionTimers,
+		Screen:     l.term,
+		Sender:     p.Conn,
+		Loop:       clockEvents{l},
+		Length:     l.length,
+		ExtendWait: p.Settings.ExtendWait,
+		MinShow:    p.Settings.PromptMinShow,
+	})
 	return l
+}
+
+// clockEvents takes what the session's clock decides.
+type clockEvents struct{ l *Loop }
+
+// TimeUp refuses everything that waits. A command that runs is not killed:
+// it gets no more time.
+func (c clockEvents) TimeUp() {
+	l := c.l
+	for _, req := range l.line.Empty() {
+		l.conn.Refused(req.ID, messages.ReasonTimeUp)
+	}
+	l.gate.TimeUp()
+	l.runner.TimeUp()
+	if l.runner.State() != runner.Idle {
+		l.term.Note("The session's time is up. The command that runs gets no more time.")
+	}
+}
+
+func (c clockEvents) NotExtended() {
+	c.l.End(messages.EndTimeUp, "The session was not extended: the session ends.")
 }
 
 // gateDone lets the runner reach the gate, which is made after it.
@@ -89,12 +131,23 @@ func (g gateDone) Done() { g.l.gate.Done() }
 // keys takes what the terminal makes of the keyboard.
 type keys struct{ l *Loop }
 
-func (k keys) Key(key []byte) { k.l.gate.Key(key) }
+func (k keys) Key(key []byte) {
+	if k.l.state != Live {
+		return
+	}
+	if k.l.session.State() == session.Extending {
+		k.l.session.Press(key)
+		return
+	}
+	k.l.gate.Key(key)
+}
 
 func (k keys) CtrlC() {
 	l := k.l
 	switch {
 	case l.state != Live:
+	case l.session.State() == session.Extending:
+		l.session.CtrlC()
 	case l.gate.State() == gate.Asking:
 		l.gate.CtrlC()
 	case l.gate.State() == gate.Busy:
@@ -114,6 +167,7 @@ func (l *Loop) Begin() {
 	l.term.Note("Connected. The session is live.")
 	l.term.PasteLine(l.session.Address(), l.session.Key())
 	l.term.Note("Each request is shown here. Press y to run it, n to refuse. Ctrl+C ends the session.")
+	l.term.Note("The session lasts " + terminal.Length(l.length) + ". Then you are asked whether to extend it.")
 }
 
 // Input takes bytes read from the keyboard.
@@ -122,6 +176,12 @@ func (l *Loop) Input(chunk []byte) { l.term.Input(chunk) }
 // Request takes a request from the controller. It has passed no check yet.
 func (l *Loop) Request(req request.Request) {
 	if l.state != Live {
+		return
+	}
+	if !l.session.Takes() {
+		l.conn.Refused(req.ID, messages.ReasonTimeUp)
+		l.term.Refused(messages.ReasonTimeUp)
+		l.settle()
 		return
 	}
 	if reason, ok := checks.Check(req); !ok {
@@ -170,7 +230,25 @@ func (l *Loop) Output(piece []byte) { l.runner.Output(piece) }
 // Exited tells that the shell of the running command ended.
 func (l *Loop) Exited(exitCode int) {
 	l.runner.Exited(exitCode)
+	l.settle()
 	l.finish()
+}
+
+// SessionTimer tells that the session timer with this number ran out.
+func (l *Loop) SessionTimer(number int) {
+	if l.state != Live {
+		return
+	}
+	l.session.Timer(number)
+	l.settle()
+}
+
+// settle tells the session's clock when no command runs. The question to
+// extend is shown only then.
+func (l *Loop) settle() {
+	if l.state == Live && l.runner.State() == runner.Idle {
+		l.session.Idle()
+	}
 }
 
 // Timer tells that the timer with this number ran out.

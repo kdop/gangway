@@ -115,16 +115,16 @@ func TestUNITSESSION06_AnAddressThatBreaksThePasteLineIsRefused(t *testing.T) {
 // UNIT-SESSION-07. Requirement: SES-03.
 func TestUNITSESSION07_AnEndedSessionStaysEnded(t *testing.T) {
 	s := mustNew(t)
-	if !s.Live() {
+	if s.State() != Live || !s.Takes() {
 		t.Fatal("a new session is not live")
 	}
 	s.End()
-	if s.Live() {
+	if s.State() != Ended || s.Takes() {
 		t.Fatal("the session is live after its end")
 	}
 	s.End()
 	_, _, _ = s.Key(), s.KeyHash(), s.PasteLine()
-	if s.Live() {
+	if s.State() != Ended || s.Takes() {
 		t.Fatal("the session came back to life")
 	}
 }
@@ -144,7 +144,7 @@ func TestUNITSESSION08_TheHashIsNotTheKey(t *testing.T) {
 // UNIT-SESSION-09. Requirement: SES-06.
 func TestUNITSESSION09_ThePackageCannotWriteAFile(t *testing.T) {
 	allowed := map[string]bool{
-		"crypto/rand": true, "encoding/hex": true, "errors": true, "fmt": true, "io": true,
+		"crypto/rand": true, "encoding/hex": true, "errors": true, "fmt": true, "io": true, "time": true,
 		"github.com/kdop/gangway/shared/messages": true,
 	}
 	files, err := os.ReadDir(".")
@@ -175,5 +175,5 @@ func TestUNITSESSION09_ThePackageCannotWriteAFile(t *testing.T) {
 }
 
 func TestDesignAndGoTestsMatch(t *testing.T) {
-	designcheck.Match(t, "UNIT-SESSION", "session_test.go")
+	designcheck.Match(t, "UNIT-SESSION", "session_test.go", "clock_test.go")
 }

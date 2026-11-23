@@ -63,6 +63,8 @@ type Start struct {
 	KeyHash string
 	Host    string
 	Limits  messages.Limits
+	// LengthSeconds is the length the session starts with.
+	LengthSeconds int
 }
 
 // Conn is a live connection. Its send methods may be called from any
@@ -118,6 +120,8 @@ func dial(ctx context.Context, client *http.Client, controller string, start Sta
 		KeyHash: start.KeyHash,
 		Host:    start.Host,
 		Limits:  &limits,
+
+		LengthSeconds: start.LengthSeconds,
 	})
 	if err := ws.Write(ctx, websocket.MessageText, hello); err != nil {
 		ws.CloseNow()
@@ -169,6 +173,16 @@ func (c *Conn) Ended(id string, result runner.Result) {
 		m.ExitCode = &code
 	}
 	c.send(m)
+}
+
+// TimeUp says the session's time is up. The controller only notes it.
+func (c *Conn) TimeUp() {
+	c.send(messages.Message{Type: messages.TypeTimeUp})
+}
+
+// Extended says the user extended the session, and how long it has now.
+func (c *Conn) Extended(secondsLeft int) {
+	c.send(messages.Message{Type: messages.TypeExtended, SecondsLeft: secondsLeft})
 }
 
 // Close tells the controller that the session ends, waits a short time for

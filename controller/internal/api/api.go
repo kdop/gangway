@@ -84,9 +84,11 @@ type requestsBody struct {
 }
 
 type sessionBody struct {
-	Host     string       `json:"host"`
-	Limits   limitsBody   `json:"limits"`
-	Requests requestsBody `json:"requests"`
+	Host        string       `json:"host"`
+	SecondsLeft int          `json:"seconds_left"`
+	TimeUp      bool         `json:"time_up"`
+	Limits      limitsBody   `json:"limits"`
+	Requests    requestsBody `json:"requests"`
 }
 
 // hello makes the caller the owner of the key and hands over the caller
@@ -100,19 +102,22 @@ func (a *api) hello(w http.ResponseWriter, r *http.Request, sess *sessions.Sessi
 	writeJSON(w, http.StatusOK, struct {
 		CallerToken string `json:"caller_token"`
 		sessionBody
-	}{token, stateOf(sess)})
+	}{token, a.stateOf(sess)})
 }
 
 func (a *api) session(w http.ResponseWriter, r *http.Request, sess *sessions.Session) {
-	writeJSON(w, http.StatusOK, stateOf(sess))
+	writeJSON(w, http.StatusOK, a.stateOf(sess))
 }
 
-func stateOf(sess *sessions.Session) sessionBody {
+func (a *api) stateOf(sess *sessions.Session) sessionBody {
 	waiting, running := sess.Relay.Counts()
+	left, timeUp := sess.Time(a.store.Now())
 	body := sessionBody{
-		Host:     sess.Host,
-		Limits:   limitsBody{sess.Limits.CommandSeconds, sess.Limits.AnswerSeconds},
-		Requests: requestsBody{Waiting: waiting, MaxWaiting: sess.Limits.MaxWaiting},
+		Host:        sess.Host,
+		SecondsLeft: left,
+		TimeUp:      timeUp,
+		Limits:      limitsBody{sess.Limits.CommandSeconds, sess.Limits.AnswerSeconds},
+		Requests:    requestsBody{Waiting: waiting, MaxWaiting: sess.Limits.MaxWaiting},
 	}
 	if running != "" {
 		body.Requests.Running = &running

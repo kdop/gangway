@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -101,7 +102,7 @@ func (c *client) wantClosed() {
 
 func start(key string) messages.Message {
 	l := limits
-	return messages.Message{Type: messages.TypeSessionStart, KeyHash: messages.KeyHash(key), Host: "web-3", Limits: &l}
+	return messages.Message{Type: messages.TypeSessionStart, KeyHash: messages.KeyHash(key), Host: "web-3", Limits: &l, LengthSeconds: 1800}
 }
 
 // live gives a client whose session is live, and the session.
@@ -183,7 +184,13 @@ func TestUNITHOSTDOOR02_TheFirstMessageMustBeSessionStart(t *testing.T) {
 	c.wantClosed()
 
 	c = f.connect()
-	c.send(messages.Message{Type: messages.TypeSessionStart, KeyHash: messages.KeyHash(keyK), Host: "web-3"})
+	c.send(messages.Message{Type: messages.TypeSessionStart, KeyHash: messages.KeyHash(keyK), Host: "web-3", LengthSeconds: 1800})
+	c.wantClosed()
+
+	c = f.connect()
+	noLength := start(keyK)
+	noLength.LengthSeconds = 0
+	c.send(noLength)
 	c.wantClosed()
 
 	c = f.connect()
@@ -362,6 +369,103 @@ func TestUNITHOSTDOOR13_SessionOKHoldsTheAPIAddress(t *testing.T) {
 	msg, ok := c.read()
 	if !ok || msg.Type != messages.TypeSessionOK || msg.APIAddress != "https://gangway.example.com" {
 		t.Fatalf("got %+v (ok=%v), want session_ok with the API address", msg, ok)
+	}
+}
+
+// clock is a clock the test holds.
+type clock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+func (c *clock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
+
+func (f *fixture) holdClock() *clock {
+	c := &clock{now: time.Unix(1000, 0)}
+	f.store.Clock = c.Now
+	return c
+}
+
+// wantTime waits until the session tells this time.
+func (f *fixture) wantTime(sess *sessions.Session, seconds int, up bool) {
+	f.t.Helper()
+	var gotSeconds int
+	var gotUp bool
+	for i := 0; i < 500; i++ {
+		if gotSeconds, gotUp = sess.Time(f.store.Now()); gotSeconds == seconds && gotUp == up {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	f.t.Fatalf("the session has %d seconds left and time up is %v, want %d and %v", gotSeconds, gotUp, seconds, up)
+}
+
+// UNIT-HOSTDOOR-14. Requirement: LEN-01.
+func TestUNITHOSTDOOR14_TheLengthOfSessionStart(t *testing.T) {
+	f := newFixture(t, &Door{})
+	f.holdClock()
+	c := f.connect()
+	first := start(keyK)
+	first.LengthSeconds = 600
+	c.send(first)
+	if msg, ok := c.read(); !ok || msg.Type != messages.TypeSessionOK {
+		t.Fatalf("got %+v (ok=%v), want session_ok", msg, ok)
+	}
+	if left, up := f.store.Find(keyK).Time(f.store.Now()); left != 600 || up {
+		t.Fatalf("the session has %d seconds left and time up is %v, want 600 and false", left, up)
+	}
+
+	for _, length := range []int{0, -600} {
+		c := f.connect()
+		bad := start(keyL)
+		bad.LengthSeconds = length
+		c.send(bad)
+		c.wantClosed()
+	}
+	if f.store.Count() != 1 {
+		t.Fatalf("%d sessions are live, want 1", f.store.Count())
+	}
+}
+
+// UNIT-HOSTDOOR-15. Requirement: LEN-03, LEN-06.
+func TestUNITHOSTDOOR15_TimeUpAndExtendedAreNoted(t *testing.T) {
+	f := newFixture(t, &Door{})
+	f.holdClock()
+	c, sess := f.live(keyK)
+	c.send(messages.Message{Type: messages.TypeTimeUp})
+	f.wantTime(sess, 0, true)
+	c.send(messages.Message{Type: messages.TypeExtended, SecondsLeft: 300})
+	f.wantTime(sess, 300, false)
+	if f.store.Find(keyK) != sess {
+		t.Fatal("the session is no longer live")
+	}
+}
+
+// UNIT-HOSTDOOR-16. Requirement: LEN-09.
+func TestUNITHOSTDOOR16_AHostTellsItsOwnTimeOnly(t *testing.T) {
+	f := newFixture(t, &Door{})
+	f.holdClock()
+	one, sessOne := f.live(keyK)
+	other, sessOther := f.live(keyL)
+	one.send(messages.Message{Type: messages.TypeExtended, SecondsLeft: 3600})
+	f.wantTime(sessOne, 3600, false)
+	one.send(messages.Message{Type: messages.TypeTimeUp})
+	f.wantTime(sessOne, 0, true)
+	if left, up := sessOther.Time(f.store.Now()); left != 1800 || up {
+		t.Fatalf("the other session has %d seconds left and time up is %v, want 1800 and false", left, up)
+	}
+	// The door sends nothing about the time, to either host.
+	for name, c := range map[string]*client{"the host that told its time": one, "the other host": other} {
+		ctx, stop := context.WithTimeout(context.Background(), 150*time.Millisecond)
+		_, b, err := c.conn.Read(ctx)
+		stop()
+		if err == nil {
+			t.Fatalf("%s got a message: %s", name, b)
+		}
 	}
 }
 

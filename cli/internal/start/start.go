@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -65,6 +66,16 @@ func (t timers) Start(d time.Duration, number int) {
 	time.AfterFunc(d, func() { t.events.post(func() { (*t.l).Timer(number) }) })
 }
 
+// sessionTimers are the timers of the session's clock.
+type sessionTimers struct {
+	events events
+	l      **loop.Loop
+}
+
+func (t sessionTimers) Start(d time.Duration, number int) {
+	time.AfterFunc(d, func() { t.events.post(func() { (*t.l).SessionTimer(number) }) })
+}
+
 type clock struct{}
 
 func (clock) Now() time.Time { return time.Now() }
@@ -80,23 +91,57 @@ const (
 const Usage = `How to start gangway:
   gangway                    start a session
   gangway login              store the Tailscale auth key of this host, once
-  gangway --local [address]  start a session with a controller on this machine, with no Tailscale`
+  gangway --local [address]  start a session with a controller on this machine, with no Tailscale
+With a session:
+  --length <time>            how long the session lasts, such as 45m or 2h, in place of SESSION_LENGTH`
 
-// Plan reads the words after the program's name. address is the
-// controller's address in the one-machine mode, empty for its starting
-// address.
-func Plan(args []string) (what int, address string, err error) {
-	switch {
-	case len(args) == 0:
-		return doSession, "", nil
-	case len(args) == 1 && args[0] == "login":
-		return doLogin, "", nil
-	case len(args) == 1 && args[0] == "--local":
-		return doLocal, "", nil
-	case len(args) == 2 && args[0] == "--local":
-		return doLocal, args[1], nil
+// Choice is what the words after the program's name ask for.
+type Choice struct {
+	What int
+	// Address is the controller's address in the one-machine mode, empty
+	// for its starting address.
+	Address string
+	// Length is the session's length asked for at start. Zero: none was
+	// asked for.
+	Length time.Duration
+}
+
+// Plan reads the words after the program's name.
+func Plan(args []string) (Choice, error) {
+	bad := func() (Choice, error) { return Choice{}, errors.New(Usage) }
+	if len(args) == 1 && args[0] == "login" {
+		return Choice{What: doLogin}, nil
 	}
-	return 0, "", errors.New(Usage)
+	c := Choice{What: doSession}
+	local, length := false, false
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--local":
+			if local {
+				return bad()
+			}
+			local = true
+			c.What = doLocal
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				i++
+				c.Address = args[i]
+			}
+		case "--length":
+			if length || i+1 == len(args) {
+				return bad()
+			}
+			length = true
+			i++
+			d, err := settings.Time(args[i])
+			if err != nil || d <= 0 {
+				return Choice{}, errors.New("--length must be a time with a unit, more than zero, such as 45m or 2h\n" + Usage)
+			}
+			c.Length = d
+		default:
+			return bad()
+		}
+	}
+	return c, nil
 }
 
 // Run is the whole program. args are the words after the program's name.
@@ -106,11 +151,12 @@ func Run(args []string, stdin, stdout *os.File, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "gangway:", err)
 		return 1
 	}
-	what, address, err := Plan(args)
+	choice, err := Plan(args)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 2
 	}
+	what, address := choice.What, choice.Address
 	in, out := int(stdin.Fd()), int(stdout.Fd())
 	check := func() error {
 		return Check(os.Geteuid(), terminal.IsTerminal(in), terminal.IsTerminal(out))
@@ -130,6 +176,10 @@ func Run(args []string, stdin, stdout *os.File, stderr io.Writer) int {
 		return fail(err)
 	}
 	host, _ := os.Hostname()
+	length := s.SessionLength
+	if choice.Length > 0 {
+		length = choice.Length
+	}
 
 	var road network.Network
 	if what == doLocal {
@@ -167,6 +217,7 @@ func Run(args []string, stdin, stdout *os.File, stderr io.Writer) int {
 			AnswerSeconds:  int(s.QuestionWait.Seconds()),
 			MaxWaiting:     s.MaxWaitingRequests,
 		},
+		LengthSeconds: session.Seconds(length),
 	}, handler{ev, &l})
 	if err != nil {
 		return fail(fmt.Errorf("cannot reach the controller at %s: %w", road.Address(), err))
@@ -193,7 +244,9 @@ func Run(args []string, stdin, stdout *os.File, stderr io.Writer) int {
 			Out:  func(piece []byte) { ev.post(func() { l.Output(piece) }) },
 			Exit: func(code int) { ev.post(func() { l.Exited(code) }) },
 		},
-		Timers: timers{ev, &l},
+		Timers:        timers{ev, &l},
+		SessionTimers: sessionTimers{ev, &l},
+		Length:        length,
 	})
 
 	go readKeys(stdin, ev, &l)
