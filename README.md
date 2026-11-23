@@ -8,9 +8,13 @@ It exists because SSH gives an AI a full shell with no say over the commands.
 
 ## Status
 
-The first version, the MVP, is built: the three parts work together on one machine. The next step is built too: a host reaches the controller over Tailscale. It passes its tests on a stand-in for the Tailscale network, and has not been run on a real one yet.
+The first version, the MVP, is built: the three parts work together on one machine. The next step is built too: a host reaches the controller over Tailscale. It passes its tests on a stand-in for the Tailscale network, and it has run on a real one, with the controller on a server on the internet.
 
 The design is written down in three levels, each with its tests: the requirements, the architecture, and the inside of each piece. The pieces are built one at a time, and every test in the code names the requirement it proves.
+
+## Known limits
+
+- **Chat windows on the web probably cannot use it as it is.** The AI must be able to send a POST request with the key in a header. A tool with a shell can, such as Claude Code. A chat on the web usually can only read a web address.
 
 ## Folders
 
