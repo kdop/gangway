@@ -33,6 +33,10 @@ cd cli && go run ./cmd/gangway --local
 
 The cli-tool prints a line that starts with `/gangway`. Paste it to an AI that has the skill in `skill/gangway/`.
 
+## Build
+
+`./build.sh` builds both programs into `build/`: `build/gangway` and `build/gangway-controller`. Each is one file that can be copied to another Linux machine as it is.
+
 ## Use it over Tailscale
 
 The controller and each host join your Tailscale network from inside the program. Nothing else is installed, and a Tailscale that is already on the machine is left alone.
