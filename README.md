@@ -8,7 +8,7 @@ It exists because SSH gives an AI a full shell with no say over the commands.
 
 ## Status
 
-The first version, the MVP, is built: the three parts work together on one machine. The next step is built too: a host reaches the controller over Tailscale. It passes its tests on a stand-in for the Tailscale network, and it has run on a real one, with the controller on a server on the internet.
+The first version, the MVP, is built: the three parts work together on one machine. The next step is built too: a host reaches the controller over Tailscale. It passes its tests on a stand-in for the Tailscale network, and it has run on a real one, with the controller on a server on the internet. A session now has a length and can have a maximum, and its key works for the first AI only.
 
 The design is written down in three levels, each with its tests: the requirements, the architecture, and the inside of each piece. The pieces are built one at a time, and every test in the code names the requirement it proves.
 
@@ -48,6 +48,7 @@ The controller and each host join your Tailscale network from inside the program
 1. In the Tailscale admin page, make two auth keys. The one for the controller: reusable and not ephemeral. The one for the hosts: reusable and ephemeral, with a tag that your Tailscale rules let reach the controller and nothing else.
 2. On the controller machine, once: `gangway-controller login`, and paste the controller's key. Then start it: `gangway-controller`. Add `-public-address https://…` when the AI reaches it at another address than the one it listens on.
 3. On a host, once: `gangway login`, and paste the hosts' key. Then start a session: `gangway`. A session lasts 30 minutes, and then asks at its terminal whether to extend. `gangway --length 45m` asks for another length.
+4. To cap how long a session on a host may last, extensions included: as root, write `SESSION_MAX = 2h` into `/etc/gangway/settings`. Root must own the folder and the file, and nobody else may be able to write them. With no such file there is no cap.
 
 Until pairing is built, any device that your Tailscale rules let reach the controller can start a session of its own. The rules are the guard.
 

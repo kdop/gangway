@@ -15,6 +15,7 @@ How the tool looks and feels to the user. The design is in `blueprint.md`. The s
 - **Ctrl+C stops the nearest thing.** One Ctrl+C cancels what is in front: it kills the running command, or refuses the request at a waiting prompt. The session lives on. With nothing in front, Ctrl+C ends the session. Two Ctrl+C close together always end the cli-tool, even if the AI sends a new request in between.
 - **A session has a length, and says so.** At start the cli-tool says how long the session lasts. The length is `SESSION_LENGTH`, 30 minutes to start with. Another length can be asked for at start, for this one session: `gangway --length 45m`. The time is a number with a unit, such as `90s`, `45m` or `2h`.
 - **When the time is up, the cli-tool asks whether to extend.** The question takes the same keys as a prompt: lower-case `y` or `n`, with no Enter, and no key in the first half second. Ctrl+C means no. `y` gives the same length again. `n`, or no answer within `EXTEND_WAIT`, ends the session.
+- **A host can have a maximum.** Root sets `SESSION_MAX` in `/etc/gangway/settings`, as `SESSION_MAX = 2h`. No session on that host lasts longer, extensions included. A length above it is cut to it, and the cli-tool says so at start. At the maximum the session ends with no question. A file there that is not root's, that others can write, or that holds a mistake stops the start, with the reason.
 - **Dots while it connects.** On start the cli-tool prints dots until it has joined Tailscale and reached the controller. They show it is working and not stuck.
 
 ## What the terminal shows
@@ -69,3 +70,27 @@ The session goes on for 30 minutes.
 ```
 
 After `n` the next line is `The session was not extended: the session ends.` With no answer in time, the line `No answer in time.` comes first.
+
+On a host with a maximum, the start says so. A length above it:
+
+```
+1 hour is above the maximum of 20 minutes, set in /etc/gangway/settings. It was cut to 20 minutes.
+The session lasts 20 minutes. That is the maximum: then it ends.
+```
+
+A length below it:
+
+```
+The session lasts 15 minutes. Then you are asked whether to extend it, up to the maximum of 20 minutes.
+```
+
+When less than a full stretch is left to the maximum, the question names what is left:
+
+```
+
+The session's time is up.
+Extend it by 5 minutes, up to the maximum? y/n y
+The session goes on for 298 seconds. That reaches the maximum: then it ends.
+```
+
+At the maximum there is no question. The line is `The session has lasted 20 minutes, the maximum: the session ends.`
