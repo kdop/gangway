@@ -1,5 +1,5 @@
 // Package start is the beginning and the end of the program: the checks,
-// the edges, the loop, the cleaning up. The design is in design.md.
+// the edges, the loop, the cleaning up. The design is in docs/design.md.
 package start
 
 import (

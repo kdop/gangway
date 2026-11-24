@@ -1,5 +1,5 @@
-// Package api is what the AI calls. The contract is architecture.md and the
-// design is in design.md.
+// Package api is what the AI calls. The contract is docs/architecture.md and the
+// design is in docs/design.md.
 package api
 
 import (

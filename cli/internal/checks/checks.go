@@ -1,5 +1,5 @@
 // Package checks refuses a request before any prompt is shown.
-// The design is in design.md.
+// The design is in docs/design.md.
 package checks
 
 import (
@@ -11,7 +11,7 @@ import (
 )
 
 // ReasonControlCharacter is sent with the refusal. It is part of the
-// contract in architecture.md.
+// contract in docs/architecture.md.
 const ReasonControlCharacter = messages.ReasonControlCharacter
 
 // Check tells whether the request may go on to the line. When it may not,

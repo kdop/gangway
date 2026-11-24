@@ -1,5 +1,5 @@
 // Package sessions holds the live sessions, in memory only.
-// The design is in design.md.
+// The design is in docs/design.md.
 package sessions
 
 import (

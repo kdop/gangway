@@ -1,5 +1,5 @@
 // Package line holds the requests that wait for the prompt, oldest first.
-// The design is in design.md.
+// The design is in docs/design.md.
 package line
 
 import "github.com/kdop/gangway/cli/internal/request"

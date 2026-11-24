@@ -1,5 +1,5 @@
 // Package start checks where the controller may listen, puts the pieces
-// together and runs them. The design is in design.md.
+// together and runs them. The design is in docs/design.md.
 package start
 
 import (

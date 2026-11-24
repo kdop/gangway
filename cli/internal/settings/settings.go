@@ -1,5 +1,5 @@
 // Package settings gives every other piece its values: the starting
-// values, and what the user's file changes. The design is in design.md.
+// values, and what the user's file changes. The design is in docs/design.md.
 package settings
 
 import (
@@ -35,7 +35,7 @@ type Settings struct {
 }
 
 // Default gives the starting values. They are the ones in the "Settings"
-// table of requirements.md.
+// table of docs/requirements.md.
 func Default() Settings {
 	return Settings{
 		ControllerName:     messages.DefaultControllerName,

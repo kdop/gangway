@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// stepsBuilt holds the steps of plan.md that are built, beside the MVP.
+// stepsBuilt holds the steps of docs/plan.md that are built, beside the MVP.
 var stepsBuilt = map[string]bool{"2": true, "4": true, "7": true, "11": true}
 
 // builtOfAStepInWork holds the requirements that are built while the rest
@@ -31,10 +31,10 @@ var noGoTest = map[string]string{
 }
 
 // TestEveryTestThatIsDueHasAGoTest fails when a Go test here carries an ID
-// that requirements.md does not have, and when a test of the MVP or of a
+// that docs/requirements.md does not have, and when a test of the MVP or of a
 // built step has no Go test.
 func TestEveryTestThatIsDueHasAGoTest(t *testing.T) {
-	b, err := os.ReadFile(filepath.Join("..", "requirements.md"))
+	b, err := os.ReadFile(filepath.Join("..", "docs", "requirements.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,13 +62,13 @@ func TestEveryTestThatIsDueHasAGoTest(t *testing.T) {
 				t.Errorf("%s has a Go test now: take it off the list noGoTest", id)
 			}
 			if !inFile[id] {
-				t.Errorf("%s has a Go test but is not in requirements.md", id)
+				t.Errorf("%s has a Go test but is not in docs/requirements.md", id)
 			}
 		}
 	}
 	for id := range noGoTest {
 		if !inFile[id] {
-			t.Errorf("%s is on the list noGoTest but is not in requirements.md", id)
+			t.Errorf("%s is on the list noGoTest but is not in docs/requirements.md", id)
 		}
 	}
 
@@ -80,7 +80,7 @@ func TestEveryTestThatIsDueHasAGoTest(t *testing.T) {
 		}
 	}
 	if len(due) == 0 {
-		t.Fatal("found no MVP table in requirements.md")
+		t.Fatal("found no MVP table in docs/requirements.md")
 	}
 	// The requirements of a built step: each says its step at its end.
 	ofAStep := 0
@@ -91,11 +91,11 @@ func TestEveryTestThatIsDueHasAGoTest(t *testing.T) {
 		}
 	}
 	if ofAStep == 0 {
-		t.Fatal("found no requirement of a built step in requirements.md")
+		t.Fatal("found no requirement of a built step in docs/requirements.md")
 	}
 	for id := range builtOfAStepInWork {
 		if !inFile[id+".1"] {
-			t.Errorf("%s is on the list builtOfAStepInWork but is not in requirements.md", id)
+			t.Errorf("%s is on the list builtOfAStepInWork but is not in docs/requirements.md", id)
 		}
 		due[id] = true
 	}

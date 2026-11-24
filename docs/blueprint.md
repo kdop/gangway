@@ -2,7 +2,7 @@
 
 Gangway: temporary remote access for AI, with just-in-time approval of commands.
 
-High level only. Steps and checks are in `plan.md`. Reasons for each decision are in `CLAUDE.md`.
+High level only. Steps and checks are in `plan.md`. Reasons for each decision are in `../CLAUDE.md`.
 
 ## The problem
 

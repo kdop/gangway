@@ -1,6 +1,6 @@
 // Package network puts the controller on the Tailscale network, from
 // inside the program, and opens the door for the hosts there. The design
-// is in design.md.
+// is in docs/design.md.
 package network
 
 import (

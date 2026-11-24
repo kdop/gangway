@@ -1,6 +1,6 @@
 // Package connection holds the websocket to the controller. It sends the
 // cli-tool's answers as messages and hands the controller's messages over
-// as events. The design is in design.md.
+// as events. The design is in docs/design.md.
 package connection
 
 import (

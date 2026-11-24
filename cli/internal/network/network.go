@@ -1,6 +1,6 @@
 // Package network is the road to the controller: Tailscale from inside
 // the program, or localhost in the one-machine mode. The design is in
-// design.md.
+// docs/design.md.
 package network
 
 import (

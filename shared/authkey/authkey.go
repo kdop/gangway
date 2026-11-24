@@ -1,5 +1,5 @@
 // Package authkey keeps a Tailscale auth key in a file that
-// only its owner can read. The design is in design.md.
+// only its owner can read. The design is in docs/design.md.
 package authkey
 
 import (

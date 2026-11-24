@@ -153,5 +153,5 @@ This software is provided "as is", with absolutely no guarantees of any kind. It
 ## More
 
 - [`DEVELOPMENT.md`](DEVELOPMENT.md): how to build it, try it on one machine, and run the tests
-- [`blueprint.md`](blueprint.md): the design
+- [`docs/blueprint.md`](docs/blueprint.md): the design
 - License: [MIT](LICENSE)

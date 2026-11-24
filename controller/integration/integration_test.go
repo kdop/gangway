@@ -1,4 +1,4 @@
-// Package integration runs the whole controller as architecture.md lays its
+// Package integration runs the whole controller as docs/architecture.md lays its
 // integration tests out. The test plays both other sides: it calls the API
 // as the AI, and it sits on a real websocket as the cli-tool.
 package integration

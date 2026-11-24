@@ -1,6 +1,6 @@
 // Package relay ties an open API call to its request on the host and
 // passes messages both ways. One relay serves one session.
-// The design is in design.md.
+// The design is in docs/design.md.
 package relay
 
 import (
