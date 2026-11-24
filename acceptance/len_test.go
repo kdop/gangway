@@ -16,14 +16,18 @@ import (
 // the session a moment late and its own clock can be held up.
 const margin = time.Second
 
-// extendQuestion is what the terminal shows when the time is up.
+// timeIsUp starts the header the terminal shows when the time is up. The
+// header ends with how long the question under it waits.
+const timeIsUp = "\n  ── time is up ─"
+
+// extendQuestion is the end of that header, and the question under it.
 func extendQuestion(length string) string {
-	return "\nThe session's time is up.\nExtend it by " + length + "? y/n "
+	return " s\n\n  extend by " + length + "?   y yes   n no "
 }
 
 // questions counts how often the question to extend was shown.
 func (w *world) questions() int {
-	return strings.Count("\n"+w.screen.text(), "\nExtend it by ")
+	return strings.Count("\n"+w.screen.text(), "\n  extend by ")
 }
 
 // question waits until n questions to extend were shown, and until a key
@@ -96,7 +100,7 @@ func TestLEN01_2_TheTimeIsUpAfterTheSessionLength(t *testing.T) {
 	if late := time.Since(w.started) - length; late > 3*time.Second {
 		t.Fatalf("the question came %s after the session length had passed", late)
 	}
-	w.shows(extendQuestion("3 seconds"))
+	w.shows(extendQuestion("3 s"))
 	if !w.sessionTime().TimeUp {
 		t.Fatal("the API does not say that the time is up")
 	}
@@ -106,10 +110,11 @@ func TestLEN02_1_AShorterLengthAskedForAtStart(t *testing.T) {
 	const length = 3 * time.Second
 	// SESSION_LENGTH stays at its starting value, 30 minutes.
 	w := newWorldOf(t, "3s")
-	w.shows("The session lasts 3 seconds.")
+	w.shows("\n  session   3 s, then you are asked to extend\n")
 	w.noQuestionBefore(w.started.Add(length-margin), 0)
 	w.question(1)
-	w.shows(extendQuestion("3 seconds"))
+	w.shows(timeIsUp)
+	w.shows("  answer in 60" + extendQuestion("3 s"))
 	if !w.sessionTime().TimeUp {
 		t.Fatal("the API does not say that the time is up")
 	}
@@ -117,7 +122,7 @@ func TestLEN02_1_AShorterLengthAskedForAtStart(t *testing.T) {
 
 func TestLEN02_2_ALongerLengthAskedForAtStart(t *testing.T) {
 	w := newWorldOf(t, "10m", "SESSION_LENGTH = 2s")
-	w.shows("The session lasts 10 minutes.")
+	w.shows("\n  session   10 min, then you are asked to extend\n")
 	w.noQuestionBefore(w.started.Add(2*time.Second+margin), 0)
 	if got := w.sessionTime(); got.TimeUp || got.SecondsLeft < 500 {
 		t.Fatalf("the API says %+v, want a session with most of ten minutes left", got)
@@ -131,7 +136,7 @@ func TestLEN02_2_ALongerLengthAskedForAtStart(t *testing.T) {
 func TestLEN03_1_TheQuestionToExtendIsShown(t *testing.T) {
 	w := newWorld(t, "SESSION_LENGTH = 2s")
 	w.question(1)
-	w.screenEnds(extendQuestion("2 seconds"))
+	w.screenEnds(timeIsUp + strings.Repeat("─", 24) + "  answer in 60" + extendQuestion("2 s"))
 }
 
 func TestLEN03_2_YMakesTheSessionLiveAgain(t *testing.T) {
@@ -139,9 +144,9 @@ func TestLEN03_2_YMakesTheSessionLiveAgain(t *testing.T) {
 	w.question(1)
 	// Capitals and Enter do not answer.
 	w.press("Y\r")
-	w.screenEnds(extendQuestion("5 seconds"))
+	w.screenEnds(extendQuestion("5 s"))
 	w.press("y")
-	w.shows(extendQuestion("5 seconds") + "y\nThe session goes on for 5 seconds.\n")
+	w.shows(extendQuestion("5 s") + "\n  ✓ extended by 5 s\n")
 	got := w.run("echo live again")
 	got.ran(t, 0)
 	if got.Output != "live again\n" {
@@ -159,7 +164,7 @@ func extendedOnce(t *testing.T, w *world, length time.Duration, words string) {
 	w.question(1)
 	extended := time.Now()
 	w.press("y")
-	w.shows("The session goes on for " + words + ".")
+	w.shows("\n  ✓ extended by " + words + "\n")
 	w.noQuestionBefore(extended.Add(length-margin/2), 1)
 	if w.sessionTime().TimeUp {
 		t.Fatal("the API says that the time is up before the second stretch has passed")
@@ -173,14 +178,14 @@ func extendedOnce(t *testing.T, w *world, length time.Duration, words string) {
 
 func TestLEN03_3_AnExtendedSessionGetsTheSessionLengthAgain(t *testing.T) {
 	w := newWorld(t, "SESSION_LENGTH = 3s")
-	extendedOnce(t, w, 3*time.Second, "3 seconds")
+	extendedOnce(t, w, 3*time.Second, "3 s")
 }
 
 func TestLEN03_4_AnExtendedSessionGetsItsOwnLengthAgain(t *testing.T) {
 	// SESSION_LENGTH stays at 30 minutes: the second stretch is the
 	// length asked for at start, not that.
 	w := newWorldOf(t, "3s")
-	extendedOnce(t, w, 3*time.Second, "3 seconds")
+	extendedOnce(t, w, 3*time.Second, "3 s")
 }
 
 func TestLEN04_1_NoAnswerEndsTheSession(t *testing.T) {
@@ -188,7 +193,8 @@ func TestLEN04_1_NoAnswerEndsTheSession(t *testing.T) {
 	w.live()
 	w.question(1)
 	w.dead()
-	w.shows("No answer in time.\nThe session was not extended: the session ends.\n")
+	w.shows("  answer in 1" + extendQuestion("2 s") + "\n  ✗ no answer in time, not extended\n")
+	w.shows("\n  ended     the time was up and the session was not extended\n")
 }
 
 func TestLEN04_2_NEndsTheSessionAtOnce(t *testing.T) {
@@ -202,7 +208,8 @@ func TestLEN04_2_NEndsTheSessionAtOnce(t *testing.T) {
 	if took := time.Since(pressed); took > 5*time.Second {
 		t.Fatalf("the session ended %s after the n", took)
 	}
-	w.shows(extendQuestion("2 seconds") + "n\nThe session was not extended: the session ends.\n")
+	w.shows(extendQuestion("2 s") + "\n  ✗ not extended\n")
+	w.shows("\n  ended     the time was up and the session was not extended\n")
 }
 
 func TestLEN06_1_ARequestIsRefusedWhileTheTimeIsUp(t *testing.T) {
@@ -211,8 +218,11 @@ func TestLEN06_1_ARequestIsRefusedWhileTheTimeIsUp(t *testing.T) {
 	w.ask("touch "+w.file("ran")).answer().refused(t, "time_up")
 	w.promptWaits(0)
 	w.notRun("ran")
-	w.shows("Refused a request with no prompt: the session's time is up.\n")
-	w.screenEnds(extendQuestion("2 seconds"))
+	w.shows(noPrompt + "the session's time is up\n")
+	w.screenEnds(extendQuestion("2 s"))
+	if got := w.questions(); got != 2 {
+		t.Fatalf("the question was drawn %d times, want it once more under the note", got)
+	}
 }
 
 func TestLEN07_1_AWaitingPromptIsRefusedWhenTheTimeRunsOut(t *testing.T) {
@@ -221,11 +231,11 @@ func TestLEN07_1_AWaitingPromptIsRefusedWhenTheTimeRunsOut(t *testing.T) {
 	w.promptShown(1)
 	a.answer().refused(t, "time_up")
 	w.question(1)
-	w.screenEnds("Run it? y/n \nThe session's time is up. Nothing ran.\n" + extendQuestion("3 seconds"))
+	w.screenEnds(question + "\n  ✗ the session's time is up, nothing ran\n" + timeIsUp + strings.Repeat("─", 24) + "  answer in 60" + extendQuestion("3 s"))
 	w.notRun("ran")
 	// A y now answers the question to extend, not the prompt that is gone.
 	w.press("y")
-	w.shows("The session goes on for 3 seconds.")
+	w.shows("\n  ✓ extended by 3 s\n")
 	w.promptWaits(1)
 	w.notRun("ran")
 }
@@ -235,7 +245,7 @@ func TestLEN08_1_ARunningCommandIsNotKilledWhenTheTimeRunsOut(t *testing.T) {
 	a := w.ask("echo began; sleep 5; echo over")
 	w.prompt(1)
 	w.press("y")
-	w.shows("The session's time is up. The command that runs gets no more time.\n")
+	w.shows("\n  The session's time is up. The command that runs gets no more time.\n")
 	if got := w.sessionTime(); !got.TimeUp || got.Requests.Running == nil {
 		t.Fatalf("the API says %+v, want the time up and a command that runs", got)
 	}
@@ -265,7 +275,7 @@ func TestLEN08_2_ItIsKilledAtItsNextTimeLimit(t *testing.T) {
 	if took := time.Since(approved); took < 4*time.Second-margin || took > 4*time.Second+5*time.Second {
 		t.Fatalf("the command was killed %s after its start, want about its time limit of 4s", took)
 	}
-	w.shows("Killed: the time limit passed and the session's time was up.\n")
+	w.shows("\n  ✗ killed: the time limit passed and the session's time was up\n")
 	w.notRun("over")
 	w.question(1)
 }
@@ -281,7 +291,7 @@ func TestLEN08_3_ACommandThatEndsByItselfThenTheQuestion(t *testing.T) {
 		t.Fatalf("want the output, got %s", got.Body)
 	}
 	w.question(1)
-	w.screenEnds("  | over\n" + extendQuestion("2 seconds"))
+	w.screenEnds(ended(0, "over") + timeIsUp + strings.Repeat("─", 24) + "  answer in 60" + extendQuestion("2 s"))
 }
 
 func TestLEN09_1_NoAPICallMakesTheSessionLonger(t *testing.T) {
@@ -356,15 +366,15 @@ func TestLEN09_3_AYesFromTheControllerDoesNotAnswerTheQuestion(t *testing.T) {
 	} {
 		s.send(raw)
 	}
-	s.screenEnds(extendQuestion("2 seconds"))
+	s.screenEnds(extendQuestion("2 s"))
 	// A request does not answer it either. The question is shown again
 	// under the note, and still waits.
 	s.send(`{"type":"request","id":"r_1","kind":"command","command":"y"}`)
-	s.shows("Refused a request with no prompt: the session's time is up.\n")
-	s.screenEnds(extendQuestion("2 seconds"))
+	s.shows(noPrompt + "the session's time is up\n")
+	s.screenEnds(extendQuestion("2 s"))
 	// Nobody said yes: the session ends when EXTEND_WAIT has passed.
 	s.ended()
-	if text := s.screen.text(); strings.Contains(text, "The session goes on") || !strings.Contains(text, "No answer in time.") {
+	if text := s.screen.text(); strings.Contains(text, "extended by") || !strings.Contains(text, "\n  ✗ no answer in time, not extended\n") {
 		t.Fatalf("the question was answered:\n%s", text)
 	}
 }
@@ -372,17 +382,18 @@ func TestLEN09_3_AYesFromTheControllerDoesNotAnswerTheQuestion(t *testing.T) {
 func TestLEN05_1_AtTheMaximumTheSessionEndsWithNoQuestion(t *testing.T) {
 	const max = 8 * time.Second
 	w := newWorldUnder(t, "SESSION_MAX = 8s", "", "SESSION_LENGTH = 3s")
-	w.shows("The session lasts 3 seconds. Then you are asked whether to extend it, up to the maximum of 8 seconds.\n")
+	w.shows("\n  session   3 s, then you are asked to extend, up to the maximum of 8 s\n")
 	w.question(1)
 	w.press("y")
-	w.shows("The session goes on for 3 seconds.\n")
+	w.shows("\n  ✓ extended by 3 s\n")
 	w.question(2)
-	// Less than a full stretch is left: the question names what is left.
-	if !regexp.MustCompile(`\nThe session's time is up\.\nExtend it by [12] seconds?, up to the maximum\? y/n $`).MatchString(w.screen.text()) {
+	// Less than a full stretch is left: the question names what is left,
+	// and does not wait past the maximum.
+	if !regexp.MustCompile(`  answer in [12] s\n\n  extend by [12] s, up to the maximum\?   y yes   n no $`).MatchString(w.screen.text()) {
 		t.Fatalf("the second question does not name what is left to the maximum")
 	}
 	w.press("y")
-	w.shows("That reaches the maximum: then it ends.\n")
+	w.shows(" s, up to the maximum: then the session ends\n")
 	w.live()
 
 	w.dead()
@@ -392,7 +403,7 @@ func TestLEN05_1_AtTheMaximumTheSessionEndsWithNoQuestion(t *testing.T) {
 	if got := w.questions(); got != 2 {
 		t.Fatalf("%d questions to extend were shown, want 2: none at the maximum", got)
 	}
-	w.shows("The session has lasted 8 seconds, the maximum: the session ends.\n")
+	w.shows("\n  ended     it reached the maximum of 8 s\n")
 }
 
 func TestLEN05_2_AMaximumShorterThanTheSessionLength(t *testing.T) {

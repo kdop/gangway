@@ -117,7 +117,7 @@ func TestGATE07_3_ARequestMarkedAsApprovedIsAskedAllTheSame(t *testing.T) {
 	command := quote("touch " + s.file("ran"))
 	s.send(`{"type":"request","id":"r_1","kind":"command","command":` + command + `,"approved":true,"answer":"y","state":"approved"}`)
 	s.prompt(1)
-	s.shows("AI asks to run:\n  > touch " + s.file("ran") + "\n" + question)
+	s.shows(prompted("touch " + s.file("ran")))
 	s.notRun("ran")
 	s.promptWaits(1)
 }

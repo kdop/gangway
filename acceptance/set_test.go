@@ -45,7 +45,7 @@ func TestSET01_3_ALengthBelowTheMaximumIsKept(t *testing.T) {
 	if late := time.Since(w.started) - length; late > 3*time.Second {
 		t.Fatalf("the question came %s after the length asked for had passed", late)
 	}
-	w.shows(extendQuestion("3 seconds"))
+	w.shows(extendQuestion("3 s"))
 	if !w.sessionTime().TimeUp {
 		t.Fatal("the API does not say that the time is up")
 	}
@@ -135,7 +135,7 @@ func TestSET02_1_TheAdminFolderIsOnlyRead(t *testing.T) {
 	w.cliLogin(tailscaleKey).loggedIn(tailscaleKey, cliReady)
 	w.startCli(nil)
 	// The file was read: the screen names its maximum.
-	w.shows("up to the maximum of 45 minutes.")
+	w.shows("up to the maximum of 45 min\n")
 	w.run("echo a whole session").ran(t, 0)
 	w.endByCtrlC()
 
@@ -170,7 +170,7 @@ func TestSET03_1_WithNoAdminFolderNoMaximumCuts(t *testing.T) {
 	if _, err := os.Stat(w.adminFolder()); !os.IsNotExist(err) {
 		t.Fatalf("the test has an admin folder: %v", err)
 	}
-	w.shows("The session lasts 2 hours. Then you are asked whether to extend it.\n")
+	w.shows("\n  session   2 h, then you are asked to extend\n")
 	if got := w.sessionTime(); got.TimeUp || got.SecondsLeft > 7200 || got.SecondsLeft < 7200-30 {
 		t.Fatalf("the API says %+v, want a session with two hours left", got)
 	}
@@ -184,8 +184,9 @@ func TestSET03_1_WithNoAdminFolderNoMaximumCuts(t *testing.T) {
 // the terminal says that one hour was cut.
 func (w *world) cutTo20() {
 	w.t.Helper()
-	w.shows("1 hour is above the maximum of 20 minutes, set in " + w.adminFile() + ". It was cut to 20 minutes.\n")
-	w.shows("The session lasts 20 minutes. That is the maximum: then it ends.\n")
+	w.shows("\n  session   20 min, the maximum: then it ends\n" +
+		"            1 h is above the maximum: it was cut to 20 min\n" +
+		"            the maximum is set in " + w.adminFile() + "\n")
 	if got := w.sessionTime(); got.TimeUp || got.SecondsLeft > 1200 || got.SecondsLeft < 1200-30 {
 		w.t.Fatalf("the API says %+v, want a session with 20 minutes left", got)
 	}
@@ -201,7 +202,7 @@ func TestSET04_2_AUsersSettingAboveTheMaximumIsCutAndSaid(t *testing.T) {
 
 func TestSET04_3_ALengthBelowTheMaximumIsNotCut(t *testing.T) {
 	w := newWorldUnder(t, "SESSION_MAX = 20m", "10m")
-	w.shows("The session lasts 10 minutes. Then you are asked whether to extend it, up to the maximum of 20 minutes.\n")
+	w.shows("\n  session   10 min, then you are asked to extend, up to the maximum of 20 min\n")
 	if got := w.sessionTime(); got.TimeUp || got.SecondsLeft > 600 || got.SecondsLeft < 600-30 {
 		t.Fatalf("the API says %+v, want a session with ten minutes left", got)
 	}

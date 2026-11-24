@@ -187,7 +187,7 @@ func TestLIM03_1_NoAnswerKillsTheCommand(t *testing.T) {
 		t.Fatal("the command was killed before the question could be answered")
 	}
 	w.gone(pid)
-	w.shows("Killed: the time limit passed and the AI gave no answer.")
+	w.shows("\n  ✗ killed: the time limit passed and the AI gave no answer\n")
 	w.post("/v1/requests/"+first.ID+"/wait").killed(t, "killed_no_answer")
 }
 
@@ -204,7 +204,7 @@ func TestLIM04_1_ACommandThatEndsWhileTheQuestionWaits(t *testing.T) {
 		if out := first.Output + got.Output; out != "one\ntwo\n" {
 			t.Fatalf("%s: want the whole output, got %q", next, out)
 		}
-		if !w.exists("end") || strings.Contains(w.screen.text(), "Killed") {
+		if !w.exists("end") || strings.Contains(w.screen.text(), "killed") {
 			t.Fatalf("%s: the command was killed", next)
 		}
 	}
@@ -252,7 +252,7 @@ func TestLIM07_1_TheAIHangsUpAndTheCommandIsKilled(t *testing.T) {
 	pid := w.pid("pid")
 	a.hangUp()
 	w.gone(pid)
-	w.shows("Killed: the AI hung up.")
+	w.shows("\n  ✗ killed: the AI hung up\n")
 	w.live()
 }
 
@@ -298,7 +298,7 @@ func TestLIM09_2_CtrlCRefusesOnlyTheFirstOfTwo(t *testing.T) {
 	w.press("\x03")
 	a.answer().refused(t, "user")
 	w.prompt(2)
-	w.shows("  > touch " + w.file("b") + "\n" + question)
+	w.shows(prompted("touch " + w.file("b")))
 	b.noAnswerYet()
 	w.notRun("a")
 	w.notRun("b")

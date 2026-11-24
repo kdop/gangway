@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const refusedCharacter = "Refused a request with no prompt: it holds a character that is not allowed."
+const refusedCharacter = noPrompt + "it holds a character that is not allowed\n"
 
 // live fails the test unless the session still takes calls.
 func (w *world) live() {
@@ -53,7 +53,8 @@ func TestGATE10_3_LineBreaksAndTabsAreAllowed(t *testing.T) {
 	w := newWorld(t)
 	a := w.ask("echo one\n\techo two")
 	w.prompt(1)
-	w.shows("AI asks to run:\n  > echo one\n  > \techo two\n" + question)
+	w.shows(header(1))
+	w.shows(prompted("echo one\n\techo two"))
 	w.press("y")
 	got := a.answer()
 	got.ran(t, 0)
@@ -76,7 +77,8 @@ func TestGATE10_6_TheWrittenFormOfACodeIsAllowed(t *testing.T) {
 	command := `printf 'a\033[31mb\n'`
 	w.ask(command)
 	w.prompt(1)
-	w.shows("AI asks to run:\n  > " + command + "\n" + question)
+	w.shows(header(1))
+	w.shows(prompted(command))
 }
 
 func TestGATE11_1_APipeWorks(t *testing.T) {
@@ -108,7 +110,7 @@ func TestGATE11_3_OneYesRunsTheWholeLine(t *testing.T) {
 	command := "touch " + w.file("a") + "; touch " + w.file("b")
 	a := w.ask(command)
 	w.prompt(1)
-	w.shows("  > " + command + "\n" + question)
+	w.shows(prompted(command))
 	w.press("y")
 	a.answer().ran(t, 0)
 	if !w.exists("a") || !w.exists("b") {
@@ -148,7 +150,7 @@ func hungUp(t *testing.T) *world {
 	a := w.ask("touch " + w.file("ran"))
 	w.prompt(1)
 	a.hangUp()
-	w.shows("The AI hung up. Nothing ran.")
+	w.shows("\n  ✗ the AI hung up, nothing ran\n")
 	return w
 }
 
@@ -196,7 +198,7 @@ func TestGATE13_1_TheLineTakesTheMaximum(t *testing.T) {
 func TestGATE13_2_OneMoreIsRefusedAtOnce(t *testing.T) {
 	w, _ := fullLine(t)
 	w.ask("touch "+w.file("ran")).answer().refused(t, "line_full")
-	w.shows("Refused a request with no prompt: too many requests wait.")
+	w.shows(noPrompt + "too many requests wait\n")
 	if strings.Contains(w.screen.text(), w.file("ran")) {
 		t.Fatal("the refused request got a prompt")
 	}
@@ -336,7 +338,7 @@ func TestGATE16_3_OtherLettersAreAllowed(t *testing.T) {
 	command := "echo αβγ café 😀"
 	a := w.ask(command)
 	w.prompt(1)
-	w.shows("  > " + command + "\n" + question)
+	w.shows(prompted(command))
 	w.press("y")
 	got := a.answer()
 	got.ran(t, 0)
