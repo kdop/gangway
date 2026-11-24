@@ -1,6 +1,6 @@
 # Gangway
 
-Remote access for AI, with just-in-time approval of commands.
+Temporary remote access for AI, with just-in-time approval of commands.
 
 An AI tool such as Claude Code asks to run a command on a remote machine. A person at that machine sees the exact command and presses `y` or `n`. Nothing runs without a yes.
 
