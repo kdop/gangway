@@ -404,6 +404,18 @@ One folder, `skill/`, with the text that teaches the AI:
 - to ask for less: plain forms such as `top -b -n 1`, and `head`, `tail` or `grep` on large output,
 - to use the written form of a code, such as `\033`, never the raw character.
 
+### The install
+
+One shell script, `install.sh`, at the top of the repo. It is no part of either program and holds no code of theirs: it only fetches the cli-tool. Requirements `INS-01` to `INS-07`.
+
+- It takes the file for this kind of machine from a GitHub release, the latest one or the version it was given, and puts it at `~/.local/bin/gangway`.
+- Before that, it checks the file against the `SHA256SUMS` of the same release. The file is downloaded into a folder next to its place and moved there in one step, so the program is the old one or the new one and never half of one.
+- It needs no root and refuses to run as root. It installs the cli-tool only, never the controller.
+- It writes nothing else: no start file of the shell, no settings.
+- All of it sits in functions that the last line starts, so a copy that was cut off on its way runs nothing.
+
+The checksum shows that the download is whole and is the file of that release. It is not a signature: whoever can change a release can change the file and its checksum together. A user who wants more than that builds from the source.
+
 ### What a test can replace
 
 A test must be able to press keys, read the screen, move time forward and fake a network failure, all without a person and without waiting. So five things sit behind a narrow opening, and a test swaps in its own:
