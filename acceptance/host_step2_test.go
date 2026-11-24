@@ -352,7 +352,9 @@ func TestHOST09_1_EveryStartIsANewDevice(t *testing.T) {
 // places for settings, state, cache, data and short-lived files are all
 // inside its own. The test wrote the settings file itself. The cli-tool
 // leaves one empty folder behind, which the library makes: "tailscale" in
-// the user's data folder. The test lets it pass because it is empty.
+// the user's data folder. The test lets it pass because it is empty. The
+// log of the session is meant to stay, and is searched like every other
+// file.
 func TestHOST09_2_NothingOfTheDeviceStaysOnDisk(t *testing.T) {
 	w, control := newTailscaleWorld(t)
 	w.run("echo live > "+w.file("out")).ran(t, 0)
@@ -375,7 +377,8 @@ func TestHOST09_2_NothingOfTheDeviceStaysOnDisk(t *testing.T) {
 		if err != nil || info.IsDir() {
 			return err
 		}
-		if !allowed[path] {
+		log, _ := filepath.Match(filepath.Join(w.cliHome, "*", "gangway-*", "session.txt"), path)
+		if !allowed[path] && !log {
 			t.Errorf("the cli-tool left the file %s", path)
 		}
 		if path == filepath.Join(config, "gangway", "tailscale-auth-key") {

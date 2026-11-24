@@ -73,7 +73,8 @@ led to it.
 - **Google is the first login provider.**
 - **Host settings come in three layers that only narrow: `/etc/gangway/` owned by root, `~/.config/gangway/`, then start options.** An approved command runs as the plain user and could rewrite the user's own settings, so the outer bounds must sit where only root can write. The cli-tool only reads that folder and never runs as root.
 - **No Python; tests are plain Go tests.** One language for the whole project.
-- **No database in the first version; plain files in the home folder.** Settings and the key in `~/.config/gangway/`, the log in `~/.local/state/gangway/`. Those are the usual Linux places.
+- **No database in the first version; plain files.** Settings and the key are in `~/.config/gangway/`, the usual Linux place.
+- **Each session has a log of its own, in a new folder with a random name under the temp folder.** A log belongs to one session, and nothing of a session should stay in the home folder. The cost: the system empties the temp folder, on many hosts at every start, so a log does not last.
 - **Sessions are never stored, on either side.** A controller restart ends every session, which is the safe way to fail.
 - **A lost connection does not end the session at once: the cli-tool connects again by itself within a short time.** A network failure is not the user's doing, and the hosts being debugged are often the ones with poor networks. Nothing is read from disk for it, so an ended session still cannot come back.
 - **The controller is a web app: a REST API with a dashboard.**

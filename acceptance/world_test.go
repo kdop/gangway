@@ -116,6 +116,7 @@ type world struct {
 
 	length  string    // the length asked for at the start of the cli-tool. Empty: none
 	admin   string    // the text of the admin file. Empty: there is no admin folder
+	tmp     string    // the temp folder of the cli-tool. The log of its session is made in it
 	started time.Time // when the test saw the paste line: just after the session began
 }
 
@@ -203,6 +204,7 @@ func (w *world) startCli(settings []string) {
 	w.t.Helper()
 	t := w.t
 	w.dir, w.screen, w.cliDone = t.TempDir(), &screen{}, make(chan struct{})
+	w.tmp = t.TempDir()
 	// A new start is a new session: the caller token of the last one is of
 	// no use.
 	w.callerMu.Lock()
@@ -293,7 +295,7 @@ func (w *world) startCli(settings []string) {
 
 // cliEnviron gives the surroundings the cli-tool runs with.
 func (w *world) cliEnviron(config string) []string {
-	return append(append(append(append(os.Environ(), "HOME="+w.cliHome), w.env...), w.cliEnv...),
+	return append(append(append(append(os.Environ(), "HOME="+w.cliHome, "TMPDIR="+w.tmp), w.env...), w.cliEnv...),
 		"XDG_CONFIG_HOME="+config, "GANGWAY_TEST_ADMIN_FOLDER="+w.adminFolder())
 }
 

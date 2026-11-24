@@ -16,6 +16,7 @@ How the tool looks and feels to the user. The design is in `blueprint.md`. The s
 - **A session has a length, and says so.** At start the cli-tool says how long the session lasts. The length is `SESSION_LENGTH`, 30 minutes to start with. Another length can be asked for at start, for this one session: `gangway --length 45m`. The time is a number with a unit, such as `90s`, `45m` or `2h`.
 - **When the time is up, the cli-tool asks whether to extend.** The question takes the same keys as a prompt: lower-case `y` or `n`, with no Enter, and no key in the first half second. Ctrl+C means no. `y` gives the same length again. `n`, or no answer within `EXTEND_WAIT`, ends the session.
 - **A host can have a maximum.** Root sets `SESSION_MAX` in `/etc/gangway/settings`, as `SESSION_MAX = 2h`. No session on that host lasts longer, extensions included. A length above it is cut to it, and the cli-tool says so at start. At the maximum the session ends with no question. A file there that is not root's, that others can write, or that holds a mistake stops the start, with the reason.
+- **Every session is logged, and the cli-tool says where.** The log is a text file in a new folder under the temp folder, such as `/tmp/gangway-2780822553/session.txt`. It holds each request, its answer and the output, with the time. Only the user can read it. The path is shown when the session starts and again as the last line when it ends. The cli-tool does not delete it. It lasts until the system empties the temp folder, on many hosts at every start.
 - **Dots while it connects.** On start the cli-tool prints dots until it has joined Tailscale and reached the controller. They show it is working and not stuck.
 
 ## What the terminal shows
@@ -94,3 +95,23 @@ The session goes on for 298 seconds. That reaches the maximum: then it ends.
 ```
 
 At the maximum there is no question. The line is `The session has lasted 20 minutes, the maximum: the session ends.`
+
+The log. At the start, under the line that tells the length:
+
+```
+The session is logged at /tmp/gangway-2780822553/session.txt
+```
+
+At the end, as the last lines:
+
+```
+The session is over. Its key is dead.
+Session logged at /tmp/gangway-2780822553/session.txt
+```
+
+| Line | When |
+|---|---|
+| `That file holds the last part. The parts before it are in the same folder.` | Under `Session logged at`, when the log grew past `LOG_FILE_SIZE` and has more than one file |
+| `gangway: cannot make the log of the session in /tmp: …` | At start. No session starts without a log |
+| `The log cannot be written: the session ends.` | The log failed in the middle of a session |
+| `The log is not whole: it could not be written. What there is of it is at …` | In place of `Session logged at`, after such a failure |

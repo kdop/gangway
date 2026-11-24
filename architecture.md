@@ -364,7 +364,7 @@ Each program is made of a few pieces. A piece has one job, and the table names t
 | `runner` | Runs an approved command through the shell as the plain user, or reads a file. Counts the time, cuts the output, kills when told | `GATE-08`, `GATE-09`, `GATE-11`, `GATE-15`, `GATE-17`, `GATE-18`, `LIM-01` to `LIM-05`, `LIM-07`, `LIM-08`, `LIM-11` to `LIM-13`, `SES-05`, `SHOW-03` |
 | `terminal` | The only piece that writes to the screen and reads keys. Cleans what it shows. Tells one Ctrl+C from two | `SHOW-01` to `SHOW-05`, `GATE-03`, `GATE-04`, `GATE-05`, `KEY-04`, `LIM-09`, `LIM-10`, `HOST-02`, `HOST-07` |
 | `loop` | Takes every event in turn and passes it to the piece it belongs to. Ends the session, and waits until no command runs | `SES-02`, `SES-05`, `LIM-08`, `LIM-09` |
-| `log` | Writes each request, answer and output to the log, and starts a new file at the size limit | `LOG-01` to `LOG-05` |
+| `log` | Makes the log of the session, in a folder of its own under the temp folder. Writes each request, answer and output to it, and starts a new file at the size limit | `LOG-01` to `LOG-06` |
 | `pairing` | The exchange at `login`: the code, the `y`/`n`, the host token | `PAIR-02` to `PAIR-05`, `PAIR-10` |
 
 How a request goes through them:
@@ -374,7 +374,7 @@ How a request goes through them:
 3. `line` gives it to `gate` when nothing else is in front.
 4. `gate` asks through `terminal`. On `n` it answers `refused`.
 5. On `y`, `runner` runs it. `terminal` shows the output and `connection` sends it.
-6. `log` writes down each of these steps.
+6. `log` writes down each of these steps. The request is written before `checks` sees it, and a request that cannot be written goes no further.
 
 `session` can stop this at any point: when the time is up, it tells `line` and `gate` to refuse.
 

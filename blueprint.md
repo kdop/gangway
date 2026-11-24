@@ -197,7 +197,7 @@ On the host:
 | Settings: the controller's Tailscale name, session length, time and size limits | `~/.config/gangway/` |
 | Tailscale auth key from `login` | Same folder, own file, readable by its owner only |
 | Host token from pairing | Same folder, own file, readable by its owner only |
-| Log of requests, answers and output. A new file is started at a set size, and only the last few are kept | `~/.local/state/gangway/` |
+| Log of requests, answers and output, one for each session. A new file is started at a set size, and only the last few are kept | A new folder with a random name under the temp folder, `/tmp` |
 | Saved allow rules (second stage) | `~/.config/gangway/` |
 
 On the controller:
@@ -205,7 +205,7 @@ On the controller:
 - Paired hosts are kept in a small file: the host, the user, and a hash of the host token. They must outlive a restart, or every host would need pairing again.
 - Live sessions are kept in memory only. If the controller restarts, every session ends and new ones must be started.
 - Its settings, such as where it listens, are a small file or start options.
-- The dashboard shows what happened since the controller started. The full record is the log on each host. History that survives a restart comes later, in one SQLite file.
+- The dashboard shows what happened since the controller started. The full record of a session is its log on the host. It lasts until the system empties the temp folder, on many hosts at every start. History that survives a restart comes later, in one SQLite file.
 
 Sessions are never stored. Nothing is left on disk that could be picked up and used again.
 
@@ -258,7 +258,7 @@ This is remote command running by design. The aim is a door that is narrow, in p
 | Someone else learns the pairing code | It works once and dies in minutes. The host shows who claimed it and asks `y`/`n` |
 | Left running by mistake | Runs only in an open terminal, never in the background. Ends when its time is up unless the user extends it at the terminal, and never runs past the maximum |
 
-Every request and its answer is written to a log on the host, with the output that was sent to the AI. Only the user can read the log.
+Every request and its answer is written to the log of the session on the host, with the output that was sent to the AI. Each session has a log of its own, in a new folder under the temp folder. Only the user can read it. The cli-tool says where it is at the start and at the end of the session.
 
 ## Not in the first version
 

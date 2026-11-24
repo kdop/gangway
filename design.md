@@ -761,6 +761,7 @@ MAX_WAITING_REQUESTS = 10
 
 - One setting on a line: the name, `=`, the value. Spaces around them do not count. Empty lines are skipped.
 - A time is a number with a unit: `500ms`, `90s`, `2m`.
+- A size is a whole number with a unit: `500KB`, `10MB`. 1KB is 1000 bytes.
 
 ### The admin file
 
@@ -789,6 +790,8 @@ SESSION_MAX = 2h
 | `MAX_WAITING_REQUESTS` | Number | One or more |
 | `SESSION_LENGTH` | Time | More than zero |
 | `EXTEND_WAIT` | Time | More than zero |
+| `LOG_FILE_SIZE` | Size | 1KB or more |
+| `LOG_FILES_KEPT` | Number | From 1 to 100 |
 
 ### Rules the code must keep
 
@@ -826,6 +829,96 @@ SESSION_MAX = 2h
 | UNIT-SETTINGS-20 | `SET-01`, `SET-04` | A maximum of 20 minutes | Ask for one hour, for a nanosecond above 20 minutes, for 20 minutes, for 10 minutes | 20 minutes and "cut" for the first two. The length asked for and "not cut" for the others |
 | UNIT-SETTINGS-21 | `SET-01` | A user's file that sets `SESSION_MAX` | Read | An error that names the line, the name and the admin file |
 | UNIT-SETTINGS-22 | `SET-01`, `SET-02` | `GANGWAY_TEST_ADMIN_FOLDER` is set. The code of `settings` | Ask where the admin folder is. Search the code that reads it | `/etc/gangway`, owned by root, whatever the surroundings say. The file that fixes the place uses no package, and the test build's file is in the test build only. The reading code does not read the surroundings, opens one file for reading, and uses nothing that can write, make, remove, rename or change the rights of a file |
+| UNIT-SETTINGS-23 | `LOG-05` | A file where `LOG_FILE_SIZE` is, one by one: `1KB`, `1000B`, `500KB`, `10MB`, `10 MB`, `2GB`. Then: empty, a number with no unit, a unit in small letters, a unit alone, below zero, with a plus sign, with a point, zero, less than 1KB, an unknown unit, a number too large to hold. Then `LOG_FILES_KEPT` as: empty, 0, below zero, 101, a word, a number with a point | Read | The size in bytes each time. Then an error each time, with the line and the name |
+
+## `log`
+
+The `log` writes down what happens in one session: each request, its answer, its output and its end. It holds no say over a request. It only writes.
+
+### What it holds
+
+- The folder of the session's log, and the open log file in it.
+- `LOG_FILE_SIZE` and `LOG_FILES_KEPT`.
+- How many bytes the log file holds, and how many old files are kept.
+- The output of each approved command that has not ended yet, up to `LOG_FILE_SIZE`.
+- The first failure to write, if there was one.
+
+### Where the log is
+
+```
+/tmp/gangway-2780822553/session.txt
+/tmp/gangway-2780822553/session.1.txt
+/tmp/gangway-2780822553/session.2.txt
+```
+
+- The place is the temp folder of the host: `TMPDIR` if it is set, else `/tmp`. One function gives the place, and nothing else in the code names it.
+- At the start of a session the `log` makes a new folder there, `gangway-` and a random number, with rights for the owner only. The log file in it is `session.txt`, with rights for the owner only. (`LOG-02`, `LOG-04`)
+- The newest entries are in `session.txt`. A full file is kept as `session.1.txt`. The one that was `session.1.txt` becomes `session.2.txt`, and so on. (`LOG-05`)
+- The `log` deletes nothing when the session ends. (`LOG-02`)
+
+### An entry
+
+```
+2026-11-24T19:26:05+02:00 session started: it lasts 30 minutes
+2026-11-24T19:26:07+02:00 r_81c2 request
+  > hostname && date
+2026-11-24T19:26:09+02:00 r_81c2 approved
+2026-11-24T19:26:09+02:00 r_81c2 ended: exit code 0
+  | web-01
+  | Tue Nov 24 07:26:09 PM EET 2026
+2026-11-24T19:27:00+02:00 r_81c3 request
+  > rm -rf build
+2026-11-24T19:27:02+02:00 r_81c3 refused: user
+2026-11-24T19:30:00+02:00 session ended: user. Ctrl+C: the session ends.
+```
+
+- The first line of an entry is the time, then the `id` of the request or the word `session`, then what happened.
+- A request is followed by its text, with `  > ` at the start of each line. The end of a command is followed by its output, with `  | ` at the start of each line.
+- The steps of a request are entries of their own: `request` when it comes in, `approved` or `refused` with the reason, and `ended` with how. (`LOG-01`)
+- The steps of the session are entries too: its start with its length, `time is up`, `extended`, and its end with the reason.
+
+### What it can be asked
+
+| Ask | Does |
+|---|---|
+| `open`, with the place, the size and the number of files | Makes the folder and the log file |
+| `request`, with a request | Writes the request and its text |
+| `started`, with an `id` | Writes `approved`, and starts to hold the output of that request |
+| `refused`, with an `id` and a reason | Writes `refused` and the reason |
+| `output`, with an `id` and a text | Holds the text. Nothing is written yet |
+| `ended`, with an `id` and how | Writes how the command ended, and the output that was held |
+| `session`, with a text | Writes one line about the session |
+| `err` | Gives the first failure to write |
+| `file`, `old` | Gives the path of the log file, and the number of old files |
+| `close` | Closes the log file |
+
+### Rules the code must keep
+
+- **An entry is written whole, into one file.** Before an entry is written, the `log` looks whether it fits under `LOG_FILE_SIZE`. If not, and the file is not empty, a new file is started first. (`LOG-05`)
+- **No entry is larger than `LOG_FILE_SIZE`.** A longer text or output is cut, at a whole character, and the entry ends with a note that says so. Output past that size is not held in memory either. So the log of a session takes `LOG_FILE_SIZE` times `LOG_FILES_KEPT` plus one at most, whatever a command prints. (`LOG-05`)
+- **No text from outside can write a first line.** Every line of a request's text and of an output starts with two spaces. The `id` is written with plain letters, digits and signs only, 64 at most. A reason is written on one line.
+- **What the terminal would not show, the log does not hold.** A control character, an invisible character and one that changes the reading order are replaced, by the same rule as in `terminal`. A log read on a terminal can then paint nothing. Line breaks and tabs stay. (`LOG-03`)
+- **No secret is written.** The `log` is never handed the session key, the caller token or the Tailscale auth key.
+- **After a failure nothing more is written.** The first failure is kept, and the `loop` ends the session for it. (`LOG-06`)
+- **Only the owner can read the log.** The folder is made with rights for the owner only, and every log file too. A file is made new, never opened if it is there already. (`LOG-04`)
+
+### Unit tests
+
+The folder is a scratch folder of the test. The clock is the test's.
+
+| Test | Requirement | Start | Action | Expect |
+|---|---|---|---|---|
+| UNIT-LOG-01 | `LOG-02`, `LOG-04` | A scratch folder as the place | `open` twice. Then `open` in a place that is not there | Two folders named `gangway-` and a number, each with `session.txt` and nothing else. Only the owner can use the folders and the files. An error for the place that is not there |
+| UNIT-LOG-02 | `LOG-01`, `LOG-03` | An open log | A request of two lines, `started`, output in two pieces that split a line, `ended` with exit code 3 | Three entries, each with the time: the request with its two lines, `approved`, and `ended: exit code 3` with the two lines of output |
+| UNIT-LOG-03 | `LOG-01`, `LOG-03` | An open log | A request and `refused` with `user`. Output for it. A request and `refused` with `control_character` | Each request with its text and its refusal. No output is written |
+| UNIT-LOG-04 | `LOG-01` | An open log | `started` and `ended`, once for each way a command can be killed or fail to start. Then a command whose bytes were replaced. Then a command with no output | Each entry names the way, and no exit code. The entry of the replaced bytes says so. The last command has none of the output of the one before |
+| UNIT-LOG-05 | `LOG-01` | An open log | A request, an output, an `id`, a reason, a way to end and a session line that each hold a line break followed by a made-up first line, and control characters. A request with an `id` of 500 letters | The log has six entries. Every other line starts with the mark of a text or of an output. No control character is in the log. The `id` holds no space and no line break, and the long one is cut at 64 |
+| UNIT-LOG-06 | `LOG-05` | A size of 1000 bytes. Seven entries that fit | One more entry | Until then one file. Now `session.1.txt` holds the seven, whole, and `session.txt` holds the new entry, whole |
+| UNIT-LOG-07 | `LOG-05`, `LOG-04` | A size of 1000 bytes, three files kept | 400 commands with output of many lengths. After each, look at the folder | Never more than four files, none larger than the size, their total within the bound. Only the owner can read each. At the end every file starts with a whole entry, and the entries go from the oldest file to the log file in order, the newest last |
+| UNIT-LOG-08 | `LOG-05` | A size of 1000 bytes | A command whose output is far larger, with characters of two bytes. Then a request whose text is larger | The output held in memory stays near the size. Each entry is no larger than the size, starts with the first part, ends with the note that it was cut, and holds no half character |
+| UNIT-LOG-09 | `LOG-06` | An open log. Its file is closed behind its back. Again: a folder stands where the old file must go | Write entries | The first failure is kept and does not change. Nothing more is written. A new file that cannot be started is a failure too |
+| UNIT-LOG-10 | `LOG-02` | A log of two files | `close`. An entry. `close` again | Both files are still there, as they were. The late entry is not written, and is no failure |
+| UNIT-LOG-11 | `LOG-02` | `TMPDIR` set, then empty | Ask for the place | That folder, then `/tmp` |
 
 ## `loop`
 
@@ -833,7 +926,7 @@ The `loop` ties the pieces of the cli-tool together. Every event is handed to it
 
 ### What it holds
 
-- The pieces: `terminal`, `line`, `gate`, `runner`, the `session` and the `connection`.
+- The pieces: `terminal`, `line`, `gate`, `runner`, the `session`, the `connection` and the `log`.
 - Its state, and why the session ended.
 - The length the session starts with: the one asked for at start, or `SESSION_LENGTH`. A length above `SESSION_MAX` is cut to it. It starts the `session`'s clock with the length and the maximum.
 - The length before it was cut, and the admin file's path, for the screen.
@@ -859,7 +952,7 @@ stateDiagram-v2
 
 | Event | From | In `Live` it goes to |
 |---|---|---|
-| A request | `connection` | The `session` first. Its time is up: `refused` with `time_up` is sent and shown. Else `checks`. Refused there: `refused` is sent and the reason is shown. Else `line`. Full: `refused` with `line_full` is sent and shown. Else the `gate` is told one waits |
+| A request | `connection` | The `log` first, which writes it down. A request that could not be written is refused with `session_ended`, and the session ends. Then the `session`. Its time is up: `refused` with `time_up` is sent and shown. Else `checks`. Refused there: `refused` is sent and the reason is shown. Else `line`. Full: `refused` with `line_full` is sent and shown. Else the `gate` is told one waits |
 | `wait`, `stop` | `connection` | The `runner`, when the `id` is the one that runs. Else nowhere |
 | `cancel` | `connection` | `line` first: a request found there is removed, and `refused` with `ai_gone` is sent. Else the `gate` and the `runner`, which act only on their own `id` |
 | Bytes from the keyboard | The keyboard | `terminal`, which makes `key`, `ctrl_c` and `quit` of them |
@@ -893,16 +986,25 @@ In this order, once:
 5. The `runner` is told. A command that runs is stopped, by asking and then by force.
 6. When no command runs any more, the `connection` is closed with the reason, and the loop is `Over`.
 
+The `log` gets a line with the reason when the ending starts. When the loop is `Over`, the last line on the screen is `Session logged at` and the path of the log file.
+
+### The log
+
+- Every answer about a request passes the `log` on its way to the `connection`: `started`, `refused`, each piece of `output`, and `ended`. So do `time_up` and `extended`. The `gate`, the `runner` and the `session` know nothing of the `log`.
+- After each event the loop asks the `log` for a failure. If there is one, the session ends, and the screen says that the log cannot be written. The loop asks between events only, never while a piece is in the middle of a step.
+- At the start the screen says where the log file is.
+
 ### Rules the code must keep
 
 - **After the end, nothing is taken.** In `Ending` and `Over`, a request, a `cancel`, a key and a second end do nothing. Only what the stopping command still needs gets through: its output, its end and its timers.
 - **The program does not end while a command runs.** The loop is `Over` only when the `runner` is idle, so no command is left behind by a session that ended. (`SES-05`)
 - **The loop decides nothing about a request.** It only passes it on. The yes comes from the `gate` alone.
 - **The loop decides nothing about the time.** It hands the `session` its timers, its keys and the news that no command runs. No event from the `connection` reaches the `session`'s clock. (`LEN-09`)
+- **Nothing reaches the prompt unlogged.** A request is written to the `log` before any other piece sees it. (`LOG-06`)
 
 ### Unit tests
 
-The pieces are the real ones. The test holds the edges: the keyboard, the screen, the clock, the starter, the timers and the connection. The integration tests `PIE-01`, `PIE-02`, `PIE-04`, `PIE-05`, `PIE-06`, `PIE-12`, `PIE-13` and `PIE-14` of `architecture.md` run in the same way, as Go tests that carry those names.
+The pieces are the real ones. The test holds the edges: the keyboard, the screen, the clock, the starter, the timers and the connection. The integration tests `PIE-01` to `PIE-07`, `PIE-12`, `PIE-13` and `PIE-14` of `architecture.md` run in the same way, as Go tests that carry those names.
 
 | Test | Requirement | Start | Action | Expect |
 |---|---|---|---|---|
@@ -934,6 +1036,9 @@ The pieces are the real ones. The test holds the edges: the keyboard, the screen
 | UNIT-LOOP-26 | `SET-01`, `SET-04` | A maximum of 20 minutes. A loop with 50 minutes asked for at start. Again with 50 minutes as `SESSION_LENGTH`. Again with 10 minutes asked for. Again with no maximum | Begin | The first two: the session timer was started with 20 minutes, and the screen says that 50 minutes is above the maximum, names the admin file, and says it was cut to 20. With 10 minutes: a timer of 10 minutes, no such line, and the screen names the maximum. With no maximum the screen names none |
 | UNIT-LOOP-27 | `LEN-05` | A maximum of 40 minutes, a length of 30 | The session timer. `y`. The session timer again. Then a request and `y` | The question names the 10 minutes left and the maximum. After `y`, `extended` carries what is left. At the maximum: `Over`, closed with `time_up`, no second question, and the screen says the session has lasted its maximum. Nothing more is sent |
 | UNIT-LOOP-28 | `LEN-05`, `LEN-08` | A session whose length is its maximum. A command runs and a request waits behind it | The session timer. A new request. Then the command ends | The request that waits and the new one are refused with `time_up`. The command is not stopped, and the session is not over while it runs. When it ends: `Over`, closed with `time_up`, and no question was shown |
+| UNIT-LOOP-29 | `LOG-02` | A loop with a real log. Again with a log of more than one file. Again with no log | Begin. Ctrl+C | The start ends with `The session is logged at` and the path, which ends in `.txt`. The end is `The session is over. Its key is dead.` and then `Session logged at` with the same path. With old files, one more line says that the parts before are in the same folder. With no log the screen names none |
+| UNIT-LOOP-30 | `LOG-06` | A log that fails when the test says so. In turn: live with nothing in front, a prompt waits, a command runs with a request behind it, and at the start | A request. A key. Output and a timer, then the command ends. Begin | Each time the screen says that the log cannot be written, and the loop ends `Over`, closed with `user`. The request that could not be logged is refused with `session_ended` and gets no prompt. The prompt is refused and a `y` runs nothing. The running command is stopped and the request behind it never runs. At the end the screen says that the log is not whole, and where it is |
+| UNIT-LOOP-31 | `LOG-01`, `KEY-03` | A loop with a real log | Begin. A request. The session timer. `y` at the question. Ctrl+C | The log holds, in order and each with the time: the start with the length, the request, `time is up`, the refusal with `time_up`, `extended` with the time left, and the end with the reason. The session key is not in the log |
 
 ## `start`
 
@@ -953,10 +1058,12 @@ A session, in order:
 6. Make the session and its key.
 7. Connect to the controller over that road, and tell it the session's length, cut to the maximum if there is one. On failure, say so and stop.
 8. Give the API address from `session_ok` to `session`. A bad one stops here, and no paste line is shown. (`KEY-10`)
-9. Set the terminal to raw mode.
-10. Run the loop until it is `Over`.
-11. Put the terminal back. This happens on every way out, also when the program fails. (`HOST-07`)
-12. `network` leaves. This happens on every way out after step 5. (`SES-08`)
+9. Open the log of the session. On failure, tell the controller that the session ends, say where the log could not be made, and stop. No paste line is shown. (`LOG-06`)
+10. Set the terminal to raw mode.
+11. Run the loop until it is `Over`.
+12. Close the log. Nothing of it is deleted.
+13. Put the terminal back. This happens on every way out, also when the program fails. (`HOST-07`)
+14. `network` leaves. This happens on every way out after step 5. (`SES-08`)
 
 ### Rules the code must keep
 

@@ -30,6 +30,8 @@ type Settings struct {
 	MaxWaitingRequests int           // MAX_WAITING_REQUESTS
 	SessionLength      time.Duration // SESSION_LENGTH
 	ExtendWait         time.Duration // EXTEND_WAIT
+	LogFileSize        int64         // LOG_FILE_SIZE, in bytes
+	LogFilesKept       int           // LOG_FILES_KEPT
 }
 
 // Default gives the starting values. They are the ones in the "Settings"
@@ -47,6 +49,8 @@ func Default() Settings {
 		MaxWaitingRequests: 20,
 		SessionLength:      30 * time.Minute,
 		ExtendWait:         60 * time.Second,
+		LogFileSize:        10 * 1000 * 1000,
+		LogFilesKept:       5,
 	}
 }
 
@@ -145,6 +149,18 @@ func (s *Settings) set(name, value string) error {
 			return fmt.Errorf("%s must be a number, one or more", name)
 		}
 		s.MaxWaitingRequests = n
+	case "LOG_FILE_SIZE":
+		n, err := Size(value)
+		if err != nil || n < smallestLogFile {
+			return fmt.Errorf("%s must be a size with a unit, such as 500KB or 10MB, and 1KB or more", name)
+		}
+		s.LogFileSize = n
+	case "LOG_FILES_KEPT":
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 1 || n > mostLogFiles {
+			return fmt.Errorf("%s must be a number from 1 to %d", name, mostLogFiles)
+		}
+		s.LogFilesKept = n
 	case "SESSION_MAX":
 		folder, _ := adminPlace()
 		return fmt.Errorf("%s can be set in %s only", name, filepath.Join(folder, "settings"))
@@ -183,4 +199,33 @@ func deviceName(s string) bool {
 		}
 	}
 	return true
+}
+
+const (
+	// smallestLogFile is the least LOG_FILE_SIZE may be. An entry must
+	// have room for its first line and the note that it was cut.
+	smallestLogFile = 1000
+	mostLogFiles    = 100
+)
+
+// Size reads a size the way the settings file writes one: a whole number
+// with a unit, such as 500KB or 10MB. 1KB is 1000 bytes.
+func Size(value string) (int64, error) {
+	units := []struct {
+		name  string
+		bytes int64
+	}{{"KB", 1000}, {"MB", 1000 * 1000}, {"GB", 1000 * 1000 * 1000}, {"B", 1}}
+	for _, unit := range units {
+		digits, found := strings.CutSuffix(value, unit.name)
+		if !found {
+			continue
+		}
+		digits = strings.TrimSpace(digits)
+		n, err := strconv.ParseInt(digits, 10, 64)
+		if err != nil || n < 0 || strings.HasPrefix(digits, "+") || n > (1<<62)/unit.bytes {
+			break
+		}
+		return n * unit.bytes, nil
+	}
+	return 0, fmt.Errorf("%q is not a size", value)
 }
