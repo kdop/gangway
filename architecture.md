@@ -282,7 +282,8 @@ These two only inform. The controller uses them for `GET /v1/session` and for th
 - `session_start` carries the length in whole seconds, as `length_seconds`. A `session_start` with no length above zero is refused: every session has an end.
 - The controller counts `seconds_left` by its own clock, from the length in `session_start` and from the seconds in the last `extended`.
 - `time_up` in the answers of the API is true only after the host said so. The controller never decides it.
-- When the user does not extend, the cli-tool ends the session with `session_end` and the reason `time_up`.
+- When the user does not extend, or the session reaches `SESSION_MAX`, the cli-tool ends the session with `session_end` and the reason `time_up`.
+- The controller is never told `SESSION_MAX`. The length in `session_start` and the seconds in `extended` are already cut to it.
 
 ### Ending a session
 
@@ -352,7 +353,7 @@ Each program is made of a few pieces. A piece has one job, and the table names t
 |---|---|---|
 | `start` | Checks that it is not root and has a terminal. Picks between `login` and a session, and between Tailscale and the one-machine mode | `HOST-01`, `HOST-02`, `HOST-04`, `HOST-08` |
 | `login` | Takes the Tailscale auth key once, stores it, and tries it | `HOST-04`, `HOST-05` |
-| `settings` | Reads the three layers and lets each only narrow the one above. Says so when it cuts a value | `SET-01` to `SET-04`, `LIM-06` |
+| `settings` | Reads the three layers and lets each only narrow the one above. Says so when it cuts a value. Refuses an admin file that cannot be trusted | `SET-01` to `SET-05`, `LIM-06` |
 | `secrets` | Keeps the auth key file and the host token file, readable by the owner only. Knows which paths are never read out | `HOST-05`, `PAIR-06`, `KEY-08` |
 | `network` | The road to the controller. Joins Tailscale from inside the program as a new device, and leaves it at the end. In the one-machine mode: localhost | `HOST-03`, `HOST-06`, `HOST-08`, `HOST-09`, `SES-08` |
 | `connection` | Holds the connection to the controller. Turns answers into messages and messages into events. Notices when it is lost, connects again, and holds what could not be sent | `GATE-07`, `SES-04`, `SES-09`, `SES-10`, `SES-11` |

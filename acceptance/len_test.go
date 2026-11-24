@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -365,5 +366,45 @@ func TestLEN09_3_AYesFromTheControllerDoesNotAnswerTheQuestion(t *testing.T) {
 	s.ended()
 	if text := s.screen.text(); strings.Contains(text, "The session goes on") || !strings.Contains(text, "No answer in time.") {
 		t.Fatalf("the question was answered:\n%s", text)
+	}
+}
+
+func TestLEN05_1_AtTheMaximumTheSessionEndsWithNoQuestion(t *testing.T) {
+	const max = 8 * time.Second
+	w := newWorldUnder(t, "SESSION_MAX = 8s", "", "SESSION_LENGTH = 3s")
+	w.shows("The session lasts 3 seconds. Then you are asked whether to extend it, up to the maximum of 8 seconds.\n")
+	w.question(1)
+	w.press("y")
+	w.shows("The session goes on for 3 seconds.\n")
+	w.question(2)
+	// Less than a full stretch is left: the question names what is left.
+	if !regexp.MustCompile(`\nThe session's time is up\.\nExtend it by [12] seconds?, up to the maximum\? y/n $`).MatchString(w.screen.text()) {
+		t.Fatalf("the second question does not name what is left to the maximum")
+	}
+	w.press("y")
+	w.shows("That reaches the maximum: then it ends.\n")
+	w.live()
+
+	w.dead()
+	if lasted := time.Since(w.started); lasted < max-margin || lasted > max+3*time.Second {
+		t.Fatalf("the session ended after %s, want at the maximum of %s", lasted.Round(time.Millisecond), max)
+	}
+	if got := w.questions(); got != 2 {
+		t.Fatalf("%d questions to extend were shown, want 2: none at the maximum", got)
+	}
+	w.shows("The session has lasted 8 seconds, the maximum: the session ends.\n")
+}
+
+func TestLEN05_2_AMaximumShorterThanTheSessionLength(t *testing.T) {
+	const max = 3 * time.Second
+	// SESSION_LENGTH stays at its starting value, 30 minutes.
+	w := newWorldUnder(t, "SESSION_MAX = 3s", "")
+	w.live()
+	w.dead()
+	if lasted := time.Since(w.started); lasted < max-margin || lasted > max+3*time.Second {
+		t.Fatalf("the session ended after %s, want at the maximum of %s", lasted.Round(time.Millisecond), max)
+	}
+	if got := w.questions(); got != 0 {
+		t.Fatalf("%d questions to extend were shown, want none", got)
 	}
 }

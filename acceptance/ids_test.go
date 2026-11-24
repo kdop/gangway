@@ -11,21 +11,13 @@ import (
 )
 
 // stepsBuilt holds the steps of plan.md that are built, beside the MVP.
-var stepsBuilt = map[string]bool{"2": true}
+var stepsBuilt = map[string]bool{"2": true, "4": true}
 
 // builtOfAStepInWork holds the requirements that are built while the rest
 // of their step is not. When the whole step is built, the step goes into
 // stepsBuilt and its requirements come off this list.
 var builtOfAStepInWork = map[string]bool{
-	"KEY-05": true, // step 4
-	"LEN-01": true, // step 4
-	"LEN-02": true, // step 4
-	"LEN-03": true, // step 4
-	"LEN-04": true, // step 4
-	"LEN-06": true, // step 4
-	"LEN-07": true, // step 4
 	"LEN-08": true, // step 6, built with the session's clock of step 4
-	"LEN-09": true, // step 4
 }
 
 // noGoTest holds the tests of a built requirement that have no Go test,

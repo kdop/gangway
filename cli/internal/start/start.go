@@ -175,11 +175,17 @@ func Run(args []string, stdin, stdout *os.File, stderr io.Writer) int {
 	if err != nil {
 		return fail(err)
 	}
-	host, _ := os.Hostname()
-	length := s.SessionLength
-	if choice.Length > 0 {
-		length = choice.Length
+	admin, err := settings.LoadAdmin()
+	if err != nil {
+		return fail(err)
 	}
+	host, _ := os.Hostname()
+	asked := s.SessionLength
+	if choice.Length > 0 {
+		asked = choice.Length
+	}
+	// The controller is told the length the session really starts with.
+	length, _ := admin.Length(asked)
 
 	var road network.Network
 	if what == doLocal {
@@ -246,7 +252,8 @@ func Run(args []string, stdin, stdout *os.File, stderr io.Writer) int {
 		},
 		Timers:        timers{ev, &l},
 		SessionTimers: sessionTimers{ev, &l},
-		Length:        length,
+		Length:        asked,
+		Admin:         admin,
 	})
 
 	go readKeys(stdin, ev, &l)

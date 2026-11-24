@@ -45,15 +45,18 @@ func TestMain(m *testing.M) {
 	}
 	controllerBin = filepath.Join(dir, "controller")
 	cliBin = filepath.Join(dir, "gangway")
-	build := func(folder, out, pkg string) {
-		cmd := exec.Command("go", "build", "-o", out, pkg)
+	build := func(folder, out, pkg string, more ...string) {
+		cmd := exec.Command("go", append(append([]string{"build"}, more...), "-o", out, pkg)...)
 		cmd.Dir = filepath.Join("..", folder)
 		if b, err := cmd.CombinedOutput(); err != nil {
 			panic(fmt.Sprintf("build of %s: %v\n%s", folder, err, b))
 		}
 	}
 	build("controller", controllerBin, ".")
-	build("cli", cliBin, "./cmd/gangway")
+	// The tests cannot write /etc/gangway. This build of the cli-tool takes
+	// the admin folder from GANGWAY_TEST_ADMIN_FOLDER, and takes the user
+	// who runs the tests as its owner. No other build reads that name.
+	build("cli", cliBin, "./cmd/gangway", "-tags", "gangwaytest")
 	code := m.Run()
 	os.RemoveAll(dir)
 	os.Exit(code)
@@ -112,6 +115,7 @@ type world struct {
 	cliEnv      []string
 
 	length  string    // the length asked for at the start of the cli-tool. Empty: none
+	admin   string    // the text of the admin file. Empty: there is no admin folder
 	started time.Time // when the test saw the paste line: just after the session began
 }
 
@@ -126,6 +130,13 @@ func newWorld(t *testing.T, settings ...string) *world {
 // "3s". Empty: none is asked for.
 func newWorldOf(t *testing.T, length string, settings ...string) *world {
 	t.Helper()
+	return newWorldUnder(t, "", length, settings...)
+}
+
+// newWorldUnder is newWorldOf on a host with this text in its admin file,
+// such as "SESSION_MAX = 20m". Empty: the host has no admin folder.
+func newWorldUnder(t *testing.T, admin, length string, settings ...string) *world {
+	t.Helper()
 	beside(t)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -134,7 +145,7 @@ func newWorldOf(t *testing.T, length string, settings ...string) *world {
 	listen := ln.Addr().String()
 	ln.Close()
 
-	w := &world{t: t, home: t.TempDir(), listen: listen, address: "http://" + listen, ctl: new(*exec.Cmd), length: length}
+	w := &world{t: t, home: t.TempDir(), listen: listen, address: "http://" + listen, ctl: new(*exec.Cmd), length: length, admin: admin}
 	w.startController()
 	t.Cleanup(w.stopController)
 	w.startCli(settings)
@@ -144,7 +155,7 @@ func newWorldOf(t *testing.T, length string, settings ...string) *world {
 // join starts one more cli-tool on the same controller.
 func (w *world) join(settings ...string) *world {
 	w.t.Helper()
-	more := &world{t: w.t, home: w.home, listen: w.listen, address: w.address, ctl: w.ctl, cliArgs: w.cliArgs, env: w.env, cliKey: w.cliKey, cliConfig: w.cliConfig, ctlOut: w.ctlOut, cliHome: w.cliHome, cliEnv: w.cliEnv}
+	more := &world{t: w.t, home: w.home, listen: w.listen, address: w.address, ctl: w.ctl, cliArgs: w.cliArgs, env: w.env, cliKey: w.cliKey, cliConfig: w.cliConfig, ctlOut: w.ctlOut, cliHome: w.cliHome, cliEnv: w.cliEnv, admin: w.admin}
 	more.startCli(settings)
 	return more
 }
@@ -221,6 +232,8 @@ func (w *world) startCli(settings []string) {
 		t.Fatal(err)
 	}
 
+	w.writeAdmin()
+
 	master, slave := openTerminal(t)
 	w.keys = master
 	args := w.cliArgs
@@ -280,7 +293,33 @@ func (w *world) startCli(settings []string) {
 
 // cliEnviron gives the surroundings the cli-tool runs with.
 func (w *world) cliEnviron(config string) []string {
-	return append(append(append(append(os.Environ(), "HOME="+w.cliHome), w.env...), w.cliEnv...), "XDG_CONFIG_HOME="+config)
+	return append(append(append(append(os.Environ(), "HOME="+w.cliHome), w.env...), w.cliEnv...),
+		"XDG_CONFIG_HOME="+config, "GANGWAY_TEST_ADMIN_FOLDER="+w.adminFolder())
+}
+
+// adminFolder is where this world's cli-tool looks for the admin file, in
+// the place of /etc/gangway.
+func (w *world) adminFolder() string { return filepath.Join(w.home, "etc-gangway") }
+
+// adminFile is the admin file of this world.
+func (w *world) adminFile() string { return filepath.Join(w.adminFolder(), "settings") }
+
+// writeAdmin makes the admin folder and its file, if the world has an
+// admin text and the folder is not there yet.
+func (w *world) writeAdmin() {
+	w.t.Helper()
+	if w.admin == "" {
+		return
+	}
+	if _, err := os.Stat(w.adminFolder()); err == nil {
+		return
+	}
+	if err := os.Mkdir(w.adminFolder(), 0o755); err != nil {
+		w.t.Fatal(err)
+	}
+	if err := os.WriteFile(w.adminFile(), []byte(w.admin+"\n"), 0o644); err != nil {
+		w.t.Fatal(err)
+	}
 }
 
 // ended waits until the cli-tool has ended.

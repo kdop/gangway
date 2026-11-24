@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -75,6 +76,15 @@ func Load(path string) (Settings, error) {
 	defer file.Close()
 
 	s := Default()
+	if err := parse(file, path, s.set); err != nil {
+		return Default(), err
+	}
+	return s, nil
+}
+
+// parse reads the lines of a settings file and hands each setting to set.
+// An error names the file and the line.
+func parse(file io.Reader, path string, set func(name, value string) error) error {
 	seen := map[string]bool{}
 	lines := bufio.NewScanner(file)
 	for number := 1; lines.Scan(); number++ {
@@ -82,8 +92,8 @@ func Load(path string) (Settings, error) {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		fail := func(why string) (Settings, error) {
-			return Default(), fmt.Errorf("%s, line %d: %s", path, number, why)
+		fail := func(why string) error {
+			return fmt.Errorf("%s, line %d: %s", path, number, why)
 		}
 		name, value, found := strings.Cut(line, "=")
 		if !found {
@@ -94,14 +104,11 @@ func Load(path string) (Settings, error) {
 			return fail(name + " is set twice")
 		}
 		seen[name] = true
-		if err := s.set(name, value); err != nil {
+		if err := set(name, value); err != nil {
 			return fail(err.Error())
 		}
 	}
-	if err := lines.Err(); err != nil {
-		return Default(), err
-	}
-	return s, nil
+	return lines.Err()
 }
 
 func (s *Settings) set(name, value string) error {
@@ -138,6 +145,9 @@ func (s *Settings) set(name, value string) error {
 			return fmt.Errorf("%s must be a number, one or more", name)
 		}
 		s.MaxWaitingRequests = n
+	case "SESSION_MAX":
+		folder, _ := adminPlace()
+		return fmt.Errorf("%s can be set in %s only", name, filepath.Join(folder, "settings"))
 	default:
 		return fmt.Errorf("%q is not a setting", name)
 	}

@@ -27,18 +27,28 @@ type world struct {
 	timers []started
 
 	questions []time.Duration // the question to extend, with the length it named
+	toMax     []bool          // whether each question, and each yes, named the maximum
 	answers   []Answer
-	sent      []string // what went to the controller
-	refuse    int      // the loop was told to refuse what waits
-	notExt    int      // the loop was told to end the session
+	got       []time.Duration // the stretch each yes gave
+	maxed     int             // the loop was told that the maximum is reached
+	sent      []string        // what went to the controller
+	refuse    int             // the loop was told to refuse what waits
+	notExt    int             // the loop was told to end the session
 }
 
 func (w *world) Now() time.Time                    { return w.now }
 func (w *world) Start(d time.Duration, number int) { w.timers = append(w.timers, started{d, number}) }
-func (w *world) ExtendQuestion(d time.Duration)    { w.questions = append(w.questions, d) }
-func (w *world) ExtendAnswer(a Answer)             { w.answers = append(w.answers, a) }
-func (w *world) TimeUp()                           { w.sent = append(w.sent, "time_up") }
-func (w *world) Extended(seconds int)              { w.sent = append(w.sent, fmt.Sprint("extended ", seconds)) }
+func (w *world) ExtendQuestion(d time.Duration, toMax bool) {
+	w.questions, w.toMax = append(w.questions, d), append(w.toMax, toMax)
+}
+func (w *world) ExtendAnswer(a Answer, d time.Duration, toMax bool) {
+	w.answers = append(w.answers, a)
+	if a == Yes {
+		w.got, w.toMax = append(w.got, d), append(w.toMax, toMax)
+	}
+}
+func (w *world) TimeUp()              { w.sent = append(w.sent, "time_up") }
+func (w *world) Extended(seconds int) { w.sent = append(w.sent, fmt.Sprint("extended ", seconds)) }
 
 // loopSide is the loop, as the session sees it.
 type loopSide struct{ w *world }
@@ -46,6 +56,10 @@ type loopSide struct{ w *world }
 func (l loopSide) TimeUp() { l.w.refuse++ }
 func (l loopSide) NotExtended() {
 	l.w.notExt++
+	l.w.s.End()
+}
+func (l loopSide) MaxReached() {
+	l.w.maxed++
 	l.w.s.End()
 }
 
@@ -56,17 +70,36 @@ func (w *world) last() started { return w.timers[len(w.timers)-1] }
 
 // did tells everything the session has done so far, to compare later.
 func (w *world) did() string {
-	return fmt.Sprint(w.s.State(), w.s.end, w.timers, w.questions, w.answers, w.sent, w.refuse, w.notExt)
+	return fmt.Sprint(w.s.State(), w.s.end, w.s.maxEnd, w.timers, w.questions, w.toMax, w.answers, w.got, w.sent, w.refuse, w.notExt, w.maxed)
 }
 
 // clocked gives a live session whose clock has just started with this
 // length.
 func clocked(t *testing.T, length time.Duration) *world {
 	t.Helper()
+	return capped(t, length, 0)
+}
+
+// capped is clocked with a maximum. Zero: none.
+func capped(t *testing.T, length, max time.Duration) *world {
+	t.Helper()
 	w := &world{now: time.Unix(1000, 0), s: mustNew(t)}
 	w.s.StartClock(Edges{Clock: w, Timers: w, Screen: w, Sender: w, Loop: loopSide{w},
-		Length: length, ExtendWait: extendWait, MinShow: minShow})
+		Length: length, Max: max, ExtendWait: extendWait, MinShow: minShow})
 	return w
+}
+
+// runOut lets the stretch that counts run out, with no command running.
+func (w *world) runOut() {
+	w.pass(w.last().d)
+	w.s.Timer(w.last().number)
+	w.s.Idle()
+}
+
+// yes presses y at the question, after PROMPT_MIN_SHOW.
+func (w *world) yes() {
+	w.pass(minShow)
+	w.s.Press([]byte("y"))
 }
 
 // timeUp gives a session whose time has just run out.
@@ -340,5 +373,171 @@ func TestUNITSESSION20_OnePlaceSetsTheEndTime(t *testing.T) {
 	if y, n := strings.Index(press, "case 'y':"), strings.Index(press, "case 'n':"); y < 0 || n < y ||
 		!strings.Contains(press[y:n], "s.count()") {
 		t.Fatal("count is not called under the key y")
+	}
+}
+
+// UNIT-SESSION-21. Requirement: LEN-05.
+func TestUNITSESSION21_AnExtendIsCutAtTheMaximum(t *testing.T) {
+	w := capped(t, 10*time.Minute, 25*time.Minute)
+	if w.last().d != 10*time.Minute {
+		t.Fatalf("the first timer is %v, want ten minutes", w.last().d)
+	}
+	w.runOut()
+	w.yes()
+	w.runOut()
+	left := 5*time.Minute - 2*minShow
+	if fmt.Sprint(w.questions) != fmt.Sprint([]time.Duration{10 * time.Minute, left + minShow}) {
+		t.Fatalf("the questions named %v", w.questions)
+	}
+	w.yes()
+	if w.last().d != left || fmt.Sprint(w.got) != fmt.Sprint([]time.Duration{10 * time.Minute, left}) {
+		t.Fatalf("the last timer is %v and the stretches given are %v, want what was left to the maximum, %v", w.last().d, w.got, left)
+	}
+	if fmt.Sprint(w.toMax) != "[false false true true]" {
+		t.Fatalf("the maximum was named: %v, want at the second question and its yes only", w.toMax)
+	}
+	if got := w.sent[len(w.sent)-1]; got != fmt.Sprint("extended ", Seconds(left)) {
+		t.Fatalf("the controller was told %q", got)
+	}
+	if !w.s.end.Equal(time.Unix(1000, 0).Add(25 * time.Minute)) {
+		t.Fatalf("the end time is %v, want the maximum", w.s.end)
+	}
+
+	w.runOut()
+	if w.maxed != 1 || w.notExt != 0 || w.s.State() != Ended {
+		t.Fatalf("at the maximum: %s", w.did())
+	}
+	if len(w.questions) != 2 {
+		t.Fatalf("a question was shown at the maximum: %v", w.questions)
+	}
+}
+
+// UNIT-SESSION-22. Requirement: LEN-05, SET-01.
+func TestUNITSESSION22_ALengthAtOrAboveTheMaximumEndsWithNoQuestion(t *testing.T) {
+	for _, length := range []time.Duration{20 * time.Minute, 30 * time.Minute, time.Hour} {
+		w := capped(t, length, 20*time.Minute)
+		if len(w.timers) != 1 || w.last().d != 20*time.Minute {
+			t.Fatalf("with a length of %v the timers are %v, want one of the maximum", length, w.timers)
+		}
+		w.pass(20*time.Minute - time.Millisecond)
+		if !w.s.Takes() {
+			t.Fatalf("with a length of %v a request just before the maximum may not go on", length)
+		}
+		w.pass(time.Millisecond)
+		w.s.Timer(w.last().number)
+		if w.s.Takes() || fmt.Sprint(w.sent) != "[time_up]" || w.refuse != 1 {
+			t.Fatalf("with a length of %v, at the maximum: %s", length, w.did())
+		}
+		w.s.Idle()
+		if w.maxed != 1 || len(w.questions) != 0 || w.s.State() != Ended {
+			t.Fatalf("with a length of %v, with no command running: %s", length, w.did())
+		}
+	}
+}
+
+// UNIT-SESSION-23. Requirement: LEN-05, LEN-08.
+func TestUNITSESSION23_AtTheMaximumARunningCommandIsWaitedFor(t *testing.T) {
+	w := capped(t, 10*time.Minute, 10*time.Minute)
+	w.pass(10 * time.Minute)
+	w.s.Timer(w.last().number)
+	if w.s.State() != TimeUp || w.maxed != 0 {
+		t.Fatalf("before the loop said that no command runs: %s", w.did())
+	}
+	w.pass(time.Minute)
+	w.s.Press([]byte("y"))
+	w.s.CtrlC()
+	if w.s.State() != TimeUp || w.maxed != 0 || len(w.timers) != 1 {
+		t.Fatalf("a key did something at the maximum: %s", w.did())
+	}
+	w.s.Idle()
+	if w.maxed != 1 || len(w.questions) != 0 {
+		t.Fatalf("after the command: %s", w.did())
+	}
+}
+
+// UNIT-SESSION-24. Requirement: LEN-05.
+func TestUNITSESSION24_TheQuestionDoesNotWaitPastTheMaximum(t *testing.T) {
+	w := capped(t, 10*time.Minute, 10*time.Minute+30*time.Second)
+	w.runOut()
+	if fmt.Sprint(w.questions) != fmt.Sprint([]time.Duration{30 * time.Second}) || !w.toMax[0] {
+		t.Fatalf("the question named %v, maximum %v", w.questions, w.toMax)
+	}
+	if w.last().d != 30*time.Second {
+		t.Fatalf("the question waits %v, want the 30 seconds left to the maximum", w.last().d)
+	}
+	w.pass(30 * time.Second)
+	w.s.Timer(w.last().number)
+	if w.maxed != 1 || w.notExt != 0 || fmt.Sprint(w.answers) != fmt.Sprint([]Answer{AtMax}) {
+		t.Fatalf("when the maximum came at the question: %s", w.did())
+	}
+
+	// The timer is late, and y comes first.
+	w = capped(t, 10*time.Minute, 10*time.Minute+30*time.Second)
+	w.runOut()
+	timers := len(w.timers)
+	w.pass(30 * time.Second)
+	w.s.Press([]byte("y"))
+	if w.maxed != 1 || len(w.timers) != timers || len(w.got) != 0 || w.s.State() != Ended {
+		t.Fatalf("a y at the maximum: %s", w.did())
+	}
+	if fmt.Sprint(w.sent) != "[time_up]" {
+		t.Fatalf("the controller was told %v", w.sent)
+	}
+
+	// More is left to the maximum than EXTEND_WAIT: the question waits
+	// EXTEND_WAIT, and no answer is a no.
+	w = capped(t, 10*time.Minute, 15*time.Minute)
+	w.runOut()
+	if w.last().d != extendWait {
+		t.Fatalf("the question waits %v, want EXTEND_WAIT", w.last().d)
+	}
+	w.pass(extendWait)
+	w.s.Timer(w.last().number)
+	if w.notExt != 1 || w.maxed != 0 {
+		t.Fatalf("no answer below the maximum: %s", w.did())
+	}
+}
+
+// UNIT-SESSION-25. Requirement: LEN-05, LEN-09, SET-03.
+func TestUNITSESSION25_TheMaximumIsSetOnceAndNoMaximumCutsNothing(t *testing.T) {
+	code, err := os.ReadFile("session.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(code)
+	if n := strings.Count(src, "s.maxEnd = ") + strings.Count(src, "s.maxEnd="); n != 1 {
+		t.Fatalf("the maximum is set in %d places, want one", n)
+	}
+	if strings.Contains(src, "&s.maxEnd") {
+		t.Fatal("the maximum is changed in a way this test does not follow")
+	}
+	start := src[strings.Index(src, "func (s *Session) StartClock("):]
+	start = start[:strings.Index(start, "\n}\n")]
+	if !strings.Contains(start, "s.maxEnd = ") {
+		t.Fatal("the maximum is not set at the start of the clock")
+	}
+
+	w := capped(t, 10*time.Minute, 25*time.Minute)
+	max := w.s.maxEnd
+	w.runOut()
+	w.yes()
+	w.runOut()
+	w.yes()
+	if !w.s.maxEnd.Equal(max) {
+		t.Fatalf("the maximum moved from %v to %v", max, w.s.maxEnd)
+	}
+
+	w = clocked(t, 10*time.Minute)
+	for i := 0; i < 50; i++ {
+		w.runOut()
+		w.yes()
+		if w.last().d != 10*time.Minute || w.maxed != 0 {
+			t.Fatalf("with no maximum, extend %d: %s", i+1, w.did())
+		}
+	}
+	for _, named := range w.toMax {
+		if named {
+			t.Fatal("a maximum was named with none set")
+		}
 	}
 }

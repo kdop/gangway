@@ -227,5 +227,5 @@ func TestUNITSETTINGS14_TheSessionLengthAndTheExtendWait(t *testing.T) {
 }
 
 func TestDesignAndGoTestsMatch(t *testing.T) {
-	designcheck.Match(t, "UNIT-SETTINGS", "settings_test.go")
+	designcheck.Match(t, "UNIT-SETTINGS", "settings_test.go", "admin_test.go")
 }
