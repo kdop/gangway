@@ -47,7 +47,7 @@ jobs:
             fi
           done
       - name: Try the program
-        run: ./dist/gangway-linux-amd64 --help
+        run: ./dist/gangway-linux-amd64 --help 2>&1 | grep "How to start gangway"
       - name: Checksums
         working-directory: dist
         run: sha256sum gangway-* > SHA256SUMS && cat SHA256SUMS
