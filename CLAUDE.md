@@ -29,6 +29,7 @@ says what it is. This file says how it is built and why.
 | `design.md` | The inside of each piece that has states, with its unit tests. A piece is added just before it is built |
 | `diagrams.md` | The design as Mermaid diagrams: parts, session, gate, failures, trust, pairing |
 | `ux.md` | How the tool looks and feels: prompts, messages, small touches |
+| `docs/demo.md` | How to record the short demo for the README and for a post |
 | `notes/<yyyy-mm>.md` | The timeline, one file per month |
 | `.claude/` | Rules (`rules/`, with the voice in `rules/voice.md`) and skills (`skills/`) |
 
