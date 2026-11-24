@@ -240,7 +240,7 @@ func TestCTL11_2_FieldsTheAPIDoesNotHaveChangeNothing(t *testing.T) {
 		done <- got
 	}()
 	w.prompt(1)
-	w.shows("AI asks to run:\n  > touch " + w.file("ran") + "\n" + question)
+	w.shows(prompted("touch " + w.file("ran")))
 	w.notRun("ran")
 	select {
 	case got := <-done:

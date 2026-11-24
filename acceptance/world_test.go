@@ -24,7 +24,14 @@ import (
 )
 
 const (
-	question = "Run it? y/n "
+	// question is the line of a prompt that waits for the y or n.
+	question = "  run it?   y yes   n no "
+	// mark starts every line of a command's output on the screen.
+	mark = "  │ "
+	// refusedByUser closes a prompt that got an n or a Ctrl+C.
+	refusedByUser = "\n  ✗ refused, nothing ran\n"
+	// noPrompt starts the line that tells of a request refused with no prompt.
+	noPrompt = "\n  ✗ refused a request with no prompt: "
 
 	// promptMinShow is the PROMPT_MIN_SHOW the tests run with, unless a
 	// test sets its own.
@@ -113,6 +120,7 @@ type world struct {
 	ctlOut      *screen // what the controller printed
 	cliHome     string  // the home folder of the cli-tool. Empty: home
 	cliEnv      []string
+	cols        int // the columns of the cli-tool's terminal. Zero: not set
 
 	length  string    // the length asked for at the start of the cli-tool. Empty: none
 	admin   string    // the text of the admin file. Empty: there is no admin folder
@@ -150,6 +158,26 @@ func newWorldUnder(t *testing.T, admin, length string, settings ...string) *worl
 	w.startController()
 	t.Cleanup(w.stopController)
 	w.startCli(settings)
+	return w
+}
+
+// newWorldLook is newWorld on a terminal of this many columns, with these
+// surroundings for the cli-tool, such as "TERM=dumb". Zero columns: the
+// terminal does not tell its width.
+func newWorldLook(t *testing.T, cols int, env ...string) *world {
+	t.Helper()
+	beside(t)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listen := ln.Addr().String()
+	ln.Close()
+
+	w := &world{t: t, home: t.TempDir(), listen: listen, address: "http://" + listen, ctl: new(*exec.Cmd), cols: cols, cliEnv: env}
+	w.startController()
+	t.Cleanup(w.stopController)
+	w.startCli(nil)
 	return w
 }
 
@@ -238,6 +266,12 @@ func (w *world) startCli(settings []string) {
 
 	master, slave := openTerminal(t)
 	w.keys = master
+	if w.cols > 0 {
+		size := [4]uint16{24, uint16(w.cols)}
+		if _, _, e := syscall.Syscall(syscall.SYS_IOCTL, master.Fd(), syscall.TIOCSWINSZ, uintptr(unsafe.Pointer(&size))); e != 0 {
+			t.Fatal(e)
+		}
+	}
 	args := w.cliArgs
 	if args == nil {
 		args = []string{"--local", w.address}
@@ -293,10 +327,42 @@ func (w *world) startCli(settings []string) {
 	})
 }
 
-// cliEnviron gives the surroundings the cli-tool runs with.
+// cliEnviron gives the surroundings the cli-tool runs with. Its terminal
+// shows the signs and no colors, unless a test sets another look.
 func (w *world) cliEnviron(config string) []string {
-	return append(append(append(append(os.Environ(), "HOME="+w.cliHome, "TMPDIR="+w.tmp), w.env...), w.cliEnv...),
+	look := []string{"TERM=xterm", "LC_ALL=C.UTF-8", "NO_COLOR=1"}
+	return append(append(append(append(append(os.Environ(), look...), "HOME="+w.cliHome, "TMPDIR="+w.tmp), w.env...), w.cliEnv...),
 		"XDG_CONFIG_HOME="+config, "GANGWAY_TEST_ADMIN_FOLDER="+w.adminFolder())
+}
+
+// header gives the start of the header line of the nth prompt of a session.
+func header(n int) string { return fmt.Sprintf("\n  ── request %d ─", n) }
+
+// running gives the start of the header line that shows when the nth
+// request was approved.
+func running(n int) string { return fmt.Sprintf("\n  ── request %d ── running ─", n) }
+
+// prompted gives a whole prompt for this command, from its first line to
+// the question.
+func prompted(command string) string {
+	return "\n\n  > " + strings.ReplaceAll(command, "\n", "\n  > ") + "\n\n" + question
+}
+
+// ended gives the lines that close a command that ran to its end: its
+// output, each line with the mark, and the line about the end.
+func ended(exit int, lines ...string) string {
+	out, wrote := "", "no output"
+	for _, l := range lines {
+		out += mark + l + "\n"
+	}
+	switch len(lines) {
+	case 0:
+	case 1:
+		wrote = "1 line sent to the AI"
+	default:
+		wrote = fmt.Sprintf("%d lines sent to the AI", len(lines))
+	}
+	return fmt.Sprintf("%s\n  ✓ ended, exit %d, %s\n", out, exit, wrote)
 }
 
 // adminFolder is where this world's cli-tool looks for the admin file, in

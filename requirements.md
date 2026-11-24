@@ -27,12 +27,12 @@ Where a test says the user presses a key at a prompt, `PROMPT_MIN_SHOW` has pass
 
 ## The MVP
 
-The MVP is set in `plan.md`. It delivers these 51 requirements:
+The MVP is set in `plan.md`. It delivers these 52 requirements:
 
 | Group | Requirements |
 |---|---|
 | GATE | 01, 02, 03, 04, 05, 06, 07, 08, 10, 11, 12, 13, 14, 15, 16, 17, 18 |
-| SHOW | 01, 02, 03, 04, 05 |
+| SHOW | 01, 02, 03, 04, 05, 06 |
 | SES | 01, 02, 03, 05, 06, 07 |
 | KEY | 01, 02, 03, 04, 09 |
 | LIM | 01, 02, 03, 04, 06, 07, 08, 09, 10, 11, 12, 13 |
@@ -246,12 +246,12 @@ The cli-tool's terminal must show each request and the answer given to it. Step 
 
 ### SHOW-02
 
-The cli-tool's terminal must show the output that is sent back. When a command is killed or cannot be started, the terminal must say so, and why. A command that ends by itself gets no line about its end, whatever its exit code. Step 1.
+The cli-tool's terminal must show the output that is sent back, and must say how each command ended. For a command that ends by itself it must show the exit code. When a command is killed or cannot be started, it must say so, and why. Step 1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
-| SHOW-02.1 | Live session | An approved command prints two lines and ends with exit code 0 | The terminal shows both lines, and no line about the end |
-| SHOW-02.2 | Live session | An approved command fails with exit code 3 | The terminal shows its output, and no line about the end. The AI gets exit code 3 |
+| SHOW-02.1 | Live session | An approved command prints two lines and ends with exit code 0 | The terminal shows both lines, then a line that says it ended with exit code 0 and that two lines were sent to the AI |
+| SHOW-02.2 | Live session | An approved command prints a line and fails with exit code 3. Then one fails with exit code 4 and prints nothing | The terminal shows the output and exit code 3. Then exit code 4, and that there was no output. The AI gets the same exit codes |
 | SHOW-02.3 | A command runs | The command is killed: once by Ctrl+C, once at a time limit | Each time the terminal shows that it was killed, and why |
 
 ### SHOW-03
@@ -268,13 +268,14 @@ Output shown on the cli-tool's terminal must hold no control character other tha
 
 ### SHOW-04
 
-Every line of output shown on the cli-tool's terminal must start with a mark that no line of the cli-tool itself starts with. Step 1.
+Every line of output shown on the cli-tool's terminal must start with a mark that no line of the cli-tool itself starts with. Every line of the command in a prompt must start with a mark of its own, under the same rule. Step 1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
 | SHOW-04.1 | Live session | An approved command prints three lines | Each of the three starts with the mark |
-| SHOW-04.2 | Live session | An approved command prints text that looks like a prompt of the cli-tool | Each line of it starts with the mark. No line of it starts where a real prompt starts |
+| SHOW-04.2 | Live session | An approved command prints text that looks like the lines of the cli-tool: a header, a prompt, the end of a command, the paste line, the end of a session | Each line of it starts with the mark. The only lines that start as lines of the cli-tool do are the ones the cli-tool wrote |
 | SHOW-04.3 | Live session | An approved command prints text with no line break at the end, and ends | What the cli-tool shows next starts on a new line |
+| SHOW-04.4 | Live session | The AI asks for a command whose lines look like the lines of the cli-tool: the same text as in SHOW-04.2 | Each line of it is shown with the mark of a command. The only lines that start as lines of the cli-tool do are the ones the cli-tool wrote. Nothing has run |
 
 ### SHOW-05
 
@@ -283,6 +284,17 @@ Output shown on the cli-tool's terminal must hold no invisible character and no 
 | Test | Start | Action | Expect |
 |---|---|---|---|
 | SHOW-05.1 | Live session | An approved command prints a character that turns the reading order around, and a zero-width space | Neither reaches the terminal. The AI gets the output unchanged |
+
+### SHOW-06
+
+The signs and colors of the cli-tool's terminal must carry no meaning of their own: every line must say the same with them and without them. The only codes the cli-tool itself may write are codes that set a color or a weight. It must never move the cursor or clear what is on screen. Where the terminal cannot show colors or signs, it must write none: no code when `NO_COLOR` is set, and plain ASCII with no code when `TERM` is `dumb` or the locale is not UTF-8. Step 1.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| SHOW-06.1 | A terminal with colors and a UTF-8 locale | A whole session: a request approved, one refused, Ctrl+C | Colors reach the terminal, and no other code does. With the colors taken out, each line reads as it does with no color. No mark of a command or of output is painted |
+| SHOW-06.2 | The same terminal. `NO_COLOR` is set | The same session | No code reaches the terminal at all |
+| SHOW-06.3 | `TERM` is `dumb`. Again with a locale that is not UTF-8 | The same session | Only plain ASCII reaches the terminal. The header, the prompt, the output with its mark, the end of the command, the refusal and the end of the session are all there |
+| SHOW-06.4 | Terminals of 100 columns, of one column more than the banner, of the banner's width, of 20 columns, and one that does not tell its width | Start a session | The banner is the first thing shown on the first two and on the last. It is left out on the other two. The start of the session is whole on all of them |
 
 ## SES: the session
 
@@ -1065,7 +1077,7 @@ Each session must have a log of its own: one log file in a new folder under the 
 |---|---|---|---|
 | LOG-02.1 | A session has ended | Look in the temp folder and in the home folder | The temp folder holds one new folder, named `gangway-` and a random part, with the log file `session.txt` in it. The home folder holds no log |
 | LOG-02.2 | Two sessions on one host, one after the other | Look in the temp folder | Each session has a folder of its own, and its log holds only its own requests. No folder name holds a part of a session key |
-| LOG-02.3 | A live session | Read the screen. End the session. Read the screen and the log | At the start the screen says `The session is logged at` and the path of the log file, which ends in `.txt`. The last line at the end is `Session logged at` and the same path. The log is still there, and holds the end of the session |
+| LOG-02.3 | A live session | Read the screen. End the session. Read the screen and the log | At the start the screen names the path of the log file, which ends in `.txt`. At the end it names the same path again, among its last lines. The log is still there, and holds the end of the session |
 
 ### LOG-03
 

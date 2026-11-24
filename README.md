@@ -14,25 +14,46 @@ On the remote machine, the host, you start a session and paste one line to the A
 
 ```
 $ gangway
-Joining Tailscale ...
-Connected. The session is live.
-Paste this line to the AI:
+   ____
+  / ___| __ _ _ __   __ ___      ____ _ _   _
+ | |  _ / _` | '_ \ / _` \ \ /\ / / _` | | | |
+ | |_| | (_| | | | | (_| |\ V  V / (_| | |_| |
+  \____|\__,_|_| |_|\__, | \_/\_/ \__,_|\__, |
+                    |___/               |___/
+
+  Joining Tailscale ...
+
+  host      build-box
+  session   30 min, then you are asked to extend
+  network   connected over Tailscale
+  log       /tmp/gangway-220257878/session.txt
+
+  Paste this line to the AI:
 
 /gangway https://controller.example gw_4f9c…
 
-Each request is shown here. Press y to run it, n to refuse. Ctrl+C ends the session.
-The session lasts 30 minutes. Then you are asked whether to extend it.
-The session is logged at /tmp/gangway-2780822553/session.txt
+  y run   n refuse   Ctrl+C end
 ```
 
 From then on, each command the AI wants is shown to you first:
 
 ```
-AI asks to run:
+  ── request 1 ──────────────────────────  29 min left
+
   > grep ERROR app.log | tail -n 20
-Run it? y/n y
-  | 14:02:11 ERROR disk full
-  | 14:02:15 ERROR disk full
+
+  run it?   y yes   n no 
+```
+
+Press `y`, and it runs:
+
+```
+  ── request 1 ── running ───────────────  Ctrl+C stops it
+
+  │ 14:02:11 ERROR disk full
+  │ 14:02:15 ERROR disk full
+
+  ✓ ended, exit 0, 2 lines sent to the AI
 ```
 
 The AI gets the same output. On `n` it gets "refused", and nothing runs.

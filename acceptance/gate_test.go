@@ -173,7 +173,8 @@ func TestGATE05_1_ThePromptShowsTheExactRequest(t *testing.T) {
 	w := newWorld(t)
 	w.ask(quoted)
 	w.prompt(1)
-	w.shows("AI asks to run:\n  > " + quoted + "\n" + question)
+	w.shows(header(1))
+	w.shows(prompted(quoted))
 }
 
 func TestGATE05_2_WhatRunsIsWhatWasShown(t *testing.T) {
@@ -192,7 +193,7 @@ func TestGATE05_3_ALineBreakAndATabAreShownAsTheyAre(t *testing.T) {
 	w := newWorld(t)
 	w.ask("echo one\n\techo two")
 	w.prompt(1)
-	w.shows("AI asks to run:\n  > echo one\n  > \techo two\n" + question)
+	w.shows(prompted("echo one\n\techo two"))
 }
 
 func TestGATE05_4_EveryLineIsShownBeforeTheQuestion(t *testing.T) {
@@ -200,7 +201,7 @@ func TestGATE05_4_EveryLineIsShownBeforeTheQuestion(t *testing.T) {
 	lines := []string{"echo 1", "echo 2", "echo 3", "echo 4", "echo 5", "echo 6"}
 	w.ask(strings.Join(lines, "\n"))
 	w.prompt(1)
-	w.shows("AI asks to run:\n  > " + strings.Join(lines, "\n  > ") + "\n" + question)
+	w.shows(prompted(strings.Join(lines, "\n")))
 }
 
 func TestGATE06_1_OnlyTheFirstRequestIsShown(t *testing.T) {
@@ -228,7 +229,8 @@ func TestGATE06_2_TheSecondIsAskedAfterTheFirst(t *testing.T) {
 		t.Fatal("the first command has not run")
 	}
 	w.prompt(2)
-	w.shows("  > touch " + w.file("b") + "\n" + question)
+	w.shows(header(2))
+	w.shows(prompted("touch " + w.file("b")))
 	b.noAnswerYet()
 	w.notRun("b")
 }

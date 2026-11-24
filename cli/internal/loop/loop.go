@@ -79,6 +79,13 @@ type Parts struct {
 
 	// Log is the log of the session. Nil: nothing is logged.
 	Log Log
+
+	// Host is the name of this host, and Network how the controller is
+	// reached. Both are for the screen only.
+	Host    string
+	Network string
+	// Look is how the screen is dressed.
+	Look terminal.Look
 }
 
 // Loop holds the pieces. It is not safe for use from more than one
@@ -98,16 +105,29 @@ type Loop struct {
 	max    time.Duration // SESSION_MAX. Zero: no maximum
 	asked  time.Duration // the length before the maximum cut it. Zero: it was not cut
 	admin  string        // the admin file, for the screen
+
+	// For the screen only.
+	clock   Clock
+	host    string
+	network string
+	began   time.Time
+	why     string // why the session ended
+	counts  *counts
 }
+
+// counts holds how many requests ran and how many were refused, for the
+// end of the session.
+type counts struct{ ran, refused int }
 
 // New puts the pieces together.
 func New(p Parts) *Loop {
-	l := &Loop{conn: p.Conn, log: p.Log, session: p.Session, length: p.Length}
+	l := &Loop{conn: p.Conn, log: p.Log, session: p.Session, length: p.Length,
+		clock: p.Clock, host: p.Host, network: p.Network, counts: &counts{}}
 	if l.log == nil {
 		l.log = noLog{}
 	}
 	// Every answer passes the log on its way to the controller.
-	l.conn = logged{p.Conn, l.log}
+	l.conn = logged{p.Conn, l.log, l.counts}
 	if l.length <= 0 {
 		l.length = p.Settings.SessionLength
 	}
@@ -116,6 +136,8 @@ func New(p Parts) *Loop {
 		l.asked, l.length = l.length, length
 	}
 	l.term = terminal.New(p.Screen, p.Clock, p.Settings.DoubleCtrlCWindow, keys{l})
+	l.term.Dress(p.Look)
+	l.term.TimeLeft(l.session.Left)
 	l.line = line.New(p.Settings.MaxWaitingRequests)
 	l.runner = runner.New(p.Starter, p.Timers, l.term, l.conn, gateDone{l}, runner.Settings{
 		Shell:        p.Settings.CommandShell,
@@ -156,11 +178,11 @@ func (c clockEvents) TimeUp() {
 }
 
 func (c clockEvents) NotExtended() {
-	c.l.End(messages.EndTimeUp, "The session was not extended: the session ends.")
+	c.l.End(messages.EndTimeUp, "The session was not extended: the session ends.", "the time was up and the session was not extended")
 }
 
 func (c clockEvents) MaxReached() {
-	c.l.End(messages.EndTimeUp, "The session has lasted "+terminal.Length(c.l.max)+", the maximum: the session ends.")
+	c.l.End(messages.EndTimeUp, "The session has lasted "+terminal.Length(c.l.max)+", the maximum: the session ends.", "it reached the maximum of "+terminal.Short(c.l.max))
 }
 
 // gateDone lets the runner reach the gate, which is made after it.
@@ -193,35 +215,32 @@ func (k keys) CtrlC() {
 	case l.gate.State() == gate.Busy:
 		l.runner.CtrlC()
 	default:
-		l.End(messages.EndUser, "Ctrl+C: the session ends.")
+		l.End(messages.EndUser, "Ctrl+C: the session ends.", "you pressed Ctrl+C")
 	}
 }
 
-func (k keys) Quit() { k.l.End(messages.EndUser, "Ctrl+C twice: the session ends.") }
+func (k keys) Quit() {
+	k.l.End(messages.EndUser, "Ctrl+C twice: the session ends.", "you pressed Ctrl+C twice")
+}
 
 // State tells where the session stands.
 func (l *Loop) State() State { return l.state }
 
-// Begin shows the line to paste.
+// Begin shows the session and the line to paste.
 func (l *Loop) Begin() {
-	l.term.Note("Connected. The session is live.")
-	l.term.PasteLine(l.session.Address(), l.session.Key())
-	l.term.Note("Each request is shown here. Press y to run it, n to refuse. Ctrl+C ends the session.")
-	if l.asked > 0 {
-		l.term.Note(terminal.Length(l.asked) + " is above the maximum of " + terminal.Length(l.max) + ", set in " + l.admin + ". It was cut to " + terminal.Length(l.max) + ".")
-	}
-	switch {
-	case l.max > 0 && l.length >= l.max:
-		l.term.Note("The session lasts " + terminal.Length(l.length) + ". That is the maximum: then it ends.")
-	case l.max > 0:
-		l.term.Note("The session lasts " + terminal.Length(l.length) + ". Then you are asked whether to extend it, up to the maximum of " + terminal.Length(l.max) + ".")
-	default:
-		l.term.Note("The session lasts " + terminal.Length(l.length) + ". Then you are asked whether to extend it.")
-	}
+	l.began = l.clock.Now()
+	l.term.Start(terminal.Start{
+		Host:    l.host,
+		Network: l.network,
+		Length:  l.length,
+		Max:     l.max,
+		Asked:   l.asked,
+		Admin:   l.admin,
+		Log:     l.log.File(),
+		Address: l.session.Address(),
+		Key:     l.session.Key(),
+	})
 	l.log.Session("started: it lasts " + terminal.Length(l.length))
-	if file := l.log.File(); file != "" {
-		l.term.Note("The session is logged at " + file)
-	}
 	l.check()
 }
 
@@ -328,22 +347,24 @@ func (l *Loop) Timer(number int) {
 
 // SessionEnd is the controller ending the session.
 func (l *Loop) SessionEnd(reason string) {
-	l.End(reason, "The controller ended the session.")
+	l.End(reason, "The controller ended the session.", "the controller ended it")
 }
 
 // Lost tells that the connection to the controller is gone.
 func (l *Loop) Lost() {
-	l.End(messages.EndConnectionLost, "The connection to the controller was lost: the session ends.")
+	l.End(messages.EndConnectionLost, "The connection to the controller was lost: the session ends.", "the connection to the controller was lost")
 }
 
 // End ends the session. Nothing new runs from here on. A command that runs
-// is stopped, and the loop is Over once it is gone.
-func (l *Loop) End(reason, note string) {
+// is stopped, and the loop is Over once it is gone. note goes to the log,
+// and why to the screen.
+func (l *Loop) End(reason, note, why string) {
 	if l.state != Live {
 		return
 	}
 	l.state = Ending
 	l.reason = reason
+	l.why = why
 	l.log.Session("ended: " + reason + ". " + note)
 	l.session.End()
 	l.gate.End()
@@ -351,7 +372,9 @@ func (l *Loop) End(reason, note string) {
 	for _, req := range l.line.Empty() {
 		l.conn.Refused(req.ID, messages.ReasonSessionEnded)
 	}
-	l.term.Note(note)
+	if l.runner.State() != runner.Idle {
+		l.term.Note("The session ends: " + why + ". The command is being stopped.")
+	}
 	l.runner.End()
 	l.finish()
 }
@@ -362,8 +385,19 @@ func (l *Loop) finish() {
 	}
 	l.state = Over
 	l.conn.Close(l.reason)
-	l.term.Note("The session is over. Its key is dead.")
-	l.logged()
+	var lasted time.Duration
+	if !l.began.IsZero() {
+		lasted = l.clock.Now().Sub(l.began)
+	}
+	l.term.Over(terminal.Over{
+		Why:     l.why,
+		Lasted:  lasted,
+		Ran:     l.counts.ran,
+		Refused: l.counts.refused,
+		Log:     l.log.File(),
+		LogOld:  l.log.Old() > 0,
+		LogBad:  l.log.Err() != nil,
+	})
 }
 
 // check ends the session when the log could not be written. It tells
@@ -373,39 +407,26 @@ func (l *Loop) check() bool {
 	if l.state != Live || l.log.Err() == nil {
 		return false
 	}
-	l.End(messages.EndUser, "The log cannot be written: the session ends.")
+	l.End(messages.EndUser, "The log cannot be written: the session ends.", "the log could not be written")
 	return true
 }
 
-// logged shows where the log of the session is.
-func (l *Loop) logged() {
-	file := l.log.File()
-	if file == "" {
-		return
-	}
-	if l.log.Err() != nil {
-		l.term.Note("The log is not whole: it could not be written. What there is of it is at " + file)
-		return
-	}
-	l.term.Note("Session logged at " + file)
-	if l.log.Old() > 0 {
-		l.term.Note("That file holds the last part. The parts before it are in the same folder.")
-	}
-}
-
 // logged is the connection with the log in front: what is sent to the
-// controller about a request is written down first.
+// controller about a request is written down first, and counted.
 type logged struct {
 	Conn
-	log Log
+	log    Log
+	counts *counts
 }
 
 func (c logged) Started(id string) {
+	c.counts.ran++
 	c.log.Started(id)
 	c.Conn.Started(id)
 }
 
 func (c logged) Refused(id, reason string) {
+	c.counts.refused++
 	c.log.Refused(id, reason)
 	c.Conn.Refused(id, reason)
 }

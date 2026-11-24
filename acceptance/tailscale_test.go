@@ -337,7 +337,7 @@ func TestHOST06_1_ASessionOverTailscale(t *testing.T) {
 	if got.Output != "over tailscale\n" {
 		t.Fatalf("want the output, got %s", got.Body)
 	}
-	if !strings.Contains(w.screen.text(), "Joining Tailscale ...") {
+	if !strings.Contains(w.screen.text(), "Joining Tailscale ...") || !strings.Contains(w.screen.text(), "\n  network   connected over Tailscale\n") {
 		t.Fatal("the screen does not say that the cli-tool joined Tailscale")
 	}
 	if control.controller() == nil || len(control.hosts()) != 1 || len(control.AllNodes()) != 2 {

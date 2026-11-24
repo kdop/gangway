@@ -402,16 +402,19 @@ Tests 01 to 20 and 32 to 35 run the state machine with a fake starter, fake time
 The `terminal` is the only piece that reads keys and writes to the screen. It is in three parts:
 
 - **The keys.** Cuts the bytes from the keyboard into key presses, and tells one Ctrl+C from two.
-- **The screen.** Writes the prompt, the answers, the output and the notes. Cleans all of it.
+- **The screen.** Writes the start and the end of a session, the prompt, the answers, the output and the notes. Cleans all of it.
+- **The look.** Picks the signs and the colors the screen is written with, from the surroundings.
 - **The raw mode.** Sets the real terminal so that keys come at once, and puts it back at the end.
 
 ### What it holds
 
 - An Escape or a key of many bytes that is not over yet.
 - The time of the last Ctrl+C that a second one can pair with.
-- Whether the cursor is at the start of a line.
-- The request whose prompt waits on screen, if one does.
-- The question to extend that waits on screen, if one does.
+- Whether the cursor is at the start of a line, and whether the last line written is empty.
+- The request whose prompt waits on screen, if one does, and the number of the last request that got a prompt.
+- The question to extend that waits on screen, if one does, and when it stops waiting.
+- The number of lines the running command has written.
+- The look.
 
 ### What it sends
 
@@ -443,15 +446,37 @@ The loop passes `key` to the `gate`. It passes `ctrl_c` to whatever is in front,
 The wording is in `ux.md`.
 
 - **Everything is cleaned.** Every character that `checks` would refuse in a request is replaced by the mark `�` before it is written: in output, and also in the command of a prompt and in notes. Line breaks and tabs stay. (`SHOW-03`, `SHOW-05`)
-- **Output is marked.** Every line of a command's output starts with `  | `. No line of the cli-tool itself starts with a space. So output that copies the words of a prompt still does not look like one. (`SHOW-04`)
-- **The cli-tool's lines start at the start of a line.** If output ended with no line break, a line break is written first.
-- **The prompt shows the request as it is.** Each line of the command is shown on a line of its own, after `  > `. (`GATE-05`)
+- **Text from outside is marked.** Every line of a command's output starts with the output mark, `  │ `. Every line of the command in a prompt starts with `  > `. No line of the cli-tool itself starts with either. So a command or its output that copies a header, a prompt, the paste line or the end of a session still does not look like one. (`SHOW-04`)
+- **The marks are never painted.** A color code never stands in front of a mark, so a line from outside starts with the mark itself in every look.
+- **The cli-tool's own lines start on a new line.** If output ended with no line break, a line break is written first. They are set in by two spaces. The paste line alone starts at the start of the line: a copy of the whole line must start with the slash, or an AI tool does not take it as a command. (`KEY-04`)
+- **The prompt shows the request as it is.** Each line of the command is shown on a line of its own, after `  > `, with nothing else on that line. (`GATE-05`)
+- **A request has a number.** The header of a prompt names the request by its number in the session: the first prompt is request 1. A prompt that is shown again keeps its number. A request refused with no prompt gets none.
+- **The time in a header is read when the header is written.** The header of a prompt says how long the session still takes requests, and the header of the question to extend says how long the question still waits. Neither is a clock: a header that is on screen does not change. A header shown again reads the time again.
+- **Nothing on screen is ever changed.** The cli-tool only writes on. It writes no code that moves the cursor or clears anything, so what scrolled by stays a true record. (`SHOW-06`)
 - **The prompt is the last thing on screen.** A note that comes while a prompt waits is written, and the prompt is then shown again under it. The same holds for the question to extend.
-- **A time is written in words.** The question to extend names the length as `30 minutes`, `1 hour` or `90 seconds`. (`LEN-03`)
+- **A time is written short.** The screen names a length as `30 min`, `1 h` or `1 min 30 s`. A time that runs, such as the time left, is rounded down, so the screen never promises more than there is. The long form, `30 minutes`, is for the log. (`LEN-03`)
 - **The maximum is named.** When the stretch a `y` would give ends at the maximum, the question says so, and the line after the `y` says that the session then ends. Such a stretch is rounded up to whole seconds. (`LEN-05`)
 - **A refusal with no prompt shows the reason only.** The screen is never handed the refused text. (`GATE-10`, `GATE-16`)
+- **The end of a command says how it ended.** A command that ended by itself gets a line with its exit code and the number of lines that were sent to the AI. A command that was killed gets a line that says by what. (`SHOW-02`)
 
 Known limit: a line of output longer than the window is folded by the terminal, and the folded part has no mark. The real prompt still comes last, under it.
+
+### The look
+
+The look changes signs and colors only. Every line says the same in every look. (`SHOW-06`)
+
+| | With signs | Plain |
+|---|---|---|
+| The line in a header | `─` | `-` |
+| The output mark | `  │ ` | `  \| ` |
+| The good sign | `✓` | `+` |
+| The bad sign | `✗` | `x` |
+
+- **Signs** are used when `TERM` is set and is not `dumb`, and the locale is UTF-8. The locale is read from `LC_ALL`, then `LC_CTYPE`, then `LANG`.
+- **Colors** are used when `TERM` is set and is not `dumb`, and `NO_COLOR` is not set. The only codes written set a color or a weight.
+- **No meaning is in a color.** Every line reads the same with the colors taken out.
+- **The banner**, the name in large letters, is written once, before the cli-tool connects. It is left out when the terminal is as wide as the banner or narrower. When the terminal does not tell its width, the banner is written.
+- **A look with no value set is the plain one.** A piece that is handed no look writes ASCII with no color.
 
 ### The raw mode
 
@@ -462,7 +487,7 @@ Known limit: a line of output longer than the window is folded by the terminal, 
 
 ### Unit tests
 
-Tests 01 to 10 are for the keys, 11 to 23 and 28 to 31 for the screen, with a buffer in place of the screen and a clock the test moves. Tests 24 to 27 use a real terminal that the test makes for itself.
+Tests 01 to 10 are for the keys, 11 to 23 and 28 to 40 for the screen and the look, with a buffer in place of the screen and a clock the test moves. They run in the plain look unless they say otherwise. Tests 24 to 27 use a real terminal that the test makes for itself.
 
 | Test | Requirement | Start | Action | Expect |
 |---|---|---|---|---|
@@ -476,28 +501,36 @@ Tests 01 to 10 are for the keys, 11 to 23 and 28 to 31 for the screen, with a bu
 | UNIT-TERMINAL-08 | `LIM-10` | | Two code 3: in one read, and in two reads within `DOUBLE_CTRL_C_WINDOW` | `ctrl_c`, then `quit`, both times |
 | UNIT-TERMINAL-09 | `LIM-10` | | Two code 3 further apart than `DOUBLE_CTRL_C_WINDOW`. Then two exactly that far apart | Two `ctrl_c` and no `quit`. Then `ctrl_c` and `quit` |
 | UNIT-TERMINAL-10 | `LIM-10` | | Code 3, then `x`, then code 3, within the window. Then a fourth code 3 at once | `ctrl_c`, `key`, `quit`. Then `ctrl_c`, not a second `quit` |
-| UNIT-TERMINAL-11 | `SHOW-01`, `GATE-05` | | A prompt for a command | The screen shows the exact command after `  > `, then the question. The cursor stays on the question's line |
+| UNIT-TERMINAL-11 | `SHOW-01`, `GATE-05` | | A prompt for a command | A header with the number of the request, then the exact command after `  > `, then the question. An empty line stands between them. The cursor stays on the question's line |
 | UNIT-TERMINAL-12 | `GATE-05` | | A prompt for a command of three lines with a tab | Three lines, each after `  > `, with the tab as it is |
-| UNIT-TERMINAL-13 | `SHOW-01` | A prompt on screen | The answer: yes, no, and "the AI left" | `y`, `n`, and a line that says the AI hung up and nothing ran. Each ends its line |
-| UNIT-TERMINAL-14 | `SHOW-02` | | Output of two lines, then the end with exit code 0. Again with exit code 3 | Both lines, and no line about the end |
-| UNIT-TERMINAL-15 | `SHOW-02` | | The end, for each way a command can end | Nothing for a command that ended by itself. A line for each other way. No two are the same |
+| UNIT-TERMINAL-13 | `SHOW-01` | A prompt on screen | The answer: yes, no, and "the AI left" | For yes, a header that says the request runs and that Ctrl+C stops it. For no, a line that says it was refused and nothing ran. For the third, a line that says the AI hung up and nothing ran. Each starts on a new line |
+| UNIT-TERMINAL-14 | `SHOW-02` | | Output of two lines, then the end with exit code 0. Again with exit code 3. Then a command with one line, and one with none | Both lines, an empty line, and a line that says it ended, with the exit code and the number of lines sent to the AI: `2 lines`, `1 line`, `no output` |
+| UNIT-TERMINAL-15 | `SHOW-02` | | The end, for each way a command can end | One line for each way. The one for a command that ended by itself starts with the good sign, every other with the bad sign. No two are the same |
 | UNIT-TERMINAL-16 | `SHOW-03` | | Output with an Escape, a colour code, a carriage return, a bell, a backspace, a zero byte, code 127 and code 155 | None of them is written. A mark stands in each place. Line breaks and tabs are written |
 | UNIT-TERMINAL-17 | `SHOW-05` | | Output with a character that turns the reading order around, and a zero-width space | Neither is written. A mark stands in each place |
-| UNIT-TERMINAL-18 | `SHOW-04` | | Output of many lines in one piece. A line that comes in two pieces. Output that copies a prompt | Every line starts with `  | `, once. No line starts with the words of a prompt |
+| UNIT-TERMINAL-18 | `SHOW-04` | Each look in turn | Output of many lines in one piece. A line that comes in two pieces. Output that copies a header, a prompt, the end of a command, an output mark and the paste line | Every line starts with the output mark, once. No line starts as a line of the cli-tool does |
 | UNIT-TERMINAL-19 | `SHOW-04` | Output that ended with no line break | The end of the command. Again with a new prompt | What the cli-tool writes starts on a new line |
 | UNIT-TERMINAL-20 | `SHOW-01` | | A refusal with no prompt, for a control character and for a full line | A line each, that says a request was refused and why |
 | UNIT-TERMINAL-21 | `SHOW-01` | A prompt on screen | A refusal with no prompt | The note, then the same prompt again as the last thing on screen |
-| UNIT-TERMINAL-22 | `KEY-04` | | The paste line for an address and a key | A line that is exactly `/gangway`, the address and the key, with one space between |
-| UNIT-TERMINAL-23 | `SHOW-03` | | A prompt, a note and a paste line that hold an Escape | No Escape is written |
+| UNIT-TERMINAL-22 | `KEY-04` | The plain look. Again with signs and colors | The start of a session, with an address and a key | A line that is exactly `/gangway`, the address and the key, with one space between. It starts at the start of the line, with an empty line above and below. The key is on the screen once |
+| UNIT-TERMINAL-23 | `SHOW-03` | | The start and the end of a session, a prompt, a note, a refusal and the end of a command, each with an Escape in every text that comes from outside | No Escape is written. Each of those texts is on the screen with a mark in it |
 | UNIT-TERMINAL-24 | `GATE-03` | A real terminal in raw mode | `y` is typed with no Enter | The `y` can be read at once |
 | UNIT-TERMINAL-25 | `LIM-09` | A real terminal in raw mode | Ctrl+C is typed | Code 3 can be read |
 | UNIT-TERMINAL-26 | `HOST-02` | | Ask whether a real terminal is a terminal. Ask the same of a plain file | Yes. No |
 | UNIT-TERMINAL-27 | `HOST-07` | A real terminal in raw mode | Put it back | Its settings are the ones found at the start |
-| UNIT-TERMINAL-28 | `LEN-03` | | The question to extend, for 30 minutes. Then the answer: yes, no, and no answer in time | A line that says the time is up, then the question with the length, and the cursor stays on its line. `y` and a line that says how long the session goes on, `n`, and a line that says no answer came. Each ends its line |
-| UNIT-TERMINAL-29 | `LEN-03`, `LEN-06` | The question to extend on screen | A refusal with no prompt, for the time being up. Then the question is forgotten, and a note comes | The note says a request was refused because the time is up, and the same question is again the last thing on screen. After it is forgotten, a note does not bring it back |
+| UNIT-TERMINAL-28 | `LEN-03` | | The question to extend, for 30 minutes, with a wait of a minute. Then the answer: yes, no, and no answer in time | A header that says the time is up and that the answer is wanted in 60 seconds, then the question with the length, and the cursor stays on its line. For yes, a line that says by how much the session was extended. For no, a line that says it was not extended. For the third, a line that says no answer came in time. Each starts on a new line |
+| UNIT-TERMINAL-29 | `LEN-03`, `LEN-06` | The question to extend on screen | A refusal with no prompt, for the time being up. Then 20 seconds pass and a note comes. Then the question is forgotten, and a note comes | The note says a request was refused because the time is up, and the same question is again the last thing on screen. Shown again after 20 seconds, its header says 40 seconds. After it is forgotten, a note does not bring it back |
 | UNIT-TERMINAL-30 | `LEN-03` | | Write in words: 30 minutes, 1 minute, 2 hours, 1 hour, 90 seconds, 1 second, and a time and a half second | `30 minutes`, `1 minute`, `2 hours`, `1 hour`, `90 seconds`, `1 second`, and for the last one a form with its unit |
 | UNIT-TERMINAL-31 | `LEN-07`, `LEN-08` | A prompt on screen | The answer "the time is up". Then the end of a command that was killed because the time was up | A line that says the time is up and nothing ran. A line that says the command was killed and why, unlike the line of every other way to end |
-| UNIT-TERMINAL-32 | `LEN-05` | | The question to extend, for 5 minutes, up to the maximum. Then the answer yes with a stretch a little shorter. Again: a question for a second and a half, closed because the maximum came. Then a note | The question says "up to the maximum". After `y`, a line with the stretch in whole seconds, rounded up, that says the maximum is reached then. The second question names 2 seconds, is closed with a line break only, and the note does not bring it back |
+| UNIT-TERMINAL-32 | `LEN-05` | | The question to extend, for 5 minutes, up to the maximum. Then the answer yes with a stretch a little shorter. Again: a question for a second and a half that waits as long, closed because the maximum came. Then a note | The question says "up to the maximum". After `y`, a line with the stretch in whole seconds, rounded up, that says the session then ends. The second question names 2 seconds and says the answer is wanted in 2 seconds. It is closed with a line break only, and the note does not bring it back |
+| UNIT-TERMINAL-33 | `KEY-04`, `LEN-01`, `SET-04`, `LOG-02` | | The start of a session of 30 minutes with a host, a network and a log. Again with no such texts, and a length below a maximum. Again with a length that the maximum cut | An empty line, a row each for the host, the session, the network and the log, then the paste line and the keys. A text that is not given has no row. The row of the session names the maximum, and a line under it says what was cut, from what, and in which file |
+| UNIT-TERMINAL-34 | `KEY-03`, `LOG-02` | | The end of a session. Again with a log of more than one file, a log that failed, no request, no log, and a session of 38 seconds. Again after a prompt that waited was forgotten | A header, a row each for why it ended, how long it lasted, the requests and the log, and as the last line that the key is dead. The time is rounded down. A line under the log tells of older files, or that the log is not whole. With no request the row says `none`. The prompt that waited is closed with a line that says nothing ran, and is not shown again |
+| UNIT-TERMINAL-35 | `SHOW-01`, `LEN-01` | A terminal that is told the time left | A prompt with just under 28 minutes left. A note, with 26 minutes left. Four more prompts: with more than an hour left, with under a minute, with nothing to tell, and with no time left | The header names request 1 and `27 min left`. Shown again it is still request 1, with `26 min left`. The next are requests 2 to 5, with `1 h 5 min left`, `42 s left`, and for the last two no time at all |
+| UNIT-TERMINAL-36 | `SHOW-04`, `SHOW-06` | Each look in turn: plain, with signs, with colors, with both | A whole session: the banner, the start, prompts, every answer, output, every end, the question to extend with every answer, a forgotten prompt, the end | Every line of a command starts with `  > `, and every line of output with the output mark. No other line starts with either, or with the output mark of the other look |
+| UNIT-TERMINAL-37 | `SHOW-06` | | The same session in each look | The plain look holds ASCII only and no code. The look with signs differs from it in four signs only, one for one. The looks with colors hold no code but codes that set a color or a weight, and with those taken out they are the looks without colors |
+| UNIT-TERMINAL-38 | `SHOW-06` | | Pick the look for: a usual terminal, `NO_COLOR` set, `TERM` that is `dumb`, no `TERM`, a locale that is not UTF-8, no locale, and `LC_ALL`, `LC_CTYPE` and `LANG` that disagree | Signs and colors. Signs only. Neither, twice. Colors only, twice. `LC_ALL` wins over `LC_CTYPE`, and that over `LANG` |
+| UNIT-TERMINAL-39 | `SHOW-06` | | The banner, on a terminal of unknown width, a wide one, one exactly as wide as the banner, and narrower ones. Then in color | Six lines of ASCII when it fits or the width is not known. Nothing when the terminal is as wide as the banner or narrower. In color it is the same text |
+| UNIT-TERMINAL-40 | `LEN-03` | | Write in short form: 30 minutes, 1 minute, 2 hours, 90 minutes, 90 seconds, an hour and two seconds, and a time and a half second. Then write times that run: just under 28 minutes, just under an hour and 6 minutes, just under a minute, a minute, and under a second | `30 min`, `1 min`, `2 h`, `1 h 30 min`, `1 min 30 s`, `1 h 2 s`, and for the last one a form with its unit. Then `27 min`, `1 h 5 min`, `59 s`, `1 min` and `0 s`: a time that runs is rounded down |
 
 ## `session`
 
@@ -520,7 +553,7 @@ The `session` makes the session key and the paste line, and runs the session's c
 |---|---|
 | The clock | Tell the time |
 | The timers | Call back after a time. They are the session's own, apart from the ones of the `runner` |
-| `terminal` | Show the question to extend, and show the answer |
+| `terminal` | Show the question to extend, with how long it waits, and show the answer |
 | `connection` | Send `time_up` and `extended` |
 | The loop | Refuse what waits, when the time is up. End the session, when it is not extended, and when the maximum is reached |
 
@@ -607,10 +640,11 @@ An empty "Does" means the event is dropped. "Time up" means: send `time_up`, and
 - **The question does not wait past the maximum.** When less than `EXTEND_WAIT` is left to the maximum, the question waits only that long, and then the session ends. (`LEN-05`)
 - **A late timer lets nothing in.** The end time is also checked each time a request comes, by the time of day. A timer that comes late, as on a machine that slept, cannot let a request through after the end time. (`LEN-06`)
 - **A timer that is no longer waited for does nothing.** Each timer carries a number, as in the `runner`. The timer of a stretch that was ended early, and the timer of a question that was answered, are dropped.
+- **The time left can be asked for, and asking changes nothing.** The `terminal` asks for it when it writes the header of a prompt. The answer is the time to the end of the stretch that counts, and there is none when the time is up, at the question, and after the end.
 
 ### Unit tests
 
-Tests 10 to 25 are for the clock: a session with a clock the test moves, fake timers, and a fake `terminal`, `connection` and loop that record what they were asked.
+Tests 10 to 26 are for the clock: a session with a clock the test moves, fake timers, and a fake `terminal`, `connection` and loop that record what they were asked.
 
 | Test | Requirement | Start | Action | Expect |
 |---|---|---|---|---|
@@ -639,6 +673,7 @@ Tests 10 to 25 are for the clock: a session with a clock the test moves, fake ti
 | UNIT-SESSION-23 | `LEN-05`, `LEN-08` | A session whose length is its maximum. A command runs | The `timer`. `key` `y` and `ctrl_c`. Then `idle` | `TimeUp`, and the loop was not told that the maximum is reached. The keys do nothing. After `idle` it was told, and no question was shown |
 | UNIT-SESSION-24 | `LEN-05` | The question is shown with 30 seconds left to the maximum. Again with more left than `EXTEND_WAIT` | The `timer` of the question. Again: `key` `y` when the maximum has come and the timer has not. Again: the `timer` | The question waits 30 seconds, then the loop was told that the maximum is reached, not that no answer came. The `y` extends nothing and the same was told. With more left, the question waits `EXTEND_WAIT` and no answer is a no |
 | UNIT-SESSION-25 | `LEN-05`, `LEN-09`, `SET-03` | The code of the `session`. A session with a maximum, extended twice. A session with no maximum, extended fifty times | Search the code for the places that set the maximum. Compare the maximum before and after | It is set in one place, at the start of the clock, and it has not moved. With no maximum every stretch is the full length and no maximum is named |
+| UNIT-SESSION-26 | `LEN-01`, `LEN-03`, `LEN-05` | A session whose clock starts with 10 minutes. Again with a maximum 30 seconds above the length | Ask for the time left: at once, 4 minutes later, at the end time, when the time is up, at the question, after `y`, after the end, and of a session with no clock. Let the stretch of the second session run out | 10 minutes, 6 minutes, then nothing to tell three times, 10 minutes again, and nothing twice. Asking changes nothing. The first question tells the screen that it waits `EXTEND_WAIT`, the one of the second session that it waits 30 seconds |
 
 ## `connection`
 
@@ -930,6 +965,7 @@ The `loop` ties the pieces of the cli-tool together. Every event is handed to it
 - Its state, and why the session ended.
 - The length the session starts with: the one asked for at start, or `SESSION_LENGTH`. A length above `SESSION_MAX` is cut to it. It starts the `session`'s clock with the length and the maximum.
 - The length before it was cut, and the admin file's path, for the screen.
+- For the screen only: the name of the host, how the controller is reached, when the session began, and how many requests ran and how many were refused. A request counts as run when `started` is sent for it, and as refused when `refused` is sent for it, whoever refused it.
 
 ### States
 
@@ -980,19 +1016,20 @@ From here on a new request is refused with `time_up`, until the user extends. Wh
 In this order, once:
 
 1. The `session` is ended, so its key is dead.
-2. The `gate` is ended. A prompt that waits is refused with `session_ended`, and is not shown again.
+2. The `gate` is ended. A prompt that waits is refused with `session_ended`. The screen says that nothing ran, and the prompt is not shown again.
 3. Every request in the `line` is refused with `session_ended`.
-4. The screen says why the session ends.
+4. When a command runs, the screen says that the session ends, why, and that the command is being stopped.
 5. The `runner` is told. A command that runs is stopped, by asking and then by force.
-6. When no command runs any more, the `connection` is closed with the reason, and the loop is `Over`.
+6. When no command runs any more, the `connection` is closed with the reason, and the loop is `Over`. The screen shows the end of the session: why it ended, how long it lasted, how many requests ran and how many were refused, the path of the log file, and that the key is dead.
 
-The `log` gets a line with the reason when the ending starts. When the loop is `Over`, the last line on the screen is `Session logged at` and the path of the log file.
+The `log` gets a line with the reason when the ending starts.
 
 ### The log
 
 - Every answer about a request passes the `log` on its way to the `connection`: `started`, `refused`, each piece of `output`, and `ended`. So do `time_up` and `extended`. The `gate`, the `runner` and the `session` know nothing of the `log`.
-- After each event the loop asks the `log` for a failure. If there is one, the session ends, and the screen says that the log cannot be written. The loop asks between events only, never while a piece is in the middle of a step.
+- After each event the loop asks the `log` for a failure. If there is one, the session ends, and the screen says that the log could not be written and is not whole. The loop asks between events only, never while a piece is in the middle of a step.
 - At the start the screen says where the log file is.
+- The lines the `log` gets about the session keep their wording, with times in the long form. The screen has its own wording.
 
 ### Rules the code must keep
 
@@ -1008,7 +1045,7 @@ The pieces are the real ones. The test holds the edges: the keyboard, the screen
 
 | Test | Requirement | Start | Action | Expect |
 |---|---|---|---|---|
-| UNIT-LOOP-01 | `GATE-01`, `SHOW-01` | Live | A request, `y`, output, the command ends | `started`, `output`, `ended` are sent in that order. The screen shows the prompt, the `y` and the output, and nothing else |
+| UNIT-LOOP-01 | `GATE-01`, `SHOW-01` | Live | A request, `y`, output, the command ends | `started`, `output`, `ended` are sent in that order. The screen shows the prompt with the time left in its header, the header of the running command, the output and the line about the end, and nothing else |
 | UNIT-LOOP-02 | `GATE-13`, `SHOW-01` | Live, limit 2 | Three requests | The third gets `refused` with `line_full`. The screen says why, and the first prompt is again the last thing on it |
 | UNIT-LOOP-03 | `LIM-09` | A prompt waits, a second request behind it | Ctrl+C | The first is refused with `user`. The second prompt shows. The session is live |
 | UNIT-LOOP-04 | `LIM-08` | A command runs | Ctrl+C, then the command ends | The command was asked to stop. `ended` with `killed_by_user`. The session is live and a new request gets a prompt |
@@ -1034,11 +1071,12 @@ The pieces are the real ones. The test holds the edges: the keyboard, the screen
 | UNIT-LOOP-24 | `LEN-03` | A session that was extended once | The session timers of before the extension. Then the new one | The old ones do nothing. The new one: `time_up` is sent again, and the question is shown again |
 | UNIT-LOOP-25 | `LEN-01`, `LEN-02` | A loop with no length asked for. Again with a length of ten minutes | Begin | The session timer was started with `SESSION_LENGTH`, and with ten minutes. The screen says how long the session lasts |
 | UNIT-LOOP-26 | `SET-01`, `SET-04` | A maximum of 20 minutes. A loop with 50 minutes asked for at start. Again with 50 minutes as `SESSION_LENGTH`. Again with 10 minutes asked for. Again with no maximum | Begin | The first two: the session timer was started with 20 minutes, and the screen says that 50 minutes is above the maximum, names the admin file, and says it was cut to 20. With 10 minutes: a timer of 10 minutes, no such line, and the screen names the maximum. With no maximum the screen names none |
-| UNIT-LOOP-27 | `LEN-05` | A maximum of 40 minutes, a length of 30 | The session timer. `y`. The session timer again. Then a request and `y` | The question names the 10 minutes left and the maximum. After `y`, `extended` carries what is left. At the maximum: `Over`, closed with `time_up`, no second question, and the screen says the session has lasted its maximum. Nothing more is sent |
+| UNIT-LOOP-27 | `LEN-05` | A maximum of 40 minutes, a length of 30 | The session timer. `y`. The session timer again. Then a request and `y` | The question names the 10 minutes left and the maximum. After `y`, `extended` carries what is left. At the maximum: `Over`, closed with `time_up`, no second question, and the screen says the session reached its maximum. Nothing more is sent |
 | UNIT-LOOP-28 | `LEN-05`, `LEN-08` | A session whose length is its maximum. A command runs and a request waits behind it | The session timer. A new request. Then the command ends | The request that waits and the new one are refused with `time_up`. The command is not stopped, and the session is not over while it runs. When it ends: `Over`, closed with `time_up`, and no question was shown |
-| UNIT-LOOP-29 | `LOG-02` | A loop with a real log. Again with a log of more than one file. Again with no log | Begin. Ctrl+C | The start ends with `The session is logged at` and the path, which ends in `.txt`. The end is `The session is over. Its key is dead.` and then `Session logged at` with the same path. With old files, one more line says that the parts before are in the same folder. With no log the screen names none |
-| UNIT-LOOP-30 | `LOG-06` | A log that fails when the test says so. In turn: live with nothing in front, a prompt waits, a command runs with a request behind it, and at the start | A request. A key. Output and a timer, then the command ends. Begin | Each time the screen says that the log cannot be written, and the loop ends `Over`, closed with `user`. The request that could not be logged is refused with `session_ended` and gets no prompt. The prompt is refused and a `y` runs nothing. The running command is stopped and the request behind it never runs. At the end the screen says that the log is not whole, and where it is |
+| UNIT-LOOP-29 | `LOG-02` | A loop with a real log. Again with a log of more than one file. Again with no log | Begin. 42 minutes later, Ctrl+C | The start has a row with the path of the log, which ends in `.txt`, above the paste line. The end is the header, a row each for why it ended, the 42 minutes it lasted, the requests and the log with the same path, and as the last line that the key is dead. With old files, a line under the log says that the parts before are in the same folder. With no log the screen names none |
+| UNIT-LOOP-30 | `LOG-06` | A log that fails when the test says so. In turn: live with nothing in front, a prompt waits, a command runs with a request behind it, and at the start | A request. A key. Output and a timer, then the command ends. Begin | Each time the screen says that the session ended because the log could not be written, and the loop ends `Over`, closed with `user`. The request that could not be logged is refused with `session_ended` and gets no prompt. The prompt is refused and a `y` runs nothing. The running command is stopped and the request behind it never runs. At the end the screen says that the log is not whole, and where it is |
 | UNIT-LOOP-31 | `LOG-01`, `KEY-03` | A loop with a real log | Begin. A request. The session timer. `y` at the question. Ctrl+C | The log holds, in order and each with the time: the start with the length, the request, `time is up`, the refusal with `time_up`, `extended` with the time left, and the end with the reason. The session key is not in the log |
+| UNIT-LOOP-32 | `SHOW-01`, `SHOW-06`, `KEY-03` | A loop with a host name that holds an Escape, a network text, and the look with signs | Begin. Ten minutes later: a request that runs, one refused with `n`, one refused with no prompt, one that runs, and one behind it. Then two Ctrl+C, and the command ends | The start is the rows of the host, cleaned, the session and the network, the paste line and the keys, and the key is on it once. The first header says `20 min left`. The third prompt is request 3. While the command is stopped, one line says that the session ends and why. Then the line about the command, and the end: why, `12 min`, `2 run, 3 refused`, and that the key is dead |
 
 ## `start`
 
@@ -1054,7 +1092,7 @@ A session, in order:
 2. Refuse to go on when the input or the output is not a terminal. Say why. (`HOST-02`)
 3. Read the settings: the user's file, then the admin file. A mistake in either stops here, with the line. So does an admin file that cannot be trusted or read. (`SET-05`)
 4. Pick the road: Tailscale with the auth key of `login`, or localhost. With no auth key, say to run `login` and stop. (`HOST-06`)
-5. `network` joins. On failure, say so and stop.
+5. Pick the look from the surroundings, and write the banner and the line that says the cli-tool connects (`SHOW-06`). Then `network` joins. On failure, say so and stop.
 6. Make the session and its key.
 7. Connect to the controller over that road, and tell it the session's length, cut to the maximum if there is one. On failure, say so and stop.
 8. Give the API address from `session_ok` to `session`. A bad one stops here, and no paste line is shown. (`KEY-10`)

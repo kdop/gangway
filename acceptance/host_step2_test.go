@@ -247,6 +247,9 @@ func TestHOST08_1_TheOneMachineModeNeedsNoTailscale(t *testing.T) {
 	if !strings.Contains(w.screen.text(), "Connecting to "+w.address) {
 		t.Fatal("the screen does not name the localhost address")
 	}
+	if !strings.Contains(w.screen.text(), "\n  network   connected, on this machine only\n") {
+		t.Fatal("the screen does not say that the session is on this machine only")
+	}
 }
 
 func TestHOST08_2_TheOneMachineModeIsForLocalhostOnly(t *testing.T) {
