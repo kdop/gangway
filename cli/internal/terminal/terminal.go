@@ -1,5 +1,5 @@
 // Package terminal is the only piece that reads keys and writes to the
-// screen. The design is in design.md, the wording in ux.md.
+// screen. The design is in docs/design.md, the wording in docs/ux.md.
 package terminal
 
 import (

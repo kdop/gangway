@@ -13,7 +13,7 @@ next session.
 
 ## Project context
 
-Gangway is temporary remote access for AI, with just-in-time approval of commands. `blueprint.md`
+Gangway is temporary remote access for AI, with just-in-time approval of commands. `docs/blueprint.md`
 says what it is. This file says how it is built and why.
 
 ### Files
@@ -22,13 +22,13 @@ says what it is. This file says how it is built and why.
 |---|---|
 | `README.md` | The front page: what Gangway is, what it looks like, how it works, what keeps it safe, how to start, the status and the known limits |
 | `DEVELOPMENT.md` | For work on the code: the folders, the one-machine trial, the build, how to make a release, the tests, and the list of design files |
-| `blueprint.md` | The design: parts, session flow, gate, key, security, open questions |
-| `plan.md` | The steps, in order, each with its check |
-| `requirements.md` | The hard requirements, each with its acceptance tests. The IDs are carried by the Go tests |
-| `architecture.md` | How the parts are built to meet the requirements: the API, the messages, the pieces |
-| `design.md` | The inside of each piece that has states, with its unit tests. A piece is added just before it is built |
-| `diagrams.md` | The design as Mermaid diagrams: parts, session, gate, failures, trust, pairing |
-| `ux.md` | How the tool looks and feels: prompts, messages, small touches |
+| `docs/blueprint.md` | The design: parts, session flow, gate, key, security, open questions |
+| `docs/plan.md` | The steps, in order, each with its check |
+| `docs/requirements.md` | The hard requirements, each with its acceptance tests. The IDs are carried by the Go tests |
+| `docs/architecture.md` | How the parts are built to meet the requirements: the API, the messages, the pieces |
+| `docs/design.md` | The inside of each piece that has states, with its unit tests. A piece is added just before it is built |
+| `docs/diagrams.md` | The design as Mermaid diagrams: parts, session, gate, failures, trust, pairing |
+| `docs/ux.md` | How the tool looks and feels: prompts, messages, small touches |
 | `notes/<yyyy-mm>.md` | The timeline, one file per month |
 | `.claude/` | Rules (`rules/`, with the voice in `rules/voice.md`) and skills (`skills/`) |
 
@@ -45,6 +45,7 @@ led to it.
 - **The repo has one folder per part: `cli/`, `controller/`, `skill/`.** Each part picks its own language, so not everything has to be Go. The cli-tool is Go because of `tsnet`.
 - **A fourth folder, `shared/`, holds the Go code both programs use: the message types, the auth key file, the raw terminal, and the check that ties tests to requirements.** Two copies of the message types would drift apart, and two copies of the code that guards a key would too.
 - **A fifth folder, `acceptance/`, holds the acceptance tests.** They start both real programs, so they belong to neither one.
+- **The design files live in `docs/`.** The top of the repo then shows the README first, not a long list of files.
 - **Host to controller goes over Tailscale; the AI calls the controller's API.** The host is never open to the internet. The AI machine does not have to be on Tailscale.
 - **The cli-tool is written in Go.** `tsnet` is Go only, and Go gives one file to copy to the host with nothing else to install.
 - **Tailscale is built into the cli-tool with `tsnet`.** The host needs no Tailscale install and no root. Source: https://pkg.go.dev/tailscale.com/tsnet ("No root privileges required", "No system daemons to install or manage").

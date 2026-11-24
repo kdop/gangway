@@ -1,6 +1,6 @@
 // Package loop ties the pieces of the cli-tool together. Every event is
 // handed to it in turn, and it passes the event to the piece it belongs
-// to. The design is in design.md.
+// to. The design is in docs/design.md.
 package loop
 
 import (

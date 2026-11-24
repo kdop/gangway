@@ -1,6 +1,6 @@
 # Gangway requirements and acceptance tests
 
-The hard requirements of the first version, each with the acceptance tests that check it. A requirement is a single sentence. Its tests sit right under it. The design and the reasons are in `blueprint.md` and `CLAUDE.md`.
+The hard requirements of the first version, each with the acceptance tests that check it. A requirement is a single sentence. Its tests sit right under it. The design and the reasons are in `blueprint.md` and `../CLAUDE.md`.
 
 ## Rules
 

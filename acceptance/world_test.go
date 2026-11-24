@@ -1,4 +1,4 @@
-// Package acceptance holds the acceptance tests of requirements.md. Each
+// Package acceptance holds the acceptance tests of docs/requirements.md. Each
 // test starts the real controller and the real cli-tool, calls the API as
 // the AI would, and presses keys as the user would.
 package acceptance

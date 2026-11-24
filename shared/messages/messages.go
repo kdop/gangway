@@ -1,5 +1,5 @@
 // Package messages holds what the cli-tool and the controller say to each
-// other. The contract is architecture.md. This package is its form in code,
+// other. The contract is docs/architecture.md. This package is its form in code,
 // shared by both programs so the two sides cannot drift apart.
 package messages
 

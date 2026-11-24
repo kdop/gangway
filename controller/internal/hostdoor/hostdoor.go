@@ -1,5 +1,5 @@
 // Package hostdoor takes the connections from the cli-tools. One
-// connection carries one session. The design is in design.md.
+// connection carries one session. The design is in docs/design.md.
 package hostdoor
 
 import (

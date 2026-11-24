@@ -50,8 +50,8 @@ func TestUNITSETTINGS01_TheStartingValues(t *testing.T) {
 		t.Fatalf("with no file the values are %+v, want the starting values", got)
 	}
 
-	// The starting values must be the ones in requirements.md.
-	doc, err := os.ReadFile("../../../requirements.md")
+	// The starting values must be the ones in docs/requirements.md.
+	doc, err := os.ReadFile("../../../docs/requirements.md")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestUNITSETTINGS01_TheStartingValues(t *testing.T) {
 		"LOG_FILES_KEPT":            strconv.Itoa(got.LogFilesKept),
 	} {
 		if table[name] != have {
-			t.Errorf("%s starts at %q in the code and %q in requirements.md", name, have, table[name])
+			t.Errorf("%s starts at %q in the code and %q in docs/requirements.md", name, have, table[name])
 		}
 	}
 	if got.MaxWaitingRequests != 20 {
@@ -83,7 +83,7 @@ func TestUNITSETTINGS01_TheStartingValues(t *testing.T) {
 	}
 }
 
-// words writes a time the way the table of requirements.md does.
+// words writes a time the way the table of docs/requirements.md does.
 func words(d time.Duration) string {
 	return strconv.FormatFloat(d.Seconds(), 'f', -1, 64) + " seconds"
 }

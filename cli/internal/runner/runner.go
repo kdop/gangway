@@ -1,6 +1,6 @@
 // Package runner runs one approved command, sends what it writes, asks
 // "wait or stop" at the time limit, and kills it when told.
-// The design is in design.md.
+// The design is in docs/design.md.
 package runner
 
 import (
@@ -36,7 +36,7 @@ func (s State) String() string {
 }
 
 // The ways a command ends. They are part of the contract in
-// architecture.md.
+// docs/architecture.md.
 const (
 	HowExit               = messages.HowExit
 	HowKilledByUser       = messages.HowKilledByUser

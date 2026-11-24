@@ -13,7 +13,7 @@ The design is written down in three levels, each with its tests: the requirement
 | `cli/` | The cli-tool, which runs on the host and holds the gate. Go |
 | `controller/` | The controller, which the AI calls. Go |
 | `shared/` | The Go code both programs use |
-| `acceptance/` | The acceptance tests of `requirements.md`. They start both real programs. Go |
+| `acceptance/` | The acceptance tests of `docs/requirements.md`. They start both real programs. Go |
 | `skill/` | The skill that teaches the AI how to ask |
 
 ## Try it on one machine
@@ -63,11 +63,11 @@ To see how many lines of each package its tests run, add `-cover`: `go test -cov
 
 ## Read next
 
-- `blueprint.md`: what it is and how the parts fit
-- `plan.md`: the steps, the MVP, and how each step is checked
-- `requirements.md`: the hard requirements, each with its acceptance tests
-- `architecture.md`: the API, the messages, and the pieces of each program
-- `design.md`: the inside of each piece, with its unit tests
-- `diagrams.md`: the design as diagrams
-- `ux.md`: what the user sees
+- `docs/blueprint.md`: what it is and how the parts fit
+- `docs/plan.md`: the steps, the MVP, and how each step is checked
+- `docs/requirements.md`: the hard requirements, each with its acceptance tests
+- `docs/architecture.md`: the API, the messages, and the pieces of each program
+- `docs/design.md`: the inside of each piece, with its unit tests
+- `docs/diagrams.md`: the design as diagrams
+- `docs/ux.md`: what the user sees
 - `CLAUDE.md`: the decisions and why

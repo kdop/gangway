@@ -1,5 +1,5 @@
 // Package login stores the Tailscale auth key, once, and tries it. The
-// design is in design.md.
+// design is in docs/design.md.
 package login
 
 import (

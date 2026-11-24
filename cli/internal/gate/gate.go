@@ -1,5 +1,5 @@
 // Package gate shows one request at a time and takes the y or n for it.
-// It is the only way to the runner. The design is in design.md.
+// It is the only way to the runner. The design is in docs/design.md.
 package gate
 
 import (
@@ -44,7 +44,7 @@ const (
 )
 
 // The reasons sent with a refusal. They are part of the contract in
-// architecture.md.
+// docs/architecture.md.
 const (
 	ReasonUser         = messages.ReasonUser
 	ReasonAIGone       = messages.ReasonAIGone

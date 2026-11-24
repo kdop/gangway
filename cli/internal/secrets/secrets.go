@@ -1,5 +1,5 @@
 // Package secrets keeps the Tailscale auth key on the host, in a file that
-// only its owner can read. The design is in design.md. The work is done by
+// only its owner can read. The design is in docs/design.md. The work is done by
 // the code both programs share.
 package secrets
 

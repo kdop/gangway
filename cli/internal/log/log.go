@@ -1,6 +1,6 @@
 // Package log writes each step of a request to the log of the session:
 // the request, the answer, the output and the end. The design is in
-// design.md.
+// docs/design.md.
 package log
 
 import (

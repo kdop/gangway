@@ -1,7 +1,7 @@
 // Package session makes the session key and the paste line, and runs the
 // session's clock: the time is up, the question to extend, the maximum,
 // the end.
-// Nothing here is written to disk. The design is in design.md.
+// Nothing here is written to disk. The design is in docs/design.md.
 package session
 
 import (
@@ -163,7 +163,7 @@ func (s *Session) Key() string { return s.key }
 // KeyHash is the form of the key that goes to the controller.
 func (s *Session) KeyHash() string { return messages.KeyHash(s.key) }
 
-// PasteLine is the line the user gives to the AI, in the form of ux.md.
+// PasteLine is the line the user gives to the AI, in the form of docs/ux.md.
 func (s *Session) PasteLine() string {
 	return "/gangway " + s.address + " " + s.key
 }
