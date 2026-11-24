@@ -2,12 +2,15 @@ package loop
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/kdop/gangway/cli/internal/connection"
+	"github.com/kdop/gangway/cli/internal/log"
 	"github.com/kdop/gangway/cli/internal/request"
 	"github.com/kdop/gangway/cli/internal/runner"
 	"github.com/kdop/gangway/cli/internal/session"
@@ -89,6 +92,12 @@ func newWorldOf(t *testing.T, change func(*settings.Settings), length time.Durat
 // SESSION_MAX. Zero: none.
 func newWorldMax(t *testing.T, change func(*settings.Settings), length, max time.Duration) *world {
 	t.Helper()
+	return newWorldLogged(t, change, length, max, nil)
+}
+
+// newWorldLogged is newWorldMax with this log. Nil: nothing is logged.
+func newWorldLogged(t *testing.T, change func(*settings.Settings), length, max time.Duration, record Log) *world {
+	t.Helper()
 	s := settings.Default()
 	if change != nil {
 		change(&s)
@@ -103,7 +112,7 @@ func newWorldMax(t *testing.T, change func(*settings.Settings), length, max time
 	w := &world{now: time.Unix(1000, 0)}
 	w.l = New(Parts{Settings: s, Session: sess, Conn: w, Screen: &w.screen, Clock: w, Starter: w, Timers: timers{w},
 		SessionTimers: sessionTimers{w}, Length: length,
-		Admin: settings.Admin{SessionMax: max, File: "/etc/gangway/settings"}})
+		Admin: settings.Admin{SessionMax: max, File: "/etc/gangway/settings"}, Log: record})
 	return w
 }
 
@@ -892,4 +901,204 @@ func TestUNITLOOP28_AtTheMaximumARunningCommandIsNotKilled(t *testing.T) {
 
 func TestDesignAndGoTestsMatch(t *testing.T) {
 	designcheck.Match(t, "UNIT-LOOP", "loop_test.go")
+}
+
+// The real log fits the loop.
+var _ Log = (*log.Log)(nil)
+
+// recorded gives a live world with a real log in a scratch folder.
+func recorded(t *testing.T, change func(*settings.Settings)) (*world, *log.Log) {
+	t.Helper()
+	s := settings.Default()
+	if change != nil {
+		change(&s)
+	}
+	// The log takes the time from the world, which is made after it.
+	var w *world
+	record, err := log.Open(t.TempDir(), s.LogFileSize, s.LogFilesKept, worldClock{&w})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(record.Close)
+	w = newWorldLogged(t, change, 0, 0, record)
+	return w, record
+}
+
+type worldClock struct{ w **world }
+
+func (c worldClock) Now() time.Time { return (*c.w).now.UTC() }
+
+func logText(t *testing.T, record *log.Log) string {
+	t.Helper()
+	b, err := os.ReadFile(record.File())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// PIE-03.
+func TestPIE03_TheLogHoldsEveryStepOfEachRequest(t *testing.T) {
+	w, record := recorded(t, nil)
+	w.l.Request(request.Request{ID: "r1", Command: "bad\x1b[2J"})
+	w.ask("r2")
+	w.press("n")
+	w.ask("r3")
+	w.press("y")
+	w.l.Output([]byte("one\n"))
+	w.l.Output([]byte("two\n"))
+	w.l.Exited(0)
+
+	want := "1970-01-01T00:16:40Z r1 request\n" +
+		"  > bad\ufffd[2J\n" +
+		"1970-01-01T00:16:40Z r1 refused: control_character\n" +
+		"1970-01-01T00:16:40Z r2 request\n" +
+		"  > echo r2\n" +
+		"1970-01-01T00:16:41Z r2 refused: user\n" +
+		"1970-01-01T00:16:41Z r3 request\n" +
+		"  > echo r3\n" +
+		"1970-01-01T00:16:42Z r3 approved\n" +
+		"1970-01-01T00:16:42Z r3 ended: exit code 0\n" +
+		"  | one\n" +
+		"  | two\n"
+	if got := logText(t, record); got != want {
+		t.Fatalf("the log holds:\n%s\nwant:\n%s", got, want)
+	}
+	w.wantSent(t, "refused r1 control_character", "refused r2 user", "started r3", "output r3 one\n", "output r3 two\n", "ended r3 exit 0")
+}
+
+// UNIT-LOOP-29. Requirement: LOG-02.
+func TestUNITLOOP29_TheScreenSaysWhereTheLogIs(t *testing.T) {
+	w, record := recorded(t, func(s *settings.Settings) { s.LogFileSize = 1000 })
+	w.l.Begin()
+	if !strings.HasSuffix(w.screen.String(), "The session is logged at "+record.File()+"\n") {
+		t.Fatalf("the start does not end with the place of the log:\n%s", w.screen.String())
+	}
+	w.press("\x03")
+	if !strings.HasSuffix(w.screen.String(), "The session is over. Its key is dead.\nSession logged at "+record.File()+"\n") {
+		t.Fatalf("the end does not name the log:\n%s", w.screen.String())
+	}
+	if !strings.HasSuffix(record.File(), ".txt") {
+		t.Fatalf("the log file is %s", record.File())
+	}
+
+	// A log of more than one file.
+	w, record = recorded(t, func(s *settings.Settings) { s.LogFileSize = 1000 })
+	w.l.Begin()
+	for i := 0; i < 20; i++ {
+		w.l.Request(request.Request{ID: "r", Command: "bad\x1b" + strings.Repeat("x", 100)})
+	}
+	w.press("\x03")
+	if !strings.HasSuffix(w.screen.String(), "Session logged at "+record.File()+"\nThat file holds the last part. The parts before it are in the same folder.\n") {
+		t.Fatalf("the end does not tell of the old files:\n%s", w.screen.String())
+	}
+
+	// With no log, the screen names none.
+	w = live(t)
+	w.l.Begin()
+	w.press("\x03")
+	if strings.Contains(w.screen.String(), "logged") {
+		t.Fatalf("the screen names a log:\n%s", w.screen.String())
+	}
+}
+
+// brokenLog is a log that fails when the test says so.
+type brokenLog struct {
+	noLog
+	err error
+}
+
+func (b *brokenLog) Err() error   { return b.err }
+func (b *brokenLog) File() string { return "/tmp/gangway-1/session.txt" }
+
+// UNIT-LOOP-30. Requirement: LOG-06.
+func TestUNITLOOP30_AFailedLogEndsTheSession(t *testing.T) {
+	failed := errors.New("no space left")
+	const says = "The log cannot be written: the session ends.\n"
+
+	// A request that cannot be logged goes no further.
+	record := &brokenLog{}
+	w := newWorldLogged(t, nil, 0, 0, record)
+	record.err = failed
+	w.ask("r1")
+	w.press("y")
+	w.wantSent(t, "refused r1 session_ended")
+	w.wantStarts(t)
+	if w.prompts("r1") != 0 {
+		t.Fatal("a prompt was shown for a request that was not logged")
+	}
+	if w.l.State() != Over || fmt.Sprint(w.closed) != "[user]" {
+		t.Fatalf("the loop is %v, closed with %v", w.l.State(), w.closed)
+	}
+	if !strings.Contains(w.screen.String(), says) ||
+		!strings.HasSuffix(w.screen.String(), "The log is not whole: it could not be written. What there is of it is at /tmp/gangway-1/session.txt\n") {
+		t.Fatalf("the screen:\n%s", w.screen.String())
+	}
+
+	// A prompt waits when the log fails: the next event ends the session.
+	record = &brokenLog{}
+	w = newWorldLogged(t, nil, 0, 0, record)
+	w.ask("r1")
+	record.err = failed
+	w.press("x")
+	w.press("y")
+	w.wantSent(t, "refused r1 session_ended")
+	w.wantStarts(t)
+	if w.l.State() != Over {
+		t.Fatalf("the loop is %v", w.l.State())
+	}
+
+	// A command runs when the log fails: it is stopped, and nothing new runs.
+	record = &brokenLog{}
+	w = newWorldLogged(t, nil, 0, 0, record)
+	w.ask("r1")
+	w.press("y")
+	w.ask("r2")
+	record.err = failed
+	w.l.Output([]byte("one\n"))
+	w.l.Timer(-1)
+	if w.l.State() != Ending || w.stops != 1 {
+		t.Fatalf("the loop is %v and the command was asked to stop %d times", w.l.State(), w.stops)
+	}
+	w.l.Exited(1)
+	if w.l.State() != Over {
+		t.Fatalf("the loop is %v", w.l.State())
+	}
+	w.wantStarts(t, "echo r1")
+	if !w.sentHas("refused r2 session_ended") || !w.sentHas("ended r1 killed_session_ended") {
+		t.Fatalf("sent %q", w.sent)
+	}
+
+	// A log that fails at the start.
+	record = &brokenLog{err: failed}
+	w = newWorldLogged(t, nil, 0, 0, record)
+	w.l.Begin()
+	if w.l.State() != Over || !strings.Contains(w.screen.String(), says) {
+		t.Fatalf("the loop is %v:\n%s", w.l.State(), w.screen.String())
+	}
+}
+
+// UNIT-LOOP-31. Requirement: LOG-01, KEY-03.
+func TestUNITLOOP31_TheLogHoldsTheStepsOfTheSessionAndNotItsKey(t *testing.T) {
+	w, record := recorded(t, nil)
+	w.l.Begin()
+	w.ask("r1")
+	w.timeUp()
+	w.pass(time.Second)
+	w.press("y")
+	w.press("\x03")
+
+	want := "1970-01-01T00:16:40Z session started: it lasts 30 minutes\n" +
+		"1970-01-01T00:16:40Z r1 request\n" +
+		"  > echo r1\n" +
+		"1970-01-01T00:46:41Z session time is up\n" +
+		"1970-01-01T00:46:41Z r1 refused: time_up\n" +
+		"1970-01-01T00:46:42Z session extended: 30 minutes left\n" +
+		"1970-01-01T00:46:42Z session ended: user. Ctrl+C: the session ends.\n"
+	if got := logText(t, record); got != want {
+		t.Fatalf("the log holds:\n%s\nwant:\n%s", got, want)
+	}
+	if strings.Contains(logText(t, record), w.l.session.Key()) || strings.Contains(logText(t, record), "gw_") {
+		t.Fatal("the log holds the session key")
+	}
 }

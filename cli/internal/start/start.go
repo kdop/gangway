@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/kdop/gangway/cli/internal/connection"
+	"github.com/kdop/gangway/cli/internal/log"
 	"github.com/kdop/gangway/cli/internal/login"
 	"github.com/kdop/gangway/cli/internal/loop"
 	"github.com/kdop/gangway/cli/internal/network"
@@ -233,6 +234,15 @@ func Run(args []string, stdin, stdout *os.File, stderr io.Writer) int {
 		return fail(err)
 	}
 
+	// No session without a log.
+	place := log.Place()
+	sessionLog, err := log.Open(place, s.LogFileSize, s.LogFilesKept, clock{})
+	if err != nil {
+		conn.Close(messages.EndUser)
+		return fail(fmt.Errorf("cannot make the log of the session in %s: %w", place, err))
+	}
+	defer sessionLog.Close()
+
 	restore, err := terminal.MakeRaw(in)
 	if err != nil {
 		conn.Close(messages.EndUser)
@@ -254,6 +264,7 @@ func Run(args []string, stdin, stdout *os.File, stderr io.Writer) int {
 		SessionTimers: sessionTimers{ev, &l},
 		Length:        asked,
 		Admin:         admin,
+		Log:           sessionLog,
 	})
 
 	go readKeys(stdin, ev, &l)

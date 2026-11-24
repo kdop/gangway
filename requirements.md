@@ -1054,20 +1054,22 @@ Every request and its answer must be written to the log on the host, with the ti
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
-| LOG-01.1 | A session with one request approved, one refused with `n`, and one refused with no prompt | Read the log | All three are there, each with its answer and its time |
+| LOG-01.1 | A session with one request approved, one refused with `n`, and one refused with no prompt | Read the log | All three are there, each with its answer and its time. The session key is not there |
 | LOG-01.2 | A session where one command was killed at a limit and one by Ctrl+C | Read the log | Both are there, each with how it ended |
 
 ### LOG-02
 
-The log must be kept in `~/.local/state/gangway/`. Step 7.
+Each session must have a log of its own: one log file in a new folder under the temp folder of the host. The name of the folder must be random and must tell nothing of the session key. The cli-tool must show the path of the log file when the session starts and when it ends, and must not delete the log. Step 7.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
-| LOG-02.1 | A session has ended | Look in `~/.local/state/gangway/` | The log is there, and in no other place |
+| LOG-02.1 | A session has ended | Look in the temp folder and in the home folder | The temp folder holds one new folder, named `gangway-` and a random part, with the log file `session.txt` in it. The home folder holds no log |
+| LOG-02.2 | Two sessions on one host, one after the other | Look in the temp folder | Each session has a folder of its own, and its log holds only its own requests. No folder name holds a part of a session key |
+| LOG-02.3 | A live session | Read the screen. End the session. Read the screen and the log | At the start the screen says `The session is logged at` and the path of the log file, which ends in `.txt`. The last line at the end is `Session logged at` and the same path. The log is still there, and holds the end of the session |
 
 ### LOG-03
 
-The log must hold the output of each command and file read, as it was sent to the AI. Step 7.
+The log must hold the output of each command, as it was sent to the AI. A character that the terminal would not show is replaced in the log too. Step 7.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1077,22 +1079,32 @@ The log must hold the output of each command and file read, as it was sent to th
 
 ### LOG-04
 
-The log must be readable by its owner only. Step 7.
+The log must be readable by its owner only: the folder and every file in it. Step 7.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
-| LOG-04.1 | A session has ended | Look at the rights of the log file and its folder | Only the owner can read or write them |
+| LOG-04.1 | A live session, then the same session after its end | Look at the rights of the log file and its folder | Only the owner can read or write them, both times |
 
 ### LOG-05
 
-When the log file passes `LOG_FILE_SIZE`, the cli-tool must start a new log file, and must keep no more than `LOG_FILES_KEPT` old ones, deleting the oldest first. Step 7.
+When one more entry would take the log file past `LOG_FILE_SIZE`, the cli-tool must start a new log file in the same folder, and must keep no more than `LOG_FILES_KEPT` old ones, deleting the oldest first. No entry may be larger than `LOG_FILE_SIZE`: a larger one is cut in the log, with a note. So the log of one session never takes more than `LOG_FILE_SIZE` times `LOG_FILES_KEPT` plus one. Step 7.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
-| LOG-05.1 | The log file is just under `LOG_FILE_SIZE` | A request is logged that takes it past the size | A new log file is started. The old one is kept under another name. No entry is lost or cut in half |
-| LOG-05.2 | `LOG_FILES_KEPT` old log files exist | The log file passes `LOG_FILE_SIZE` again | The oldest file is deleted. There are still `LOG_FILES_KEPT` old files |
-| LOG-05.3 | Many sessions have filled the log many times over | Add up the size of all log files | It is never more than `LOG_FILE_SIZE` times `LOG_FILES_KEPT` plus one |
+| LOG-05.1 | The log file is nearly full | A request is logged that does not fit in it | A new log file is started. The old one is kept under another name. No entry is lost or cut in half |
+| LOG-05.2 | `LOG_FILES_KEPT` old log files exist | The log file is full again | The oldest file is deleted. There are still `LOG_FILES_KEPT` old files, and they hold the newest entries with no gap |
+| LOG-05.3 | A session that fills the log many times over, with one command that prints far more than `LOG_FILE_SIZE` | Add up the size of all its log files, again and again | It is never more than `LOG_FILE_SIZE` times `LOG_FILES_KEPT` plus one |
 | LOG-05.4 | A new log file was just started | Look at the rights of every log file | Only the owner can read or write them |
+| LOG-05.5 | `LOG_FILE_SIZE` is small | An approved command prints more than `LOG_FILE_SIZE` | The AI gets the whole output. The log holds the first part of it and the note that the entry was cut. No log file is larger than `LOG_FILE_SIZE` |
+
+### LOG-06
+
+No session must start without a log, and a session whose log can no longer be written must end. A request that cannot be logged must not reach the prompt. Step 7.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| LOG-06.1 | The temp folder is not there | Start a session | The cli-tool says that it cannot make the log, and where, and ends. No paste line is shown |
+| LOG-06.2 | A live session with a small `LOG_FILE_SIZE`. The folder of its log is deleted | The AI sends requests until a new log file is due | The request that cannot be logged is refused with `session_ended` and gets no prompt. Nothing runs. The screen says that the log cannot be written, and the session ends |
 
 ## Settings
 
@@ -1121,8 +1133,8 @@ A name in upper case is a setting. The requirements use the name, never the numb
 | `PAIRING_CODE_LIFE` | 5 minutes | How long a pairing code works | PAIR-03, PAIR-10 |
 | `LINK_TIMEOUT` | 30 seconds | How long the connection may be silent before it counts as lost | SES-04 |
 | `RECONNECT_WINDOW` | 2 minutes | How long the cli-tool tries to connect again before the session ends | SES-04, SES-09 |
-| `LOG_FILE_SIZE` | 10 MB | How big one log file may get before a new one is started | LOG-05 |
-| `LOG_FILES_KEPT` | 5 | How many old log files are kept | LOG-05 |
+| `LOG_FILE_SIZE` | 10 MB | How big one log file of a session may get before a new one is started. One entry is never larger | LOG-05 |
+| `LOG_FILES_KEPT` | 5 | How many old log files of a session are kept | LOG-05 |
 
 ## Not here yet
 

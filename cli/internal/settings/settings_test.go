@@ -71,6 +71,8 @@ func TestUNITSETTINGS01_TheStartingValues(t *testing.T) {
 		"JOIN_TIMEOUT":              words(got.JoinTimeout),
 		"SESSION_LENGTH":            strconv.FormatFloat(got.SessionLength.Minutes(), 'f', -1, 64) + " minutes",
 		"EXTEND_WAIT":               words(got.ExtendWait),
+		"LOG_FILE_SIZE":             strconv.FormatInt(got.LogFileSize/1000/1000, 10) + " MB",
+		"LOG_FILES_KEPT":            strconv.Itoa(got.LogFilesKept),
 	} {
 		if table[name] != have {
 			t.Errorf("%s starts at %q in the code and %q in requirements.md", name, have, table[name])
@@ -99,6 +101,8 @@ DOUBLE_CTRL_C_WINDOW=3s
 MAX_WAITING_REQUESTS=7
 SESSION_LENGTH=45m
 EXTEND_WAIT=20s
+LOG_FILE_SIZE=3MB
+LOG_FILES_KEPT=9
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -115,6 +119,8 @@ EXTEND_WAIT=20s
 		MaxWaitingRequests: 7,
 		SessionLength:      45 * time.Minute,
 		ExtendWait:         20 * time.Second,
+		LogFileSize:        3 * 1000 * 1000,
+		LogFilesKept:       9,
 	}
 	if got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
@@ -223,6 +229,22 @@ func TestUNITSETTINGS14_TheSessionLengthAndTheExtendWait(t *testing.T) {
 		for _, bad := range []string{"0s", "-5m", "30"} {
 			wantError(t, name+" = "+bad+"\n", "line 1", name)
 		}
+	}
+}
+
+// UNIT-SETTINGS-23. Requirement: LOG-05.
+func TestUNITSETTINGS23_TheSizeAndTheNumberOfLogFiles(t *testing.T) {
+	for value, want := range map[string]int64{"1KB": 1000, "1000B": 1000, "500KB": 500 * 1000, "10MB": 10 * 1000 * 1000, "10 MB": 10 * 1000 * 1000, "2GB": 2 * 1000 * 1000 * 1000} {
+		got, err := Load(write(t, "LOG_FILE_SIZE = "+value+"\nLOG_FILES_KEPT = 1"))
+		if err != nil || got.LogFileSize != want || got.LogFilesKept != 1 {
+			t.Fatalf("%s gives %d and %v, want %d", value, got.LogFileSize, err, want)
+		}
+	}
+	for _, value := range []string{"", "10", "10 mb", "MB", "-1MB", "+1MB", "1.5MB", "0KB", "999B", "1TB", "99999999999999999999MB", "9223372036854775807GB"} {
+		wantError(t, "COMMAND_TIME_LIMIT = 90s\nLOG_FILE_SIZE = "+value, "line 2", "LOG_FILE_SIZE")
+	}
+	for _, value := range []string{"", "0", "-1", "101", "two", "1.5"} {
+		wantError(t, "LOG_FILES_KEPT = "+value, "line 1", "LOG_FILES_KEPT")
 	}
 }
 
