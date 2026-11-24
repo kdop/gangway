@@ -31,6 +31,26 @@ The cli-tool prints a line that starts with `/gangway`. Paste it to an AI that h
 
 `./build.sh` builds both programs into `build/`: `build/gangway` and `build/gangway-controller`. Each is one file that can be copied to another Linux machine as it is.
 
+## Make a release
+
+A release is made on GitHub from a tag that starts with `v`:
+
+```
+git checkout main && git pull
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+GitHub then runs the tests, builds both programs for Linux on x86_64 and on aarch64, and puts the four files and `SHA256SUMS` on the releases page, `https://github.com/kdop/gangway/releases`. A tag on a commit whose tests fail gives no release. The workflow is `.github/workflows/release.yml`.
+
+To check a downloaded file by hand, put it next to `SHA256SUMS` and run:
+
+```
+sha256sum --check --ignore-missing SHA256SUMS
+```
+
+`install.sh` reads the release: it takes `gangway-linux-amd64` or `gangway-linux-arm64` and checks it against `SHA256SUMS`. So the names of those files must stay as they are. The script is served from the `main` branch, not from a release, so a change to it is live once it is merged.
+
 ## Run the tests
 
 ```

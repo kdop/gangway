@@ -21,7 +21,7 @@ says what it is. This file says how it is built and why.
 | File | Purpose |
 |---|---|
 | `README.md` | The front page: what Gangway is, what it looks like, how it works, what keeps it safe, how to start, the status and the known limits |
-| `DEVELOPMENT.md` | For work on the code: the folders, the one-machine trial, the build, the tests, and the list of design files |
+| `DEVELOPMENT.md` | For work on the code: the folders, the one-machine trial, the build, how to make a release, the tests, and the list of design files |
 | `blueprint.md` | The design: parts, session flow, gate, key, security, open questions |
 | `plan.md` | The steps, in order, each with its check |
 | `requirements.md` | The hard requirements, each with its acceptance tests. The IDs are carried by the Go tests |
@@ -59,6 +59,7 @@ led to it.
 - **An MCP door on the controller may come later, next to the API and not in place of it.** It would let in the chats that cannot call the API. It is an addition, so nothing waits for it.
 - **Linux hosts only for now.** Keep it simple.
 - **`login` once, then start with no questions.** The auth key is pasted at `login`, about once a month, and kept in a file in the home folder that only the user can read.
+- **The install is one shell script that puts one file in the home folder, `~/.local/bin/gangway`, and checks it against the checksums of its release.** A host must need no root and no package manager, and a shell is on every host. The script changes no start file of the shell: it says what to add. The checksum is not a signature, so the build from the source stays the way that needs no trust in a release.
 - **The cli-tool never gives its own key file to the AI; the ban is fixed in code.** A setting could be switched off by mistake.
 - **A command has a time limit and a size limit, and neither is strict.** They stop a hang and a flood. A small size limit also pushes the AI to ask for less.
 - **Past the time limit the AI is asked whether to go on; the cli-tool does the stopping.** The AI knows why it ran the command, its call must get "still running" in any case because AI tools cut off long calls, and the command is already approved. Only the cli-tool holds the running command.

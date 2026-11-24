@@ -11,7 +11,7 @@ import (
 )
 
 // stepsBuilt holds the steps of plan.md that are built, beside the MVP.
-var stepsBuilt = map[string]bool{"2": true, "4": true, "7": true}
+var stepsBuilt = map[string]bool{"2": true, "4": true, "7": true, "11": true}
 
 // builtOfAStepInWork holds the requirements that are built while the rest
 // of their step is not. When the whole step is built, the step goes into
