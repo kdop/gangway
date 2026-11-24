@@ -1106,6 +1106,79 @@ No session must start without a log, and a session whose log can no longer be wr
 | LOG-06.1 | The temp folder is not there | Start a session | The cli-tool says that it cannot make the log, and where, and ends. No paste line is shown |
 | LOG-06.2 | A live session with a small `LOG_FILE_SIZE`. The folder of its log is deleted | The AI sends requests until a new log file is due | The request that cannot be logged is refused with `session_ended` and gets no prompt. Nothing runs. The screen says that the log cannot be written, and the session ends |
 
+## INS: the install
+
+The install is the script `install.sh`. A user runs it on a host. "The release" is the GitHub release the user asked for: the latest one, or the version given to the script. In the tests a web server of the test stands in for GitHub, and a small file stands in for the cli-tool.
+
+### INS-01
+
+The install must put the cli-tool for this kind of machine at `~/.local/bin/gangway`, as a file the user can run, and must then say where it is and that `gangway login` is the next step. Step 11.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| INS-01.1 | A home folder with no `.local`. An x86_64 machine | Run the install | `~/.local/bin/gangway` holds the release's file `gangway-linux-amd64`, byte for byte, and can be run. The screen names that path and `gangway login` |
+| INS-01.2 | The same, on an aarch64 machine | Run the install | `~/.local/bin/gangway` holds the release's file `gangway-linux-arm64` |
+| INS-01.3 | The latest release and an older one, `v0.1.0`, hold different files | Run the install with `v0.1.0` | `~/.local/bin/gangway` holds the file of `v0.1.0` |
+
+### INS-02
+
+The install must check the downloaded file against the `SHA256SUMS` of the same release before it puts it in place. When the check fails, or a download fails, it must stop, say why, and leave the home folder as it was. Step 11.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| INS-02.1 | A home folder with no cli-tool. The release's file does not match its line in `SHA256SUMS` | Run the install | It stops and says the download does not match its checksum. There is no `~/.local/bin/gangway`, and no other file was left behind |
+| INS-02.2 | The same release. An older cli-tool is installed | Run the install | It stops. The older cli-tool is still there, unchanged |
+| INS-02.3 | There is no release, or it has no file for this machine | Run the install | It stops and says that there may be no release yet. Nothing was installed and no file was left behind |
+| INS-02.4 | The release has the file but no `SHA256SUMS` | Run the install | It stops and says the download cannot be checked. Nothing was installed and no file was left behind |
+| INS-02.5 | The release's `SHA256SUMS` has no line for this machine's file | Run the install | The same |
+
+### INS-03
+
+Running the install again must replace the cli-tool with the one of the release asked for. Step 11.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| INS-03.1 | The cli-tool of `v0.1.0` is installed. A newer release is the latest | Run the install | `~/.local/bin/gangway` holds the file of the latest release, and can be run |
+| INS-03.2 | The cli-tool of the latest release is installed | Run the install with `v0.1.0` | `~/.local/bin/gangway` holds the file of `v0.1.0` |
+
+### INS-04
+
+The install must refuse to run as root, on a system that is not Linux, and on a kind of machine there is no cli-tool for. Each time it must say why and install nothing. Step 11.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| INS-04.1 | The user is root | Run the install | It stops and says that it does not run as root. Nothing was downloaded and nothing was written |
+| INS-04.2 | The system is not Linux | Run the install | It stops and says that gangway runs on Linux only. Nothing was downloaded and nothing was written |
+| INS-04.3 | A kind of machine that is neither x86_64 nor aarch64 | Run the install | It stops and names the kind of machine. Nothing was downloaded and nothing was written |
+
+### INS-05
+
+The install must write nothing but `~/.local/bin/gangway`. It must not change the start files of the shell, the settings in `~/.config/gangway/`, or anything outside the home folder. Step 11.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| INS-05.1 | A home folder with a `.profile`, a `.bashrc`, and an auth key and settings in `~/.config/gangway/` | Run the install | `~/.local/bin/gangway` is the only new file. Every other file is unchanged. The temp folder is empty |
+| INS-05.2 | `~/.local/bin` is not on `PATH` | Run the install | The screen says so and shows the line to add. No start file of the shell was changed |
+| INS-05.3 | `~/.local/bin` is on `PATH` | Run the install | The screen says nothing about `PATH` |
+
+### INS-06
+
+The install must download over HTTPS only, and only from the release it was asked for. Another place to download from must be refused unless it is HTTPS or on this machine, and a version that holds more than letters, digits, dots, `-` and `_` must be refused. Step 11.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| INS-06.1 | The place to download from is set to a plain `http://` address on another machine | Run the install | It stops and says that the address must start with `https://`. Nothing was installed |
+| INS-06.2 | The place to download from is set to an address that starts like one on this machine but holds an `@` | Run the install | It stops. Nothing was downloaded and nothing was installed |
+| INS-06.3 | A live release | Run the install with the version `../x` | It stops and says that this is not a version. Nothing was downloaded and nothing was installed |
+
+### INS-07
+
+A copy of the install script that was cut off at any point must install nothing and download nothing. Step 11.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| INS-07.1 | The script cut after each of its lines, and after each character of its last lines | Run each cut copy | No copy downloads anything, and no copy writes anything to the home folder |
+
 ## Settings
 
 A name in upper case is a setting. The requirements use the name, never the number, so a changed value changes no requirement. The values here are the starting values.
