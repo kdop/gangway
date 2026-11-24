@@ -26,7 +26,7 @@ import (
 	"github.com/kdop/gangway/shared/messages"
 )
 
-const goodKey = "tskey-auth-kGOODKEY11CNTRL-abcdefghijklmnop"
+const goodKey = "tskey-auth-fake-good-key"
 
 // standIn starts a stand-in for Tailscale's servers and points the
 // program at it, with scratch folders for its key and its identity.
@@ -194,7 +194,7 @@ func TestUNITCTLSTART12_LoginStoresAndTriesTheKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oldKey := "tskey-auth-kOLDKEY11CNTRL-aaaaaaaaaaaaaaaa"
+	oldKey := "tskey-auth-fake-old-key"
 	if err := authkey.Save(keyFile, oldKey); err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestUNITCTLSTART12_LoginStoresAndTriesTheKey(t *testing.T) {
 	}
 
 	var screen bytes.Buffer
-	bad := "tskey-auth-kBADKEY11CNTRL-zzzzzzzzzzzz"
+	bad := "tskey-auth-fake-bad-key"
 	err = Login(context.Background(), config, bad, &screen)
 	if err == nil || !strings.Contains(err.Error(), "Tailscale refused the key") || stored() != oldKey {
 		t.Fatalf("a refused key gave %v, and the stored key changed: %v", err, stored() != oldKey)

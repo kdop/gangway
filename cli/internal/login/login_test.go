@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	oldKey = "tskey-auth-kOLDKEY11CNTRL-aaaaaaaaaaaaaaaa"
-	newKey = "tskey-auth-kNEWKEY11CNTRL-bbbbbbbbbbbbbbbb"
+	oldKey = "tskey-auth-fake-old-key"
+	newKey = "tskey-auth-fake-new-key"
 )
 
 // world is one login with a keyboard and a screen played by the test.

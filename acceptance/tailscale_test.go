@@ -24,10 +24,10 @@ import (
 	"tailscale.com/types/logger"
 )
 
-const tailscaleKey = "tskey-auth-kGOODKEY11CNTRL-abcdefghijklmnop"
+const tailscaleKey = "tskey-auth-fake-good-key"
 
 // otherTailscaleKey is a key the stand-in network does not take.
-const otherTailscaleKey = "tskey-" + "auth-kOTHERKEY1CNTRL-zyxwvutsrqponmlk"
+const otherTailscaleKey = "tskey-auth-fake-other-key"
 
 // joinWait is how long a test waits for a program to get onto the
 // stand-in network.

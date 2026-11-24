@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-const goodKey = "tskey-auth-kTESTONLY11CNTRL-abcdefghijklmnopqrstuvwxyz"
+const goodKey = "tskey-auth-fake-test-only-key"
 
 // place gives the path of a key file in a folder that is not there yet.
 func place(t *testing.T) string {
