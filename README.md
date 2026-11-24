@@ -93,6 +93,28 @@ The log of a session is a text file in a new folder under the temp folder. The t
 
 Until pairing is built, any device that your Tailscale rules let reach the controller can start a session of its own. The rules are the guard.
 
+### A second way to get the cli-tool on a host
+
+The build from the source, above, is the main way: you run what you can read. For a host with no Go there is a second way. It needs a release on the [releases page](https://github.com/kdop/gangway/releases); with none, it stops and says so.
+
+One command puts the cli-tool at `~/.local/bin/gangway`. It needs no root, and it changes nothing else:
+
+```
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/kdop/gangway/main/install.sh | sh
+```
+
+The careful way does the same, and lets you read the script before it runs:
+
+```
+curl --proto '=https' --tlsv1.2 -fsSL -o install.sh https://raw.githubusercontent.com/kdop/gangway/main/install.sh
+less install.sh
+sh install.sh
+```
+
+`sh install.sh v0.1.0` takes that release and not the latest. Running the script again replaces the program, so that is also how to update. The controller is not installed this way.
+
+The script checks the file against the checksums of its release before it puts it in place. That shows the download is whole and is the file of that release. It is not a signature: whoever can change a release can change both.
+
 ## Status
 
 It works end to end, and it has run on a real Tailscale network, with the controller on a server on the internet.
