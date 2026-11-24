@@ -62,8 +62,8 @@ type Timers interface {
 // Screen is the terminal, as far as the session needs it.
 type Screen interface {
 	// ExtendQuestion asks whether to extend by this length. toMax: that
-	// stretch ends at the maximum.
-	ExtendQuestion(length time.Duration, toMax bool)
+	// stretch ends at the maximum. wait is how long the question waits.
+	ExtendQuestion(length time.Duration, toMax bool, wait time.Duration)
 	// ExtendAnswer closes the question. With Yes, length is the stretch
 	// the session got, and toMax tells that it ends at the maximum.
 	ExtendAnswer(answer Answer, length time.Duration, toMax bool)
@@ -238,6 +238,20 @@ func (s *Session) Takes() bool {
 	return s.state == Live
 }
 
+// Left tells how long the session still takes requests: the time to the
+// end of the stretch that counts. It tells false when no stretch counts.
+// It is for the screen only, and decides nothing.
+func (s *Session) Left() (time.Duration, bool) {
+	if s.state != Live || !s.clocked {
+		return 0, false
+	}
+	left := s.end.Sub(s.today())
+	if left <= 0 {
+		return 0, false
+	}
+	return left, true
+}
+
 // Timer tells the session that the timer with this number ran out.
 func (s *Session) Timer(number int) {
 	if number != s.timer {
@@ -277,14 +291,14 @@ func (s *Session) Idle() {
 		return
 	}
 	s.state = Extending
-	s.edges.Screen.ExtendQuestion(length, toMax)
-	s.shownAt = s.edges.Clock.Now()
 	// The question does not wait past the maximum.
 	wait := s.edges.ExtendWait
 	s.maxWait = toMax && length < wait
 	if s.maxWait {
 		wait = length
 	}
+	s.edges.Screen.ExtendQuestion(length, toMax, wait)
+	s.shownAt = s.edges.Clock.Now()
 	s.startTimer(wait)
 }
 

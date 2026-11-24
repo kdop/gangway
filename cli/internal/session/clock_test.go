@@ -28,6 +28,7 @@ type world struct {
 
 	questions []time.Duration // the question to extend, with the length it named
 	toMax     []bool          // whether each question, and each yes, named the maximum
+	waits     []time.Duration // how long each question said it waits
 	answers   []Answer
 	got       []time.Duration // the stretch each yes gave
 	maxed     int             // the loop was told that the maximum is reached
@@ -38,8 +39,8 @@ type world struct {
 
 func (w *world) Now() time.Time                    { return w.now }
 func (w *world) Start(d time.Duration, number int) { w.timers = append(w.timers, started{d, number}) }
-func (w *world) ExtendQuestion(d time.Duration, toMax bool) {
-	w.questions, w.toMax = append(w.questions, d), append(w.toMax, toMax)
+func (w *world) ExtendQuestion(d time.Duration, toMax bool, wait time.Duration) {
+	w.questions, w.toMax, w.waits = append(w.questions, d), append(w.toMax, toMax), append(w.waits, wait)
 }
 func (w *world) ExtendAnswer(a Answer, d time.Duration, toMax bool) {
 	w.answers = append(w.answers, a)
@@ -495,6 +496,61 @@ func TestUNITSESSION24_TheQuestionDoesNotWaitPastTheMaximum(t *testing.T) {
 	w.s.Timer(w.last().number)
 	if w.notExt != 1 || w.maxed != 0 {
 		t.Fatalf("no answer below the maximum: %s", w.did())
+	}
+}
+
+// UNIT-SESSION-26. Requirement: LEN-01, LEN-03, LEN-05.
+func TestUNITSESSION26_TheScreenIsToldTheTimeLeftAndTheWait(t *testing.T) {
+	left := func(w *world) string {
+		d, ok := w.s.Left()
+		return fmt.Sprint(d, ok)
+	}
+	w := clocked(t, 10*time.Minute)
+	before := w.did()
+	if got := left(w); got != "10m0s true" {
+		t.Fatalf("at the start %s is left", got)
+	}
+	w.pass(4 * time.Minute)
+	if got := left(w); got != "6m0s true" {
+		t.Fatalf("four minutes later %s is left", got)
+	}
+	if w.did() != before {
+		t.Fatalf("asking for the time left changed something: %s", w.did())
+	}
+	// At the end, when the time is up, at the question and after the end:
+	// nothing to tell.
+	w.pass(6 * time.Minute)
+	if got := left(w); got != "0s false" {
+		t.Fatalf("at the end time %s is left", got)
+	}
+	w.s.Timer(w.last().number)
+	if got := left(w); got != "0s false" {
+		t.Fatalf("when the time is up %s is left", got)
+	}
+	w.s.Idle()
+	if got := left(w); got != "0s false" {
+		t.Fatalf("at the question %s is left", got)
+	}
+	if fmt.Sprint(w.waits) != fmt.Sprint([]time.Duration{extendWait}) {
+		t.Fatalf("the question said it waits %v, want EXTEND_WAIT", w.waits)
+	}
+	w.yes()
+	if got := left(w); got != "10m0s true" {
+		t.Fatalf("after the extension %s is left", got)
+	}
+	w.s.End()
+	if got := left(w); got != "0s false" {
+		t.Fatalf("after the end %s is left", got)
+	}
+	if got := fmt.Sprint((&Session{}).Left()); got != "0s false" {
+		t.Fatalf("with no clock %s is left", got)
+	}
+
+	// A question that does not wait past the maximum says so.
+	w = capped(t, 10*time.Minute, 10*time.Minute+30*time.Second)
+	w.runOut()
+	if fmt.Sprint(w.waits) != fmt.Sprint([]time.Duration{30 * time.Second}) || w.last().d != 30*time.Second {
+		t.Fatalf("the question said it waits %v, and waits %v, want 30 seconds for both", w.waits, w.last().d)
 	}
 }
 

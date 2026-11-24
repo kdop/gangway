@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/kdop/gangway/cli/internal/runner"
 	"github.com/kdop/gangway/cli/internal/session"
 	"github.com/kdop/gangway/cli/internal/settings"
+	"github.com/kdop/gangway/cli/internal/terminal"
 	"github.com/kdop/gangway/shared/designcheck"
 	"github.com/kdop/gangway/shared/messages"
 )
@@ -112,14 +114,38 @@ func newWorldLogged(t *testing.T, change func(*settings.Settings), length, max t
 	w := &world{now: time.Unix(1000, 0)}
 	w.l = New(Parts{Settings: s, Session: sess, Conn: w, Screen: &w.screen, Clock: w, Starter: w, Timers: timers{w},
 		SessionTimers: sessionTimers{w}, Length: length,
-		Admin: settings.Admin{SessionMax: max, File: "/etc/gangway/settings"}, Log: record})
+		Admin: settings.Admin{SessionMax: max, File: "/etc/gangway/settings"}, Log: record,
+		Host: hostOfTests, Network: networkOfTests, Look: lookOfTests})
 	return w
 }
 
-const (
-	sessionLength  = 30 * time.Minute
-	extendQuestion = "\nThe session's time is up.\nExtend it by 30 minutes? y/n "
+// What the next world is made with, for the screen. A test that sets one
+// puts it back.
+var (
+	hostOfTests, networkOfTests string
+	lookOfTests                 terminal.Look
 )
+
+const (
+	sessionLength = 30 * time.Minute
+	question      = "  run it?   y yes   n no "
+)
+
+// The question to extend in the plain look, just shown.
+var extendQuestion = "\n  -- time is up " + strings.Repeat("-", 25) + "  answer in 60 s\n\n  extend by 30 min?   y yes   n no "
+
+// extendShown fits the question to extend as the last thing on screen,
+// however long it still waits.
+var extendShown = regexp.MustCompile(`\n  -- time is up -{25}  answer in \d+ s\n\n  extend by 30 min\?   y yes   n no $`)
+
+// asksToExtend tells whether the question to extend is the last thing on
+// screen.
+func (w *world) asksToExtend() bool { return extendShown.MatchString(w.screen.String()) }
+
+// questions counts how often the question to extend was drawn.
+func (w *world) questions() int {
+	return strings.Count(w.screen.String(), "\n  extend by 30 min?   y yes   n no ")
+}
 
 // sessionTimer lets the session timer that was started last run out.
 func (w *world) sessionTimer() { w.l.SessionTimer(w.stimers[len(w.stimers)-1].number) }
@@ -162,7 +188,7 @@ func (w *world) press(keys string)    { w.l.Input([]byte(keys)) }
 
 // prompts counts how often the prompt for this request was drawn.
 func (w *world) prompts(id string) int {
-	return strings.Count(w.screen.String(), "  > echo "+id+"\nRun it? y/n ")
+	return strings.Count(w.screen.String(), "  > echo "+id+"\n\n"+question)
 }
 
 func (w *world) wantSent(t *testing.T, want ...string) {
@@ -184,7 +210,7 @@ func TestPIE01_ARefusedRequestGoesNoFurther(t *testing.T) {
 	w := live(t)
 	w.l.Request(request.Request{ID: "bad", Command: "ls\x1b[2J"})
 	w.wantSent(t, "refused bad control_character")
-	if strings.Contains(w.screen.String(), "Run it?") {
+	if strings.Contains(w.screen.String(), "run it?") {
 		t.Fatal("a prompt was drawn")
 	}
 	if strings.ContainsRune(w.screen.String(), 0x1b) || strings.Contains(w.screen.String(), "[2J") {
@@ -294,7 +320,8 @@ func TestUNITLOOP01_OneRequestFromStartToEnd(t *testing.T) {
 	w.l.Exited(0)
 	w.wantSent(t, "started a", "output a a\n", "ended a exit 0")
 	w.wantStarts(t, "echo a")
-	want := "\nAI asks to run:\n  > echo a\nRun it? y/n y\n  | a\n"
+	want := "\n  -- request 1 " + strings.Repeat("-", 26) + "  30 min left\n\n  > echo a\n\n" + question +
+		"\n\n  -- request 1 -- running " + strings.Repeat("-", 15) + "  Ctrl+C stops it\n\n  | a\n\n  + ended, exit 0, 1 line sent to the AI\n"
 	if w.screen.String() != want {
 		t.Fatalf("the screen shows %q, want %q", w.screen.String(), want)
 	}
@@ -310,7 +337,7 @@ func TestUNITLOOP02_AFullLine(t *testing.T) {
 	if !strings.Contains(w.screen.String(), "too many requests wait") {
 		t.Fatal("the screen does not say why")
 	}
-	if !strings.HasSuffix(w.screen.String(), "  > echo a\nRun it? y/n ") {
+	if !strings.HasSuffix(w.screen.String(), "  > echo a\n\n"+question) {
 		t.Fatalf("the prompt for a is not the last thing on screen: %q", w.screen.String())
 	}
 	w.press("n")
@@ -511,7 +538,7 @@ func TestUNITLOOP13_TheControllerEndsTheSession(t *testing.T) {
 	if w.l.State() != Over || fmt.Sprint(w.closed) != "[removed]" {
 		t.Fatalf("state %v, closed %q", w.l.State(), w.closed)
 	}
-	if strings.HasSuffix(w.screen.String(), "Run it? y/n ") || w.prompts("a") != 1 {
+	if strings.HasSuffix(w.screen.String(), question) || w.prompts("a") != 1 {
 		t.Fatal("the prompt was shown again after the end")
 	}
 }
@@ -564,7 +591,7 @@ func TestUNITLOOP15_TimeUpThenExtended(t *testing.T) {
 	w.pass(time.Second)
 	w.press("y")
 	w.wantSent(t, "time_up", "extended 1800")
-	if !strings.HasSuffix(w.screen.String(), extendQuestion+"y\nThe session goes on for 30 minutes.\n") {
+	if !strings.HasSuffix(w.screen.String(), extendQuestion+"\n  + extended by 30 min\n") {
 		t.Fatalf("the screen shows %q", w.screen.String())
 	}
 	w.ask("a")
@@ -580,13 +607,13 @@ func TestUNITLOOP16_RequestsAreRefusedWhileTheTimeIsUp(t *testing.T) {
 	w.l.Request(request.Request{ID: "bad", Command: "ls\x1b[2J"})
 	w.wantSent(t, "time_up", "refused a time_up", "refused bad time_up")
 	screen := w.screen.String()
-	if strings.Contains(screen, "Run it?") || strings.Contains(screen, "echo a") {
+	if strings.Contains(screen, "run it?") || strings.Contains(screen, "echo a") {
 		t.Fatalf("a prompt was shown: %q", screen)
 	}
-	if strings.Count(screen, "Refused a request with no prompt: the session's time is up.\n") != 2 {
+	if strings.Count(screen, "\n  x refused a request with no prompt: the session's time is up\n") != 2 {
 		t.Fatalf("the screen does not say why, once for each: %q", screen)
 	}
-	if !strings.HasSuffix(screen, extendQuestion) {
+	if !w.asksToExtend() {
 		t.Fatalf("the question is not the last thing on screen: %q", screen)
 	}
 	w.wantStarts(t)
@@ -600,7 +627,7 @@ func TestUNITLOOP17_AWaitingPromptIsRefusedAndItsYDoesNotExtend(t *testing.T) {
 	w.press("y")
 	w.wantSent(t, "time_up", "refused a time_up")
 	w.wantStarts(t)
-	want := "  > echo a\nRun it? y/n \nThe session's time is up. Nothing ran.\n" + extendQuestion
+	want := "  > echo a\n\n" + question + "\n  x the session's time is up, nothing ran\n" + extendQuestion
 	if !strings.HasSuffix(w.screen.String(), want) {
 		t.Fatalf("the screen shows %q, want it to end with %q", w.screen.String(), want)
 	}
@@ -619,10 +646,10 @@ func TestUNITLOOP18_ARunningCommandIsKilledAtItsNextTimeLimit(t *testing.T) {
 	if w.stops+w.kills != 0 {
 		t.Fatal("the command was killed when the time ran out")
 	}
-	if strings.Contains(w.screen.String(), "Extend it") {
+	if strings.Contains(w.screen.String(), "extend by") {
 		t.Fatal("the question was shown while the command runs")
 	}
-	if !strings.Contains(w.screen.String(), "The session's time is up. The command that runs gets no more time.\n") {
+	if !strings.Contains(w.screen.String(), "\n  The session's time is up. The command that runs gets no more time.\n") {
 		t.Fatalf("the screen does not say that the time is up: %q", w.screen.String())
 	}
 	w.l.Timer(w.timers[len(w.timers)-1])
@@ -632,7 +659,7 @@ func TestUNITLOOP18_ARunningCommandIsKilledAtItsNextTimeLimit(t *testing.T) {
 	if w.sentHas("still_running") {
 		t.Fatalf("the AI was asked to wait or stop: %q", w.sent)
 	}
-	if strings.Contains(w.screen.String(), "Extend it") {
+	if strings.Contains(w.screen.String(), "extend by") {
 		t.Fatal("the question was shown before the command was gone")
 	}
 	w.l.Exited(143)
@@ -654,7 +681,7 @@ func TestUNITLOOP19_ARunningCommandMayEndByItself(t *testing.T) {
 	if w.stops+w.kills != 0 {
 		t.Fatal("the command was killed")
 	}
-	if !strings.HasSuffix(w.screen.String(), "  | a\n"+extendQuestion) {
+	if !strings.HasSuffix(w.screen.String(), "  | a\n\n  + ended, exit 0, 1 line sent to the AI\n"+extendQuestion) {
 		t.Fatalf("the question is not shown under the output: %q", w.screen.String())
 	}
 }
@@ -675,7 +702,7 @@ func TestUNITLOOP20_NotExtendedEndsTheSession(t *testing.T) {
 			t.Fatalf("%s: closed %q, want [time_up]", name, w.closed)
 		}
 		w.wantSent(t, "time_up")
-		if !strings.Contains(w.screen.String(), "The session was not extended: the session ends.\n") {
+		if !strings.Contains(w.screen.String(), "\n  ended     the time was up and the session was not extended\n") {
 			t.Fatalf("%s: the screen does not say why the session ends: %q", name, w.screen.String())
 		}
 		w.l.Request(req("late"))
@@ -693,7 +720,7 @@ func TestUNITLOOP21_OtherKeysDoNotAnswerTheQuestion(t *testing.T) {
 		t.Fatalf("the question was answered: the session is %s", w.l.session.State())
 	}
 	w.wantSent(t, "time_up")
-	if !strings.HasSuffix(w.screen.String(), extendQuestion) {
+	if !w.asksToExtend() || w.questions() != 1 {
 		t.Fatalf("the screen changed: %q", w.screen.String())
 	}
 }
@@ -732,7 +759,7 @@ func TestUNITLOOP23_ALateTimerLetsNoRequestIn(t *testing.T) {
 	if w.prompts("a") != 0 {
 		t.Fatal("a prompt was shown after the end time")
 	}
-	if !strings.HasSuffix(w.screen.String(), extendQuestion) || strings.Count(w.screen.String(), extendQuestion) != 1 {
+	if !w.asksToExtend() || w.questions() != 1 {
 		t.Fatalf("the question is not shown once, as the last thing: %q", w.screen.String())
 	}
 }
@@ -751,7 +778,7 @@ func TestUNITLOOP24_OldSessionTimersDoNothingAfterAnExtension(t *testing.T) {
 	}
 	w.timeUp()
 	w.wantSent(t, "time_up", "extended 1800", "time_up")
-	if !strings.HasSuffix(w.screen.String(), extendQuestion) || strings.Count(w.screen.String(), extendQuestion) != 2 {
+	if !w.asksToExtend() || w.questions() != 2 {
 		t.Fatalf("the question is not shown a second time: %q", w.screen.String())
 	}
 }
@@ -763,7 +790,7 @@ func TestUNITLOOP25_TheLengthTheSessionStartsWith(t *testing.T) {
 	if len(w.stimers) != 1 || w.stimers[0].d != sessionLength {
 		t.Fatalf("with no length asked for the session timers are %v", w.stimers)
 	}
-	if !strings.Contains(w.screen.String(), "The session lasts 30 minutes.") {
+	if !strings.Contains(w.screen.String(), "\n  session   30 min, then you are asked to extend\n") {
 		t.Fatalf("the screen does not say how long the session lasts: %q", w.screen.String())
 	}
 
@@ -772,7 +799,7 @@ func TestUNITLOOP25_TheLengthTheSessionStartsWith(t *testing.T) {
 	if len(w.stimers) != 1 || w.stimers[0].d != 10*time.Minute {
 		t.Fatalf("with ten minutes asked for the session timers are %v", w.stimers)
 	}
-	if !strings.Contains(w.screen.String(), "The session lasts 10 minutes.") {
+	if !strings.Contains(w.screen.String(), "\n  session   10 min, then you are asked to extend\n") {
 		t.Fatalf("the screen does not say how long the session lasts: %q", w.screen.String())
 	}
 }
@@ -782,7 +809,7 @@ func TestUNITLOOP25_TheLengthTheSessionStartsWith(t *testing.T) {
 func TestPIE07_TheCutLengthReachesTheSessionAndTheScreen(t *testing.T) {
 	w := newWorldMax(t, nil, 45*time.Minute, 20*time.Minute)
 	w.l.Begin()
-	if !strings.Contains(w.screen.String(), "45 minutes is above the maximum of 20 minutes, set in /etc/gangway/settings. It was cut to 20 minutes.\n") {
+	if !strings.Contains(w.screen.String(), "            45 min is above the maximum: it was cut to 20 min\n            the maximum is set in /etc/gangway/settings\n") {
 		t.Fatalf("the terminal does not show that the length was cut: %q", w.screen.String())
 	}
 	w.pass(20*time.Minute - time.Second)
@@ -802,7 +829,7 @@ func TestPIE07_TheCutLengthReachesTheSessionAndTheScreen(t *testing.T) {
 
 // UNIT-LOOP-26. Requirement: SET-01, SET-04.
 func TestUNITLOOP26_ALengthAboveTheMaximumIsCutAndTheScreenSaysSo(t *testing.T) {
-	const cut = "50 minutes is above the maximum of 20 minutes, set in /etc/gangway/settings. It was cut to 20 minutes.\n"
+	const cut = "            50 min is above the maximum: it was cut to 20 min\n            the maximum is set in /etc/gangway/settings\n"
 	for name, w := range map[string]*world{
 		"asked for at start": newWorldMax(t, nil, 50*time.Minute, 20*time.Minute),
 		"the user's file":    newWorldMax(t, func(s *settings.Settings) { s.SessionLength = 50 * time.Minute }, 0, 20*time.Minute),
@@ -814,7 +841,7 @@ func TestUNITLOOP26_ALengthAboveTheMaximumIsCutAndTheScreenSaysSo(t *testing.T) 
 		if !strings.Contains(w.screen.String(), cut) {
 			t.Fatalf("%s: the screen does not say that the length was cut: %q", name, w.screen.String())
 		}
-		if !strings.Contains(w.screen.String(), "The session lasts 20 minutes. That is the maximum: then it ends.\n") {
+		if !strings.Contains(w.screen.String(), "\n  session   20 min, the maximum: then it ends\n") {
 			t.Fatalf("%s: the screen does not say how long the session lasts: %q", name, w.screen.String())
 		}
 	}
@@ -827,7 +854,7 @@ func TestUNITLOOP26_ALengthAboveTheMaximumIsCutAndTheScreenSaysSo(t *testing.T) 
 	if strings.Contains(w.screen.String(), "above the maximum") {
 		t.Fatalf("the screen says that a length below the maximum was cut: %q", w.screen.String())
 	}
-	if !strings.Contains(w.screen.String(), "The session lasts 10 minutes. Then you are asked whether to extend it, up to the maximum of 20 minutes.\n") {
+	if !strings.Contains(w.screen.String(), "\n  session   10 min, then you are asked to extend, up to the maximum of 20 min\n") {
 		t.Fatalf("the screen does not name the maximum: %q", w.screen.String())
 	}
 
@@ -843,12 +870,12 @@ func TestUNITLOOP27_AtTheMaximumTheSessionEndsWithNoQuestion(t *testing.T) {
 	w := newWorldMax(t, nil, 0, 40*time.Minute)
 	w.timeUp()
 	w.pass(time.Second)
-	if !strings.HasSuffix(w.screen.String(), "\nThe session's time is up.\nExtend it by 10 minutes, up to the maximum? y/n ") {
+	if !strings.HasSuffix(w.screen.String(), "  answer in 60 s\n\n  extend by 10 min, up to the maximum?   y yes   n no ") {
 		t.Fatalf("the question does not name what is left to the maximum: %q", w.screen.String())
 	}
 	w.press("y")
 	w.wantSent(t, "time_up", "extended 599")
-	if !strings.HasSuffix(w.screen.String(), "y\nThe session goes on for 599 seconds. That reaches the maximum: then it ends.\n") {
+	if !strings.HasSuffix(w.screen.String(), "\n  + extended by 9 min 59 s, up to the maximum: then the session ends\n") {
 		t.Fatalf("the screen does not say that the maximum comes next: %q", w.screen.String())
 	}
 	if got := w.stimers[len(w.stimers)-1].d; got != 599*time.Second {
@@ -863,10 +890,10 @@ func TestUNITLOOP27_AtTheMaximumTheSessionEndsWithNoQuestion(t *testing.T) {
 	if fmt.Sprint(w.closed) != "[time_up]" {
 		t.Fatalf("closed %q, want [time_up]", w.closed)
 	}
-	if strings.Count(w.screen.String(), "Extend it") != 1 {
+	if strings.Count(w.screen.String(), "extend by") != 1 {
 		t.Fatalf("a question was shown at the maximum: %q", w.screen.String())
 	}
-	if !strings.Contains(w.screen.String(), "The session has lasted 40 minutes, the maximum: the session ends.\n") {
+	if !strings.Contains(w.screen.String(), "\n  ended     it reached the maximum of 40 min\n") {
 		t.Fatalf("the screen does not say why the session ends: %q", w.screen.String())
 	}
 	w.l.Request(req("late"))
@@ -893,7 +920,7 @@ func TestUNITLOOP28_AtTheMaximumARunningCommandIsNotKilled(t *testing.T) {
 	if w.l.State() != Over || fmt.Sprint(w.closed) != "[time_up]" {
 		t.Fatalf("after the command the loop is %v, closed %q", w.l.State(), w.closed)
 	}
-	if strings.Contains(w.screen.String(), "Extend it") {
+	if strings.Contains(w.screen.String(), "extend by") {
 		t.Fatalf("a question was shown at the maximum: %q", w.screen.String())
 	}
 	w.wantStarts(t, "echo a")
@@ -971,11 +998,16 @@ func TestPIE03_TheLogHoldsEveryStepOfEachRequest(t *testing.T) {
 func TestUNITLOOP29_TheScreenSaysWhereTheLogIs(t *testing.T) {
 	w, record := recorded(t, func(s *settings.Settings) { s.LogFileSize = 1000 })
 	w.l.Begin()
-	if !strings.HasSuffix(w.screen.String(), "The session is logged at "+record.File()+"\n") {
-		t.Fatalf("the start does not end with the place of the log:\n%s", w.screen.String())
+	if !strings.Contains(w.screen.String(), "\n  log       "+record.File()+"\n\n  Paste this line to the AI:\n") {
+		t.Fatalf("the start does not name the place of the log:\n%s", w.screen.String())
 	}
+	w.pass(42 * time.Minute)
 	w.press("\x03")
-	if !strings.HasSuffix(w.screen.String(), "The session is over. Its key is dead.\nSession logged at "+record.File()+"\n") {
+	if !strings.HasSuffix(w.screen.String(), "\n  -- session over "+strings.Repeat("-", 23)+"\n\n"+
+		"  ended     you pressed Ctrl+C\n"+
+		"  lasted    42 min\n"+
+		"  requests  none\n"+
+		"  log       "+record.File()+"\n\n  The key is dead.\n") {
 		t.Fatalf("the end does not name the log:\n%s", w.screen.String())
 	}
 	if !strings.HasSuffix(record.File(), ".txt") {
@@ -989,7 +1021,8 @@ func TestUNITLOOP29_TheScreenSaysWhereTheLogIs(t *testing.T) {
 		w.l.Request(request.Request{ID: "r", Command: "bad\x1b" + strings.Repeat("x", 100)})
 	}
 	w.press("\x03")
-	if !strings.HasSuffix(w.screen.String(), "Session logged at "+record.File()+"\nThat file holds the last part. The parts before it are in the same folder.\n") {
+	if !strings.HasSuffix(w.screen.String(), "  requests  0 run, 20 refused\n"+
+		"  log       "+record.File()+"\n            That file holds the last part. The parts before it are in the same folder.\n\n  The key is dead.\n") {
 		t.Fatalf("the end does not tell of the old files:\n%s", w.screen.String())
 	}
 
@@ -997,7 +1030,7 @@ func TestUNITLOOP29_TheScreenSaysWhereTheLogIs(t *testing.T) {
 	w = live(t)
 	w.l.Begin()
 	w.press("\x03")
-	if strings.Contains(w.screen.String(), "logged") {
+	if strings.Contains(w.screen.String(), "log ") {
 		t.Fatalf("the screen names a log:\n%s", w.screen.String())
 	}
 }
@@ -1014,7 +1047,7 @@ func (b *brokenLog) File() string { return "/tmp/gangway-1/session.txt" }
 // UNIT-LOOP-30. Requirement: LOG-06.
 func TestUNITLOOP30_AFailedLogEndsTheSession(t *testing.T) {
 	failed := errors.New("no space left")
-	const says = "The log cannot be written: the session ends.\n"
+	const says = "\n  ended     the log could not be written\n"
 
 	// A request that cannot be logged goes no further.
 	record := &brokenLog{}
@@ -1031,7 +1064,7 @@ func TestUNITLOOP30_AFailedLogEndsTheSession(t *testing.T) {
 		t.Fatalf("the loop is %v, closed with %v", w.l.State(), w.closed)
 	}
 	if !strings.Contains(w.screen.String(), says) ||
-		!strings.HasSuffix(w.screen.String(), "The log is not whole: it could not be written. What there is of it is at /tmp/gangway-1/session.txt\n") {
+		!strings.HasSuffix(w.screen.String(), "  log       /tmp/gangway-1/session.txt\n            The log is not whole: it could not be written.\n\n  The key is dead.\n") {
 		t.Fatalf("the screen:\n%s", w.screen.String())
 	}
 
@@ -1075,6 +1108,64 @@ func TestUNITLOOP30_AFailedLogEndsTheSession(t *testing.T) {
 	w.l.Begin()
 	if w.l.State() != Over || !strings.Contains(w.screen.String(), says) {
 		t.Fatalf("the loop is %v:\n%s", w.l.State(), w.screen.String())
+	}
+}
+
+// UNIT-LOOP-32. Requirement: SHOW-01, SHOW-06, KEY-03.
+func TestUNITLOOP32_TheStartAndTheEndOfASessionOnTheScreen(t *testing.T) {
+	hostOfTests, networkOfTests, lookOfTests = "build-box\x1b[2J", "connected over Tailscale", terminal.Look{Unicode: true}
+	defer func() { hostOfTests, networkOfTests, lookOfTests = "", "", terminal.Look{} }()
+	w := live(t)
+	w.l.Begin()
+	start := "\n" +
+		"  host      build-box�[2J\n" +
+		"  session   30 min, then you are asked to extend\n" +
+		"  network   connected over Tailscale\n" +
+		"\n  Paste this line to the AI:\n\n/gangway " + w.l.session.Address() + " " + w.l.session.Key() + "\n\n  y run   n refuse   Ctrl+C end\n"
+	if w.screen.String() != start {
+		t.Fatalf("the start shows:\n%s\nwant:\n%s", w.screen.String(), start)
+	}
+	if strings.Count(w.screen.String(), w.l.session.Key()) != 1 {
+		t.Fatal("the key shows more than once")
+	}
+
+	// One runs, one is refused by n, one with no prompt, one is cut off by the end.
+	w.pass(10 * time.Minute)
+	w.ask("a")
+	if !strings.Contains(w.screen.String(), "\n  ── request 1 "+strings.Repeat("─", 26)+"  20 min left\n") {
+		t.Fatalf("the header of the first prompt:\n%s", w.screen.String())
+	}
+	w.press("y")
+	w.l.Output([]byte("a\n"))
+	w.l.Exited(0)
+	w.ask("b")
+	w.press("n")
+	w.l.Request(request.Request{ID: "bad", Command: "ls\x1b[2J"})
+	w.ask("c")
+	if !strings.Contains(w.screen.String(), "\n  ── request 3 ─") || strings.Contains(w.screen.String(), "request 4") {
+		t.Fatalf("the third prompt is not request 3:\n%s", w.screen.String())
+	}
+	w.press("y")
+	w.ask("d")
+	w.screen.Reset()
+	w.pass(2*time.Minute + 30*time.Second)
+	w.press("\x03\x03")
+	if got, want := w.screen.String(), "  The session ends: you pressed Ctrl+C twice. The command is being stopped.\n"; got != want {
+		t.Fatalf("while the command is stopped the screen shows %q, want %q", got, want)
+	}
+	w.screen.Reset()
+	w.l.Exited(143)
+	end := "\n  ✗ killed: you pressed Ctrl+C\n" +
+		"\n  ── session over " + strings.Repeat("─", 23) + "\n\n" +
+		"  ended     you pressed Ctrl+C twice\n" +
+		"  lasted    12 min\n" +
+		"  requests  2 run, 3 refused\n" +
+		"\n  The key is dead.\n"
+	if w.screen.String() != end {
+		t.Fatalf("the end shows:\n%s\nwant:\n%s", w.screen.String(), end)
+	}
+	if strings.ContainsRune(w.screen.String(), 0x1b) {
+		t.Fatal("an Escape reached the screen")
 	}
 }
 

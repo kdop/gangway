@@ -188,17 +188,23 @@ func Run(args []string, stdin, stdout *os.File, stderr io.Writer) int {
 	// The controller is told the length the session really starts with.
 	length, _ := admin.Length(asked)
 
+	look := terminal.Detect(os.Getenv, terminal.Columns(out))
 	var road network.Network
+	var reached string
 	if what == doLocal {
 		if road, err = network.Local(address); err != nil {
 			return fail(err)
 		}
-		fmt.Fprintf(stdout, "Connecting to %s ...\n", road.Address())
+		terminal.Banner(stdout, look)
+		terminal.Wait(stdout, "Connecting to "+road.Address()+" ...")
+		reached = "connected, on this machine only"
 	} else {
 		if road, err = tailscaleRoad(s, host); err != nil {
 			return fail(err)
 		}
-		fmt.Fprintln(stdout, "Joining Tailscale ...")
+		terminal.Banner(stdout, look)
+		terminal.Wait(stdout, "Joining Tailscale ...")
+		reached = "connected over Tailscale"
 	}
 	if err := road.Join(context.Background()); err != nil {
 		return fail(err)
@@ -265,6 +271,9 @@ func Run(args []string, stdin, stdout *os.File, stderr io.Writer) int {
 		Length:        asked,
 		Admin:         admin,
 		Log:           sessionLog,
+		Host:          host,
+		Network:       reached,
+		Look:          look,
 	})
 
 	go readKeys(stdin, ev, &l)
@@ -273,7 +282,9 @@ func Run(args []string, stdin, stdout *os.File, stderr io.Writer) int {
 	signal.Notify(signals, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGINT)
 	go func() {
 		for range signals {
-			ev.post(func() { l.End(messages.EndUser, "Told to stop from outside: the session ends.") })
+			ev.post(func() {
+				l.End(messages.EndUser, "Told to stop from outside: the session ends.", "it was told to stop from outside")
+			})
 		}
 	}()
 
@@ -295,7 +306,9 @@ func readKeys(stdin *os.File, ev events, l **loop.Loop) {
 			ev.post(func() { (*l).Input(chunk) })
 		}
 		if err != nil {
-			ev.post(func() { (*l).End(messages.EndUser, "The terminal is gone: the session ends.") })
+			ev.post(func() {
+				(*l).End(messages.EndUser, "The terminal is gone: the session ends.", "the terminal is gone")
+			})
 			return
 		}
 	}
@@ -342,6 +355,8 @@ func runLogin(check func() error, in int, stdin, stdout *os.File, fail func(erro
 	if err != nil {
 		return fail(err)
 	}
+	terminal.Banner(stdout, terminal.Detect(os.Getenv, terminal.Columns(int(stdout.Fd()))))
+	fmt.Fprintln(stdout)
 	err = login.Run(context.Background(), login.Parts{
 		Check:  check,
 		Keys:   stdin,

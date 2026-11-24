@@ -35,7 +35,7 @@ func Run(ctx context.Context, p Parts) error {
 	if err := p.Check(); err != nil {
 		return err
 	}
-	fmt.Fprint(p.Screen, "Paste the Tailscale auth key and press Enter. It is not shown: ")
+	fmt.Fprint(p.Screen, "  Paste the Tailscale auth key and press Enter. It is not shown: ")
 	key, err := authkey.ReadHidden(p.Keys)
 	fmt.Fprintln(p.Screen)
 	if err != nil {
@@ -46,10 +46,10 @@ func Run(ctx context.Context, p Parts) error {
 	if err := secrets.Save(p.File, key); err != nil {
 		return err
 	}
-	fmt.Fprintln(p.Screen, "Trying the key on Tailscale ...")
+	fmt.Fprintln(p.Screen, "  Trying the key on Tailscale ...")
 	switch err := p.Try(ctx, key); {
 	case err == nil:
-		fmt.Fprintln(p.Screen, "This host is ready. Start a session with: gangway")
+		fmt.Fprintln(p.Screen, "  This host is ready. Start a session with: gangway")
 		return nil
 	case errors.Is(err, network.ErrKeyRefused):
 		// A key that Tailscale refuses is not kept.
@@ -64,7 +64,7 @@ func Run(ctx context.Context, p Parts) error {
 		}
 		return errors.New("Tailscale refused the key. No key is stored")
 	default:
-		fmt.Fprintln(p.Screen, "The key is stored, but it could not be tried:", err)
+		fmt.Fprintln(p.Screen, "  The key is stored, but it could not be tried:", err)
 		return nil
 	}
 }
