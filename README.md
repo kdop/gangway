@@ -103,6 +103,10 @@ It is early. It is made for one user, and hosts are Linux only. Not built yet: t
 
 - **Chat windows on the web probably cannot use it as it is.** The AI must be able to send a POST request with the key in a header. A tool with a shell can, such as Claude Code. A chat on the web usually can only read a web address.
 
+## No guarantees
+
+This software is provided "as is", with absolutely no guarantees of any kind. It runs commands on your machines. You use it at your own risk. The [license](LICENSE) has the full text.
+
 ## More
 
 - [`DEVELOPMENT.md`](DEVELOPMENT.md): how to build it, try it on one machine, and run the tests
