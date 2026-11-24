@@ -24,7 +24,7 @@ import (
 	"github.com/kdop/gangway/shared/designcheck"
 )
 
-const goodKey = "tskey-auth-kGOODKEY11CNTRL-abcdefghijklmnop"
+const goodKey = "tskey-auth-fake-good-key"
 
 // standIn is a stand-in for Tailscale's servers, from the library's own
 // test tools.
@@ -240,7 +240,7 @@ func TestUNITCTLNETWORK06_TheKeyAndTheIdentityAreForTheOwnerOnly(t *testing.T) {
 // UNIT-CTLNETWORK-07. Requirement: CTL-12.
 func TestUNITCTLNETWORK07_ARefusedKey(t *testing.T) {
 	s := newStandIn(t)
-	n, err := Join(context.Background(), s.config(t, "tskey-auth-kBADKEY11CNTRL-zzzzzzzzzzzz"))
+	n, err := Join(context.Background(), s.config(t, "tskey-auth-fake-bad-key"))
 	if !errors.Is(err, ErrKeyRefused) || !strings.Contains(err.Error(), "Tailscale said: ") || n != nil {
 		t.Fatalf("got %v, want the error about a refused key", err)
 	}

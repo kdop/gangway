@@ -23,7 +23,7 @@ import (
 	"github.com/kdop/gangway/shared/designcheck"
 )
 
-const goodKey = "tskey-auth-kGOODKEY11CNTRL-abcdefghijklmnop"
+const goodKey = "tskey-auth-fake-good-key"
 
 // standIn is a stand-in for Tailscale's servers, from the library's own
 // test tools.
@@ -240,7 +240,7 @@ func TestUNITNETWORK08_LeaveRemovesTheFolderAndTheDevice(t *testing.T) {
 // UNIT-NETWORK-09. Requirement: HOST-06.
 func TestUNITNETWORK09_ARefusedKey(t *testing.T) {
 	s := newStandIn(t)
-	bad := "tskey-auth-kBADKEY11CNTRL-zzzzzzzzzzzz"
+	bad := "tskey-auth-fake-bad-key"
 	n, folder := s.road(t, bad)
 	err := n.Join(context.Background())
 	if !errors.Is(err, ErrKeyRefused) || !strings.Contains(err.Error(), "Tailscale said: ") {

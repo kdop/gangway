@@ -20,7 +20,7 @@ func TestTheCliToolsOwnFileAndLogin(t *testing.T) {
 	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), `"gangway login"`) {
 		t.Fatalf("with no file the user is told %v", err)
 	}
-	key := "tskey-auth-kTESTONLY11CNTRL-abcdefghijklmnopqrstuvwxyz"
+	key := "tskey-auth-fake-test-only-key"
 	if err := Save(path, key); err != nil {
 		t.Fatal(err)
 	}
