@@ -473,7 +473,7 @@ func TestLOG06_2_ASessionEndsWhenItsLogCannotBeWritten(t *testing.T) {
 		last.refused(t, "session_ended")
 	}
 	w.ended()
-	w.shows("\n  ended     the log could not be written\n")
+	w.shows("\n  reason    Log failed\n")
 	w.shows("\n  log       " + file + "\n            The log is not whole: it could not be written.\n")
 	if w.prompts() != 0 {
 		t.Fatal("a prompt was shown")

@@ -283,7 +283,7 @@ func Run(args []string, stdin, stdout *os.File, stderr io.Writer) int {
 	go func() {
 		for range signals {
 			ev.post(func() {
-				l.End(messages.EndUser, "Told to stop from outside: the session ends.", "it was told to stop from outside")
+				l.End(messages.EndUser, terminal.StoppedFromOutside, "Told to stop from outside: the session ends.", "it was told to stop from outside")
 			})
 		}
 	}()
@@ -307,7 +307,7 @@ func readKeys(stdin *os.File, ev events, l **loop.Loop) {
 		}
 		if err != nil {
 			ev.post(func() {
-				(*l).End(messages.EndUser, "The terminal is gone: the session ends.", "the terminal is gone")
+				(*l).End(messages.EndUser, terminal.TerminalClosed, "The terminal is gone: the session ends.", "the terminal is gone")
 			})
 			return
 		}

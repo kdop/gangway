@@ -94,7 +94,7 @@ func TestSES02_1_CtrlCWithNothingInFrontEndsTheSession(t *testing.T) {
 	w.live()
 	w.press("\x03")
 	w.ended()
-	w.shows("\n  ended     you pressed Ctrl+C\n")
+	w.shows("\n  reason    Ctrl+C\n")
 	w.keyRefused(w.key)
 }
 
@@ -146,7 +146,7 @@ func TestSES05_2_ALostConnectionStopsTheCommand(t *testing.T) {
 	w.stopController()
 	w.ended()
 	w.gone(pid)
-	w.shows("\n  ended     the connection to the controller was lost\n")
+	w.shows("\n  reason    Connection lost\n")
 }
 
 // filesHold tells which files under the home folder of both programs hold
@@ -222,7 +222,7 @@ func TestSES07_1_ARestartedControllerHasNoSession(t *testing.T) {
 func TestSES07_2_EachCliToolSaysTheControllerWentAway(t *testing.T) {
 	w, second := restarted(t)
 	for _, each := range []*world{w, second} {
-		each.shows("\n  ended     the connection to the controller was lost\n")
+		each.shows("\n  reason    Connection lost\n")
 		each.screenEnds("\n  log       " + each.logFile() + "\n")
 	}
 }

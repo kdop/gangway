@@ -438,7 +438,7 @@ func TestUNITLOOP08_ALostConnectionEndsTheSession(t *testing.T) {
 	if w.l.State() != Over || fmt.Sprint(w.closed) != "[connection_lost]" {
 		t.Fatalf("state %v, closed %q", w.l.State(), w.closed)
 	}
-	if !strings.Contains(w.screen.String(), "connection to the controller was lost") {
+	if !strings.Contains(w.screen.String(), "\n  reason    Connection lost\n") {
 		t.Fatal("the screen does not say why")
 	}
 
@@ -702,7 +702,7 @@ func TestUNITLOOP20_NotExtendedEndsTheSession(t *testing.T) {
 			t.Fatalf("%s: closed %q, want [time_up]", name, w.closed)
 		}
 		w.wantSent(t, "time_up")
-		if !strings.Contains(w.screen.String(), "\n  ended     the time was up and the session was not extended\n") {
+		if !strings.Contains(w.screen.String(), "\n  reason    Expired\n") {
 			t.Fatalf("%s: the screen does not say why the session ends: %q", name, w.screen.String())
 		}
 		w.l.Request(req("late"))
@@ -893,7 +893,7 @@ func TestUNITLOOP27_AtTheMaximumTheSessionEndsWithNoQuestion(t *testing.T) {
 	if strings.Count(w.screen.String(), "extend by") != 1 {
 		t.Fatalf("a question was shown at the maximum: %q", w.screen.String())
 	}
-	if !strings.Contains(w.screen.String(), "\n  ended     it reached the maximum of 40 min\n") {
+	if !strings.Contains(w.screen.String(), "\n  reason    Expired\n") {
 		t.Fatalf("the screen does not say why the session ends: %q", w.screen.String())
 	}
 	w.l.Request(req("late"))
@@ -1004,7 +1004,7 @@ func TestUNITLOOP29_TheScreenSaysWhereTheLogIs(t *testing.T) {
 	w.pass(42 * time.Minute)
 	w.press("\x03")
 	if !strings.HasSuffix(w.screen.String(), "\n  -- session over "+strings.Repeat("-", 23)+"\n\n"+
-		"  ended     you pressed Ctrl+C\n"+
+		"  reason    Ctrl+C\n"+
 		"  lasted    42 min\n"+
 		"  requests  none\n"+
 		"  log       "+record.File()+"\n") {
@@ -1047,7 +1047,7 @@ func (b *brokenLog) File() string { return "/tmp/gangway-1/session.txt" }
 // UNIT-LOOP-30. Requirement: LOG-06.
 func TestUNITLOOP30_AFailedLogEndsTheSession(t *testing.T) {
 	failed := errors.New("no space left")
-	const says = "\n  ended     the log could not be written\n"
+	const says = "\n  reason    Log failed\n"
 
 	// A request that cannot be logged goes no further.
 	record := &brokenLog{}
@@ -1157,7 +1157,7 @@ func TestUNITLOOP32_TheStartAndTheEndOfASessionOnTheScreen(t *testing.T) {
 	w.l.Exited(143)
 	end := "\n  ✗ killed: you pressed Ctrl+C\n" +
 		"\n  ── session over " + strings.Repeat("─", 23) + "\n\n" +
-		"  ended     you pressed Ctrl+C twice\n" +
+		"  reason    Ctrl+C\n" +
 		"  lasted    12 min\n" +
 		"  requests  2 run, 3 refused\n"
 	if w.screen.String() != end {
