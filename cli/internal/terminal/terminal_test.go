@@ -520,26 +520,25 @@ func TestUNITTERMINAL34_TheEndOfASession(t *testing.T) {
 		"  ended     you pressed Ctrl+C\n"+
 		"  lasted    42 min\n"+
 		"  requests  7 run, 1 refused\n"+
-		"  log       /tmp/gangway-1/session.txt\n"+
-		"\n  The key is dead.\n")
+		"  log       /tmp/gangway-1/session.txt\n")
 
 	for name, c := range map[string]struct {
 		change func(*Over)
 		want   string
 	}{
 		"a log of more than one file": {func(o *Over) { o.LogOld = true },
-			"  log       /tmp/gangway-1/session.txt\n            That file holds the last part. The parts before it are in the same folder.\n\n"},
+			"  log       /tmp/gangway-1/session.txt\n            That file holds the last part. The parts before it are in the same folder.\n"},
 		"a log that failed": {func(o *Over) { o.LogOld, o.LogBad = true, true },
-			"  log       /tmp/gangway-1/session.txt\n            The log is not whole: it could not be written.\n\n"},
+			"  log       /tmp/gangway-1/session.txt\n            The log is not whole: it could not be written.\n"},
 		"no request":  {func(o *Over) { o.Ran, o.Refused = 0, 0 }, "  requests  none\n"},
-		"no log":      {func(o *Over) { o.Log = "" }, "  requests  7 run, 1 refused\n\n  The key is dead.\n"},
+		"no log":      {func(o *Over) { o.Log = "" }, "  requests  7 run, 1 refused\n"},
 		"a short one": {func(o *Over) { o.Lasted = 38*time.Second + 900*time.Millisecond }, "  lasted    38 s\n"},
 	} {
 		o := over
 		c.change(&o)
 		w := newWorld()
 		w.t.Over(o)
-		if !strings.Contains(w.screen.String(), c.want) || !strings.HasSuffix(w.screen.String(), "\n  The key is dead.\n") {
+		if !strings.Contains(w.screen.String(), c.want) || strings.HasSuffix(w.screen.String(), "\n\n") {
 			t.Fatalf("%s: the screen shows %q, want %q in it", name, w.screen.String(), c.want)
 		}
 	}

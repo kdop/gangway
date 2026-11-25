@@ -177,8 +177,6 @@ At the maximum there is no question. The session ends.
   lasted    42 min
   requests  7 run, 1 refused
   log       /tmp/gangway-2780822553/session.txt
-
-  The key is dead.
 ```
 
 A request counts as refused whoever refused it: the user, the cli-tool, or the end of the session. With no request the row says `none`.

@@ -366,8 +366,6 @@ func (t *Terminal) Over(o Over) {
 			t.line(under("That file holds the last part. The parts before it are in the same folder."))
 		}
 	}
-	t.gap()
-	t.line("  The key is dead.")
 }
 
 // Forget drops the prompt or the question that waits on screen, when the

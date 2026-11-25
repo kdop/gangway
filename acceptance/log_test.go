@@ -229,7 +229,7 @@ func TestLOG02_3_TheScreenSaysWhereTheLogIsAndTheLogStays(t *testing.T) {
 	w.shows("\n  log       " + file + "\n")
 	w.run("echo one").ran(t, 0)
 	w.end()
-	if !strings.HasSuffix(w.screen.text(), "\n  requests  1 run, 0 refused\n  log       "+file+"\n\n  The key is dead.\n") {
+	if !strings.HasSuffix(w.screen.text(), "\n  requests  1 run, 0 refused\n  log       "+file+"\n") {
 		t.Fatalf("the screen does not end with the place of the log:\n%s", w.screen.text())
 	}
 	if !strings.Contains(w.log(), " session ended: user") {

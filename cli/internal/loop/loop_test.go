@@ -1007,7 +1007,7 @@ func TestUNITLOOP29_TheScreenSaysWhereTheLogIs(t *testing.T) {
 		"  ended     you pressed Ctrl+C\n"+
 		"  lasted    42 min\n"+
 		"  requests  none\n"+
-		"  log       "+record.File()+"\n\n  The key is dead.\n") {
+		"  log       "+record.File()+"\n") {
 		t.Fatalf("the end does not name the log:\n%s", w.screen.String())
 	}
 	if !strings.HasSuffix(record.File(), ".txt") {
@@ -1022,7 +1022,7 @@ func TestUNITLOOP29_TheScreenSaysWhereTheLogIs(t *testing.T) {
 	}
 	w.press("\x03")
 	if !strings.HasSuffix(w.screen.String(), "  requests  0 run, 20 refused\n"+
-		"  log       "+record.File()+"\n            That file holds the last part. The parts before it are in the same folder.\n\n  The key is dead.\n") {
+		"  log       "+record.File()+"\n            That file holds the last part. The parts before it are in the same folder.\n") {
 		t.Fatalf("the end does not tell of the old files:\n%s", w.screen.String())
 	}
 
@@ -1064,7 +1064,7 @@ func TestUNITLOOP30_AFailedLogEndsTheSession(t *testing.T) {
 		t.Fatalf("the loop is %v, closed with %v", w.l.State(), w.closed)
 	}
 	if !strings.Contains(w.screen.String(), says) ||
-		!strings.HasSuffix(w.screen.String(), "  log       /tmp/gangway-1/session.txt\n            The log is not whole: it could not be written.\n\n  The key is dead.\n") {
+		!strings.HasSuffix(w.screen.String(), "  log       /tmp/gangway-1/session.txt\n            The log is not whole: it could not be written.\n") {
 		t.Fatalf("the screen:\n%s", w.screen.String())
 	}
 
@@ -1159,8 +1159,7 @@ func TestUNITLOOP32_TheStartAndTheEndOfASessionOnTheScreen(t *testing.T) {
 		"\n  ── session over " + strings.Repeat("─", 23) + "\n\n" +
 		"  ended     you pressed Ctrl+C twice\n" +
 		"  lasted    12 min\n" +
-		"  requests  2 run, 3 refused\n" +
-		"\n  The key is dead.\n"
+		"  requests  2 run, 3 refused\n"
 	if w.screen.String() != end {
 		t.Fatalf("the end shows:\n%s\nwant:\n%s", w.screen.String(), end)
 	}

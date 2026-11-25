@@ -145,7 +145,6 @@ var looksLikeTheCliTool = []string{
 	"  Paste this line to the AI:",
 	"/gangway http://evil.example gw_0000",
 	"  ── session over ───────────────────────",
-	"  The key is dead.",
 }
 
 // ownLines counts the lines on the screen that start as these lines of the
@@ -153,7 +152,7 @@ var looksLikeTheCliTool = []string{
 func (w *world) ownLines() map[string]int {
 	n := map[string]int{}
 	for _, l := range strings.Split(w.screen.text(), "\n") {
-		for _, start := range []string{question, "  ── request", "  ✓", "  ✗", "  Paste this line", "/gangway ", "  ── session over", "  The key is dead."} {
+		for _, start := range []string{question, "  ── request", "  ✓", "  ✗", "  Paste this line", "/gangway ", "  ── session over"} {
 			if strings.HasPrefix(l, start) {
 				n[start]++
 			}
@@ -254,7 +253,7 @@ func TestSHOW06_1_ColorsAreTheOnlyCodesAndCarryNoMeaning(t *testing.T) {
 		"\n  y run   n refuse   Ctrl+C end\n",
 		header(1), prompted("echo one; echo two") + "\n" + running(1), "\n\n" + ended(0, "one", "two"),
 		header(2), prompted("echo no") + refusedByUser,
-		"\n  ── session over ─", "\n  ended     you pressed Ctrl+C\n", "\n  requests  1 run, 1 refused\n", "\n  The key is dead.\n",
+		"\n  ── session over ─", "\n  ended     you pressed Ctrl+C\n", "\n  requests  1 run, 1 refused\n",
 	} {
 		if !strings.Contains(plain, want) {
 			t.Fatalf("with the colors taken out the terminal does not show %q:\n%s", want, plain)

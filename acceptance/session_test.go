@@ -223,7 +223,7 @@ func TestSES07_2_EachCliToolSaysTheControllerWentAway(t *testing.T) {
 	w, second := restarted(t)
 	for _, each := range []*world{w, second} {
 		each.shows("\n  ended     the connection to the controller was lost\n")
-		each.screenEnds("\n  The key is dead.\n")
+		each.screenEnds("\n  log       " + each.logFile() + "\n")
 	}
 }
 
@@ -275,7 +275,7 @@ func TestKEY03_1_TheKeyDiesWithTheSession(t *testing.T) {
 	w.live()
 	w.press("\x03")
 	w.shows("\n  ── session over ─")
-	w.screenEnds("\n  The key is dead.\n")
+	w.screenEnds("\n  log       " + w.logFile() + "\n")
 	if s := w.status(w.key, "POST", "/v1/hello", ""); s != 401 {
 		t.Fatalf("want 401 right after the end, got %d", s)
 	}
