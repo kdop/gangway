@@ -250,7 +250,6 @@ func TestSHOW06_1_ColorsAreTheOnlyCodesAndCarryNoMeaning(t *testing.T) {
 	for _, want := range []string{
 		"\n  session   30 min, then you are asked to extend\n",
 		"\n\n/gangway " + w.address + " " + w.key + "\n\n",
-		"\n  y run   n refuse   Ctrl+C end\n",
 		header(1), prompted("echo one; echo two") + "\n" + running(1), "\n\n" + ended(0, "one", "two"),
 		header(2), prompted("echo no") + refusedByUser,
 		"\n  ── session over ─", "\n  reason    Ctrl+C\n", "\n  requests  1 run, 1 refused\n",

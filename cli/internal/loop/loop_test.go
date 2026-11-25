@@ -1121,7 +1121,7 @@ func TestUNITLOOP32_TheStartAndTheEndOfASessionOnTheScreen(t *testing.T) {
 		"  host      build-box�[2J\n" +
 		"  session   30 min, then you are asked to extend\n" +
 		"  network   connected over Tailscale\n" +
-		"\n  Paste this line to the AI:\n\n/gangway " + w.l.session.Address() + " " + w.l.session.Key() + "\n\n  y run   n refuse   Ctrl+C end\n"
+		"\n  Paste this line to the AI:\n\n/gangway " + w.l.session.Address() + " " + w.l.session.Key() + "\n"
 	if w.screen.String() != start {
 		t.Fatalf("the start shows:\n%s\nwant:\n%s", w.screen.String(), start)
 	}

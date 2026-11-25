@@ -58,8 +58,6 @@ Lines of the cli-tool are set in by two spaces. Lines that come from a request o
   Paste this line to the AI:
 
 /gangway https://controller.example gw_4f9c…
-
-  y run   n refuse   Ctrl+C end
 ```
 
 In the one-machine mode the line under the banner is `Connecting to` and the address, and the network row is `connected, on this machine only`.

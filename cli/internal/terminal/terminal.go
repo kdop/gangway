@@ -138,9 +138,6 @@ func (t *Terminal) Start(s Start) {
 	// At the start of the line: a copy of the whole line must start with
 	// the slash, or an AI tool does not take it as a command.
 	t.line("/gangway " + clean(s.Address) + " " + clean(s.Key))
-	t.gap()
-	key := func(k string) string { return t.look.paint(bold, k) }
-	t.line("  " + key("y") + " run   " + key("n") + " refuse   " + key("Ctrl+C") + " end")
 }
 
 // Prompt shows a request and asks for the y or n.

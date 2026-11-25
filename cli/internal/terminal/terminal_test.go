@@ -330,7 +330,7 @@ func TestUNITTERMINAL22_ThePasteLine(t *testing.T) {
 		w := newWorld()
 		w.t.Dress(look)
 		w.t.Start(Start{Length: time.Minute, Address: "http://127.0.0.1:8642", Key: "gw_4f9c"})
-		if !strings.Contains(w.screen.String(), "\n\n/gangway http://127.0.0.1:8642 gw_4f9c\n\n") {
+		if !strings.HasSuffix(w.screen.String(), "\n\n/gangway http://127.0.0.1:8642 gw_4f9c\n") {
 			t.Fatalf("the screen shows %q, want the paste line on a line of its own, at the start of the line", w.screen.String())
 		}
 		if strings.Count(w.screen.String(), "gw_4f9c") != 1 {
@@ -479,7 +479,7 @@ func TestUNITTERMINAL31_TheTimeIsUpAtAPromptAndAtACommand(t *testing.T) {
 
 // UNIT-TERMINAL-33. Requirement: KEY-04, LEN-01, SET-04, LOG-02.
 func TestUNITTERMINAL33_TheStartOfASession(t *testing.T) {
-	const paste = "\n  Paste this line to the AI:\n\n/gangway https://controller.example gw_4f9c\n\n  y run   n refuse   Ctrl+C end\n"
+	const paste = "\n  Paste this line to the AI:\n\n/gangway https://controller.example gw_4f9c\n"
 	start := Start{
 		Host: "build-box", Network: "connected over Tailscale", Length: 30 * time.Minute,
 		Log: "/tmp/gangway-1/session.txt", Address: "https://controller.example", Key: "gw_4f9c",
