@@ -174,7 +174,7 @@ At the maximum there is no question. The session ends.
   ── session over ───────────────────────
 
   reason    Ctrl+C
-  lasted    42 min
+  duration  42 min
   requests  7 run, 1 refused
   log       /tmp/gangway-2780822553/session.txt
 ```

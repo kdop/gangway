@@ -384,7 +384,7 @@ func (t *Terminal) Over(o Over) {
 	t.line(t.look.rule("", "session over"))
 	t.gap()
 	t.line(t.look.row("reason", o.Cause.String()))
-	t.line(t.look.row("lasted", about(o.Lasted)))
+	t.line(t.look.row("duration", about(o.Lasted)))
 	requests := "none"
 	if o.Ran > 0 || o.Refused > 0 {
 		requests = strconv.Itoa(o.Ran) + " run, " + strconv.Itoa(o.Refused) + " refused"

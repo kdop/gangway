@@ -518,7 +518,7 @@ func TestUNITTERMINAL34_TheEndOfASession(t *testing.T) {
 	w.t.Over(over)
 	w.wantScreen(t, header+
 		"  reason    Ctrl+C\n"+
-		"  lasted    42 min\n"+
+		"  duration  42 min\n"+
 		"  requests  7 run, 1 refused\n"+
 		"  log       /tmp/gangway-1/session.txt\n")
 
@@ -532,7 +532,7 @@ func TestUNITTERMINAL34_TheEndOfASession(t *testing.T) {
 			"  log       /tmp/gangway-1/session.txt\n            The log is not whole: it could not be written.\n"},
 		"no request":  {func(o *Over) { o.Ran, o.Refused = 0, 0 }, "  requests  none\n"},
 		"no log":      {func(o *Over) { o.Log = "" }, "  requests  7 run, 1 refused\n"},
-		"a short one": {func(o *Over) { o.Lasted = 38*time.Second + 900*time.Millisecond }, "  lasted    38 s\n"},
+		"a short one": {func(o *Over) { o.Lasted = 38*time.Second + 900*time.Millisecond }, "  duration  38 s\n"},
 	} {
 		o := over
 		c.change(&o)

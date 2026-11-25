@@ -1005,7 +1005,7 @@ func TestUNITLOOP29_TheScreenSaysWhereTheLogIs(t *testing.T) {
 	w.press("\x03")
 	if !strings.HasSuffix(w.screen.String(), "\n  -- session over "+strings.Repeat("-", 23)+"\n\n"+
 		"  reason    Ctrl+C\n"+
-		"  lasted    42 min\n"+
+		"  duration  42 min\n"+
 		"  requests  none\n"+
 		"  log       "+record.File()+"\n") {
 		t.Fatalf("the end does not name the log:\n%s", w.screen.String())
@@ -1158,7 +1158,7 @@ func TestUNITLOOP32_TheStartAndTheEndOfASessionOnTheScreen(t *testing.T) {
 	end := "\n  ✗ killed: you pressed Ctrl+C\n" +
 		"\n  ── session over " + strings.Repeat("─", 23) + "\n\n" +
 		"  reason    Ctrl+C\n" +
-		"  lasted    12 min\n" +
+		"  duration  12 min\n" +
 		"  requests  2 run, 3 refused\n"
 	if w.screen.String() != end {
 		t.Fatalf("the end shows:\n%s\nwant:\n%s", w.screen.String(), end)
