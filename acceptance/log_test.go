@@ -229,7 +229,7 @@ func TestLOG02_3_TheScreenSaysWhereTheLogIsAndTheLogStays(t *testing.T) {
 	w.shows("\n  log       " + file + "\n")
 	w.run("echo one").ran(t, 0)
 	w.end()
-	if !strings.HasSuffix(w.screen.text(), "\n  requests  1 run, 0 refused\n  log       "+file+"\n\n  The key is dead.\n") {
+	if !strings.HasSuffix(w.screen.text(), "\n  requests  1 run, 0 refused\n  log       "+file+"\n") {
 		t.Fatalf("the screen does not end with the place of the log:\n%s", w.screen.text())
 	}
 	if !strings.Contains(w.log(), " session ended: user") {
@@ -473,7 +473,7 @@ func TestLOG06_2_ASessionEndsWhenItsLogCannotBeWritten(t *testing.T) {
 		last.refused(t, "session_ended")
 	}
 	w.ended()
-	w.shows("\n  ended     the log could not be written\n")
+	w.shows("\n  reason    Log failed\n")
 	w.shows("\n  log       " + file + "\n            The log is not whole: it could not be written.\n")
 	if w.prompts() != 0 {
 		t.Fatal("a prompt was shown")

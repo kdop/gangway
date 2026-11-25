@@ -330,7 +330,7 @@ func TestUNITTERMINAL22_ThePasteLine(t *testing.T) {
 		w := newWorld()
 		w.t.Dress(look)
 		w.t.Start(Start{Length: time.Minute, Address: "http://127.0.0.1:8642", Key: "gw_4f9c"})
-		if !strings.Contains(w.screen.String(), "\n\n/gangway http://127.0.0.1:8642 gw_4f9c\n\n") {
+		if !strings.HasSuffix(w.screen.String(), "\n\n/gangway http://127.0.0.1:8642 gw_4f9c\n") {
 			t.Fatalf("the screen shows %q, want the paste line on a line of its own, at the start of the line", w.screen.String())
 		}
 		if strings.Count(w.screen.String(), "gw_4f9c") != 1 {
@@ -348,11 +348,11 @@ func TestUNITTERMINAL23_EverythingIsCleaned(t *testing.T) {
 	w.t.Refused("why" + bad)
 	w.t.Ended(reqA, runner.Result{How: "odd" + bad})
 	w.t.Prompt(request.Request{ID: "a", Command: "ls" + bad})
-	w.t.Over(Over{Why: "why" + bad, Log: "/tmp" + bad})
+	w.t.Over(Over{Log: "/tmp" + bad})
 	if strings.ContainsRune(w.screen.String(), 0x1b) {
 		t.Fatalf("an Escape reached the screen: %q", w.screen.String())
 	}
-	if strings.Count(w.screen.String(), "�[2J") != 12 {
+	if strings.Count(w.screen.String(), "�[2J") != 11 {
 		t.Fatalf("not every text from outside is on the screen with a mark in it: %q", w.screen.String())
 	}
 }
@@ -479,7 +479,7 @@ func TestUNITTERMINAL31_TheTimeIsUpAtAPromptAndAtACommand(t *testing.T) {
 
 // UNIT-TERMINAL-33. Requirement: KEY-04, LEN-01, SET-04, LOG-02.
 func TestUNITTERMINAL33_TheStartOfASession(t *testing.T) {
-	const paste = "\n  Paste this line to the AI:\n\n/gangway https://controller.example gw_4f9c\n\n  y run   n refuse   Ctrl+C end\n"
+	const paste = "\n  Paste this line to the AI:\n\n/gangway https://controller.example gw_4f9c\n"
 	start := Start{
 		Host: "build-box", Network: "connected over Tailscale", Length: 30 * time.Minute,
 		Log: "/tmp/gangway-1/session.txt", Address: "https://controller.example", Key: "gw_4f9c",
@@ -513,34 +513,45 @@ func TestUNITTERMINAL33_TheStartOfASession(t *testing.T) {
 // UNIT-TERMINAL-34. Requirement: KEY-03, LOG-02.
 func TestUNITTERMINAL34_TheEndOfASession(t *testing.T) {
 	header := "\n  -- session over " + strings.Repeat("-", 23) + "\n\n"
-	over := Over{Why: "you pressed Ctrl+C", Lasted: 42*time.Minute + 17*time.Second, Ran: 7, Refused: 1, Log: "/tmp/gangway-1/session.txt"}
+	over := Over{Cause: CtrlC, Lasted: 42*time.Minute + 17*time.Second, Ran: 7, Refused: 1, Log: "/tmp/gangway-1/session.txt"}
 	w := newWorld()
 	w.t.Over(over)
 	w.wantScreen(t, header+
-		"  ended     you pressed Ctrl+C\n"+
-		"  lasted    42 min\n"+
+		"  reason    Ctrl+C\n"+
+		"  duration  42 min\n"+
 		"  requests  7 run, 1 refused\n"+
-		"  log       /tmp/gangway-1/session.txt\n"+
-		"\n  The key is dead.\n")
+		"  log       /tmp/gangway-1/session.txt\n")
 
 	for name, c := range map[string]struct {
 		change func(*Over)
 		want   string
 	}{
 		"a log of more than one file": {func(o *Over) { o.LogOld = true },
-			"  log       /tmp/gangway-1/session.txt\n            That file holds the last part. The parts before it are in the same folder.\n\n"},
+			"  log       /tmp/gangway-1/session.txt\n            That file holds the last part. The parts before it are in the same folder.\n"},
 		"a log that failed": {func(o *Over) { o.LogOld, o.LogBad = true, true },
-			"  log       /tmp/gangway-1/session.txt\n            The log is not whole: it could not be written.\n\n"},
+			"  log       /tmp/gangway-1/session.txt\n            The log is not whole: it could not be written.\n"},
 		"no request":  {func(o *Over) { o.Ran, o.Refused = 0, 0 }, "  requests  none\n"},
-		"no log":      {func(o *Over) { o.Log = "" }, "  requests  7 run, 1 refused\n\n  The key is dead.\n"},
-		"a short one": {func(o *Over) { o.Lasted = 38*time.Second + 900*time.Millisecond }, "  lasted    38 s\n"},
+		"no log":      {func(o *Over) { o.Log = "" }, "  requests  7 run, 1 refused\n"},
+		"a short one": {func(o *Over) { o.Lasted = 38*time.Second + 900*time.Millisecond }, "  duration  38 s\n"},
 	} {
 		o := over
 		c.change(&o)
 		w := newWorld()
 		w.t.Over(o)
-		if !strings.Contains(w.screen.String(), c.want) || !strings.HasSuffix(w.screen.String(), "\n  The key is dead.\n") {
+		if !strings.Contains(w.screen.String(), c.want) || strings.HasSuffix(w.screen.String(), "\n\n") {
 			t.Fatalf("%s: the screen shows %q, want %q in it", name, w.screen.String(), c.want)
+		}
+	}
+
+	for cause, want := range map[Cause]string{
+		CtrlC: "Ctrl+C", Expired: "Expired", ControllerEnded: "Controller ended it", ConnectionLost: "Connection lost",
+		LogFailed: "Log failed", StoppedFromOutside: "Stopped from outside", TerminalClosed: "Terminal closed",
+		Unknown: "Unknown", Cause(99): "Unknown",
+	} {
+		w := newWorld()
+		w.t.Over(Over{Cause: cause})
+		if !strings.Contains(w.screen.String(), "\n  reason    "+want+"\n") {
+			t.Fatalf("cause %d: the screen shows %q, want the reason %q", cause, w.screen.String(), want)
 		}
 	}
 
@@ -640,7 +651,7 @@ func (w *world) session(look Look, cmd, out string) {
 	}
 	w.t.Prompt(req)
 	w.t.Forget()
-	w.t.Over(Over{Why: "you pressed Ctrl+C", Lasted: time.Hour, Ran: 8, Refused: 4, Log: "/tmp/gangway-1/session.txt", LogOld: true})
+	w.t.Over(Over{Cause: CtrlC, Lasted: time.Hour, Ran: 8, Refused: 4, Log: "/tmp/gangway-1/session.txt", LogOld: true})
 }
 
 var colorCode = regexp.MustCompile(`\x1b\[[0-9;]*m`)

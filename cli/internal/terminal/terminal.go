@@ -138,9 +138,6 @@ func (t *Terminal) Start(s Start) {
 	// At the start of the line: a copy of the whole line must start with
 	// the slash, or an AI tool does not take it as a command.
 	t.line("/gangway " + clean(s.Address) + " " + clean(s.Key))
-	t.gap()
-	key := func(k string) string { return t.look.paint(bold, k) }
-	t.line("  " + key("y") + " run   " + key("n") + " refuse   " + key("Ctrl+C") + " end")
 }
 
 // Prompt shows a request and asks for the y or n.
@@ -332,8 +329,43 @@ func (t *Terminal) again() {
 }
 
 // Over is what the screen shows when a session has ended.
+// Cause is why a session ended. The set is closed: the zero value, and a
+// value outside the set, show as "Unknown".
+type Cause int
+
+const (
+	Unknown Cause = iota
+	CtrlC
+	Expired
+	ControllerEnded
+	ConnectionLost
+	LogFailed
+	StoppedFromOutside
+	TerminalClosed
+)
+
+func (c Cause) String() string {
+	switch c {
+	case CtrlC:
+		return "Ctrl+C"
+	case Expired:
+		return "Expired"
+	case ControllerEnded:
+		return "Controller ended it"
+	case ConnectionLost:
+		return "Connection lost"
+	case LogFailed:
+		return "Log failed"
+	case StoppedFromOutside:
+		return "Stopped from outside"
+	case TerminalClosed:
+		return "Terminal closed"
+	}
+	return "Unknown"
+}
+
 type Over struct {
-	Why     string // why the session ended
+	Cause   Cause // why the session ended
 	Lasted  time.Duration
 	Ran     int    // the requests that were approved
 	Refused int    // the requests that were refused, by anyone
@@ -348,10 +380,8 @@ func (t *Terminal) Over(o Over) {
 	t.gap()
 	t.line(t.look.rule("", "session over"))
 	t.gap()
-	if o.Why != "" {
-		t.line(t.look.row("ended", t.text(o.Why)))
-	}
-	t.line(t.look.row("lasted", about(o.Lasted)))
+	t.line(t.look.row("reason", o.Cause.String()))
+	t.line(t.look.row("duration", about(o.Lasted)))
 	requests := "none"
 	if o.Ran > 0 || o.Refused > 0 {
 		requests = strconv.Itoa(o.Ran) + " run, " + strconv.Itoa(o.Refused) + " refused"
@@ -366,8 +396,6 @@ func (t *Terminal) Over(o Over) {
 			t.line(under("That file holds the last part. The parts before it are in the same folder."))
 		}
 	}
-	t.gap()
-	t.line("  The key is dead.")
 }
 
 // Forget drops the prompt or the question that waits on screen, when the

@@ -194,7 +194,7 @@ func TestLEN04_1_NoAnswerEndsTheSession(t *testing.T) {
 	w.question(1)
 	w.dead()
 	w.shows("  answer in 1" + extendQuestion("2 s") + "\n  ✗ no answer in time, not extended\n")
-	w.shows("\n  ended     the time was up and the session was not extended\n")
+	w.shows("\n  reason    Expired\n")
 }
 
 func TestLEN04_2_NEndsTheSessionAtOnce(t *testing.T) {
@@ -209,7 +209,7 @@ func TestLEN04_2_NEndsTheSessionAtOnce(t *testing.T) {
 		t.Fatalf("the session ended %s after the n", took)
 	}
 	w.shows(extendQuestion("2 s") + "\n  ✗ not extended\n")
-	w.shows("\n  ended     the time was up and the session was not extended\n")
+	w.shows("\n  reason    Expired\n")
 }
 
 func TestLEN06_1_ARequestIsRefusedWhileTheTimeIsUp(t *testing.T) {
@@ -403,7 +403,7 @@ func TestLEN05_1_AtTheMaximumTheSessionEndsWithNoQuestion(t *testing.T) {
 	if got := w.questions(); got != 2 {
 		t.Fatalf("%d questions to extend were shown, want 2: none at the maximum", got)
 	}
-	w.shows("\n  ended     it reached the maximum of 8 s\n")
+	w.shows("\n  reason    Expired\n")
 }
 
 func TestLEN05_2_AMaximumShorterThanTheSessionLength(t *testing.T) {

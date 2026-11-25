@@ -111,7 +111,7 @@ type Loop struct {
 	host    string
 	network string
 	began   time.Time
-	why     string // why the session ended
+	cause   terminal.Cause // why the session ended
 	counts  *counts
 }
 
@@ -178,11 +178,11 @@ func (c clockEvents) TimeUp() {
 }
 
 func (c clockEvents) NotExtended() {
-	c.l.End(messages.EndTimeUp, "The session was not extended: the session ends.", "the time was up and the session was not extended")
+	c.l.End(messages.EndTimeUp, terminal.Expired, "The session was not extended: the session ends.", "the time was up and the session was not extended")
 }
 
 func (c clockEvents) MaxReached() {
-	c.l.End(messages.EndTimeUp, "The session has lasted "+terminal.Length(c.l.max)+", the maximum: the session ends.", "it reached the maximum of "+terminal.Short(c.l.max))
+	c.l.End(messages.EndTimeUp, terminal.Expired, "The session has lasted "+terminal.Length(c.l.max)+", the maximum: the session ends.", "it reached the maximum of "+terminal.Short(c.l.max))
 }
 
 // gateDone lets the runner reach the gate, which is made after it.
@@ -215,12 +215,12 @@ func (k keys) CtrlC() {
 	case l.gate.State() == gate.Busy:
 		l.runner.CtrlC()
 	default:
-		l.End(messages.EndUser, "Ctrl+C: the session ends.", "you pressed Ctrl+C")
+		l.End(messages.EndUser, terminal.CtrlC, "Ctrl+C: the session ends.", "you pressed Ctrl+C")
 	}
 }
 
 func (k keys) Quit() {
-	k.l.End(messages.EndUser, "Ctrl+C twice: the session ends.", "you pressed Ctrl+C twice")
+	k.l.End(messages.EndUser, terminal.CtrlC, "Ctrl+C twice: the session ends.", "you pressed Ctrl+C twice")
 }
 
 // State tells where the session stands.
@@ -347,24 +347,25 @@ func (l *Loop) Timer(number int) {
 
 // SessionEnd is the controller ending the session.
 func (l *Loop) SessionEnd(reason string) {
-	l.End(reason, "The controller ended the session.", "the controller ended it")
+	l.End(reason, terminal.ControllerEnded, "The controller ended the session.", "the controller ended it")
 }
 
 // Lost tells that the connection to the controller is gone.
 func (l *Loop) Lost() {
-	l.End(messages.EndConnectionLost, "The connection to the controller was lost: the session ends.", "the connection to the controller was lost")
+	l.End(messages.EndConnectionLost, terminal.ConnectionLost, "The connection to the controller was lost: the session ends.", "the connection to the controller was lost")
 }
 
 // End ends the session. Nothing new runs from here on. A command that runs
 // is stopped, and the loop is Over once it is gone. note goes to the log,
-// and why to the screen.
-func (l *Loop) End(reason, note, why string) {
+// why to the line shown while a command is stopped, and cause to the end
+// of the session on screen.
+func (l *Loop) End(reason string, cause terminal.Cause, note, why string) {
 	if l.state != Live {
 		return
 	}
 	l.state = Ending
 	l.reason = reason
-	l.why = why
+	l.cause = cause
 	l.log.Session("ended: " + reason + ". " + note)
 	l.session.End()
 	l.gate.End()
@@ -390,7 +391,7 @@ func (l *Loop) finish() {
 		lasted = l.clock.Now().Sub(l.began)
 	}
 	l.term.Over(terminal.Over{
-		Why:     l.why,
+		Cause:   l.cause,
 		Lasted:  lasted,
 		Ran:     l.counts.ran,
 		Refused: l.counts.refused,
@@ -407,7 +408,7 @@ func (l *Loop) check() bool {
 	if l.state != Live || l.log.Err() == nil {
 		return false
 	}
-	l.End(messages.EndUser, "The log cannot be written: the session ends.", "the log could not be written")
+	l.End(messages.EndUser, terminal.LogFailed, "The log cannot be written: the session ends.", "the log could not be written")
 	return true
 }
 

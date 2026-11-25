@@ -58,8 +58,6 @@ Lines of the cli-tool are set in by two spaces. Lines that come from a request o
   Paste this line to the AI:
 
 /gangway https://controller.example gw_4f9c…
-
-  y run   n refuse   Ctrl+C end
 ```
 
 In the one-machine mode the line under the banner is `Connecting to` and the address, and the network row is `connected, on this machine only`.
@@ -173,29 +171,26 @@ At the maximum there is no question. The session ends.
 
   ── session over ───────────────────────
 
-  ended     you pressed Ctrl+C
-  lasted    42 min
+  reason    Ctrl+C
+  duration  42 min
   requests  7 run, 1 refused
   log       /tmp/gangway-2780822553/session.txt
-
-  The key is dead.
 ```
 
 A request counts as refused whoever refused it: the user, the cli-tool, or the end of the session. With no request the row says `none`.
 
-The `ended` row:
+The `reason` row holds one of a fixed set of short texts:
 
-| Text | When |
+| Reason | When |
 |---|---|
-| `you pressed Ctrl+C` | With nothing in front |
-| `you pressed Ctrl+C twice` | |
-| `the time was up and the session was not extended` | `n`, Ctrl+C or no answer at the question |
-| `it reached the maximum of 20 min` | |
-| `the controller ended it` | |
-| `the connection to the controller was lost` | |
-| `the log could not be written` | |
-| `it was told to stop from outside` | The program got a signal |
-| `the terminal is gone` | |
+| `Ctrl+C` | The user pressed Ctrl+C, once or twice |
+| `Expired` | The time was up and the session was not extended, or it reached the maximum |
+| `Controller ended it` | The controller ended the session |
+| `Connection lost` | The connection to the controller was lost |
+| `Log failed` | The log could not be written |
+| `Stopped from outside` | The program was told to stop from outside |
+| `Terminal closed` | The terminal is gone |
+| `Unknown` | Anything else |
 
 When a command still runs as the session ends, one line comes first, and the end is shown when the command is gone:
 

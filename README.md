@@ -31,8 +31,6 @@ $ gangway
   Paste this line to the AI:
 
 /gangway https://controller.example gw_4f9c…
-
-  y run   n refuse   Ctrl+C end
 ```
 
 From then on, each command the AI wants is shown to you first:

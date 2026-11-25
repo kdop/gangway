@@ -438,7 +438,7 @@ func TestUNITLOOP08_ALostConnectionEndsTheSession(t *testing.T) {
 	if w.l.State() != Over || fmt.Sprint(w.closed) != "[connection_lost]" {
 		t.Fatalf("state %v, closed %q", w.l.State(), w.closed)
 	}
-	if !strings.Contains(w.screen.String(), "connection to the controller was lost") {
+	if !strings.Contains(w.screen.String(), "\n  reason    Connection lost\n") {
 		t.Fatal("the screen does not say why")
 	}
 
@@ -702,7 +702,7 @@ func TestUNITLOOP20_NotExtendedEndsTheSession(t *testing.T) {
 			t.Fatalf("%s: closed %q, want [time_up]", name, w.closed)
 		}
 		w.wantSent(t, "time_up")
-		if !strings.Contains(w.screen.String(), "\n  ended     the time was up and the session was not extended\n") {
+		if !strings.Contains(w.screen.String(), "\n  reason    Expired\n") {
 			t.Fatalf("%s: the screen does not say why the session ends: %q", name, w.screen.String())
 		}
 		w.l.Request(req("late"))
@@ -893,7 +893,7 @@ func TestUNITLOOP27_AtTheMaximumTheSessionEndsWithNoQuestion(t *testing.T) {
 	if strings.Count(w.screen.String(), "extend by") != 1 {
 		t.Fatalf("a question was shown at the maximum: %q", w.screen.String())
 	}
-	if !strings.Contains(w.screen.String(), "\n  ended     it reached the maximum of 40 min\n") {
+	if !strings.Contains(w.screen.String(), "\n  reason    Expired\n") {
 		t.Fatalf("the screen does not say why the session ends: %q", w.screen.String())
 	}
 	w.l.Request(req("late"))
@@ -1004,10 +1004,10 @@ func TestUNITLOOP29_TheScreenSaysWhereTheLogIs(t *testing.T) {
 	w.pass(42 * time.Minute)
 	w.press("\x03")
 	if !strings.HasSuffix(w.screen.String(), "\n  -- session over "+strings.Repeat("-", 23)+"\n\n"+
-		"  ended     you pressed Ctrl+C\n"+
-		"  lasted    42 min\n"+
+		"  reason    Ctrl+C\n"+
+		"  duration  42 min\n"+
 		"  requests  none\n"+
-		"  log       "+record.File()+"\n\n  The key is dead.\n") {
+		"  log       "+record.File()+"\n") {
 		t.Fatalf("the end does not name the log:\n%s", w.screen.String())
 	}
 	if !strings.HasSuffix(record.File(), ".txt") {
@@ -1022,7 +1022,7 @@ func TestUNITLOOP29_TheScreenSaysWhereTheLogIs(t *testing.T) {
 	}
 	w.press("\x03")
 	if !strings.HasSuffix(w.screen.String(), "  requests  0 run, 20 refused\n"+
-		"  log       "+record.File()+"\n            That file holds the last part. The parts before it are in the same folder.\n\n  The key is dead.\n") {
+		"  log       "+record.File()+"\n            That file holds the last part. The parts before it are in the same folder.\n") {
 		t.Fatalf("the end does not tell of the old files:\n%s", w.screen.String())
 	}
 
@@ -1047,7 +1047,7 @@ func (b *brokenLog) File() string { return "/tmp/gangway-1/session.txt" }
 // UNIT-LOOP-30. Requirement: LOG-06.
 func TestUNITLOOP30_AFailedLogEndsTheSession(t *testing.T) {
 	failed := errors.New("no space left")
-	const says = "\n  ended     the log could not be written\n"
+	const says = "\n  reason    Log failed\n"
 
 	// A request that cannot be logged goes no further.
 	record := &brokenLog{}
@@ -1064,7 +1064,7 @@ func TestUNITLOOP30_AFailedLogEndsTheSession(t *testing.T) {
 		t.Fatalf("the loop is %v, closed with %v", w.l.State(), w.closed)
 	}
 	if !strings.Contains(w.screen.String(), says) ||
-		!strings.HasSuffix(w.screen.String(), "  log       /tmp/gangway-1/session.txt\n            The log is not whole: it could not be written.\n\n  The key is dead.\n") {
+		!strings.HasSuffix(w.screen.String(), "  log       /tmp/gangway-1/session.txt\n            The log is not whole: it could not be written.\n") {
 		t.Fatalf("the screen:\n%s", w.screen.String())
 	}
 
@@ -1121,7 +1121,7 @@ func TestUNITLOOP32_TheStartAndTheEndOfASessionOnTheScreen(t *testing.T) {
 		"  host      build-box�[2J\n" +
 		"  session   30 min, then you are asked to extend\n" +
 		"  network   connected over Tailscale\n" +
-		"\n  Paste this line to the AI:\n\n/gangway " + w.l.session.Address() + " " + w.l.session.Key() + "\n\n  y run   n refuse   Ctrl+C end\n"
+		"\n  Paste this line to the AI:\n\n/gangway " + w.l.session.Address() + " " + w.l.session.Key() + "\n"
 	if w.screen.String() != start {
 		t.Fatalf("the start shows:\n%s\nwant:\n%s", w.screen.String(), start)
 	}
@@ -1157,10 +1157,9 @@ func TestUNITLOOP32_TheStartAndTheEndOfASessionOnTheScreen(t *testing.T) {
 	w.l.Exited(143)
 	end := "\n  ✗ killed: you pressed Ctrl+C\n" +
 		"\n  ── session over " + strings.Repeat("─", 23) + "\n\n" +
-		"  ended     you pressed Ctrl+C twice\n" +
-		"  lasted    12 min\n" +
-		"  requests  2 run, 3 refused\n" +
-		"\n  The key is dead.\n"
+		"  reason    Ctrl+C\n" +
+		"  duration  12 min\n" +
+		"  requests  2 run, 3 refused\n"
 	if w.screen.String() != end {
 		t.Fatalf("the end shows:\n%s\nwant:\n%s", w.screen.String(), end)
 	}
