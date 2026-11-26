@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gangway: remote access for AI, one yes at a time</title>
+<meta name="description" content="Temporary remote access for AI, with just-in-time approval of commands. Nothing runs without a yes.">
+<style>
+  :root {
+    --bg: #0a0d12;
+    --panel: #11161d;
+    --line: #232b36;
+    --text: #d9e2ec;
+    --dim: #7d8a99;
+    --yes: #6dffa8;
+    --no: #ff6b6b;
+    --hot: #ffd166;
+    --blue: #6db8ff;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.5;
+    overflow-x: hidden;
+  }
+  a { color: var(--yes); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--hot); outline-offset: 3px; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 16px; }
+
+  /* The glow behind the top of the page. */
+  .glow {
+    position: absolute; inset: -20% -10% auto -10%; height: 720px; z-index: -1;
+    background:
+      radial-gradient(40% 50% at 25% 35%, rgba(109,255,168,.20), transparent 70%),
+      radial-gradient(35% 45% at 75% 25%, rgba(109,184,255,.18), transparent 70%),
+      radial-gradient(30% 40% at 60% 70%, rgba(255,209,102,.10), transparent 70%);
+    filter: blur(20px);
+    animation: drift 14s ease-in-out infinite alternate;
+  }
+  @keyframes drift { to { transform: translate3d(3%, 4%, 0) scale(1.06); } }
+
+  header { position: relative; padding: 56px 0 8px; text-align: center; }
+  .banner {
+    display: inline-block; margin: 0; text-align: left;
+    font-family: var(--mono); font-weight: 700; line-height: 1.15;
+    font-size: clamp(7px, 2.55vw, 19px);
+    background: linear-gradient(100deg, var(--yes), var(--blue) 55%, var(--hot));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  h1 {
+    margin: 22px auto 10px; max-width: 18ch;
+    font-size: clamp(30px, 6.4vw, 58px); line-height: 1.04; letter-spacing: -0.03em;
+  }
+  h1 .y { color: var(--yes); }
+  .lead { margin: 0 auto; max-width: 56ch; color: var(--dim); font-size: clamp(16px, 2.2vw, 19px); }
+  .lead b { color: var(--text); font-weight: 600; }
+
+  /* The terminal. */
+  .term {
+    margin: 36px auto 0; max-width: 760px; text-align: left;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.02) inset;
+    overflow: hidden;
+  }
+  .bar { display: flex; align-items: center; gap: 7px; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+  .bar i { width: 11px; height: 11px; border-radius: 50%; background: #2c3643; }
+  .bar span { margin-left: 8px; font: 12px var(--mono); color: var(--dim); }
+  .screen {
+    height: 330px; overflow-y: auto; padding: 16px 18px 6px;
+    font: 14px/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere;
+    scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+  }
+  .screen .dim { color: var(--dim); }
+  .screen .cmd { color: #fff; font-weight: 700; }
+  .screen .ok { color: var(--yes); }
+  .screen .bad { color: var(--no); }
+  .screen .mark { color: var(--blue); }
+  .ask { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 18px 16px; border-top: 1px solid var(--line); }
+  .ask p { margin: 0; font: 14px var(--mono); color: var(--dim); flex: 1 1 200px; }
+  .key {
+    font: 700 16px var(--mono); min-width: 92px; padding: 10px 16px; border-radius: 10px; cursor: pointer;
+    background: transparent; border: 1.5px solid currentColor; transition: transform .08s, background .15s;
+  }
+  .key.y { color: var(--yes); } .key.n { color: var(--no); }
+  .key:hover:not(:disabled) { background: rgba(255,255,255,.06); }
+  .key:active:not(:disabled), .key.hit { transform: translateY(2px) scale(.97); background: rgba(255,255,255,.12); }
+  .key:disabled { opacity: .35; cursor: default; }
+  .tally { margin: 14px 0 0; text-align: center; font: 13px var(--mono); color: var(--dim); min-height: 1.5em; }
+
+  section { padding: 64px 0 0; }
+  h2 { margin: 0 0 22px; font-size: clamp(22px, 3.6vw, 30px); letter-spacing: -0.02em; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  .card h3 { margin: 0 0 6px; font-size: 16px; }
+  .card p { margin: 0; color: var(--dim); font-size: 15px; }
+  .card .tag { display: inline-block; margin-bottom: 10px; font: 700 12px var(--mono); color: var(--bg); background: var(--yes); border-radius: 6px; padding: 2px 8px; }
+  .card:nth-child(3n+2) .tag { background: var(--blue); }
+  .card:nth-child(3n) .tag { background: var(--hot); }
+
+  .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; font-family: var(--mono); }
+  .flow .box { flex: 1 1 180px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .flow .box b { display: block; color: #fff; margin-bottom: 4px; }
+  .flow .box span { color: var(--dim); font: 14px/1.45 var(--sans); }
+  .flow .box.gate { border-color: var(--yes); box-shadow: 0 0 0 3px rgba(109,255,168,.08); }
+  .flow .arrow { align-self: center; color: var(--dim); font-size: 20px; }
+
+  .get { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; display: flex; gap: 6px; align-items: stretch; }
+  .get code { flex: 1; min-width: 0; padding: 12px; font: 13px/1.5 var(--mono); color: var(--text); overflow-x: auto; white-space: nowrap; }
+  .get button { font: 600 14px var(--sans); color: var(--bg); background: var(--yes); border: 0; border-radius: 8px; padding: 0 18px; cursor: pointer; }
+  .small { color: var(--dim); font-size: 14px; margin: 12px 0 0; }
+  .links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+  .btn { display: inline-block; padding: 11px 18px; border-radius: 10px; font-weight: 600; text-decoration: none; border: 1.5px solid var(--line); color: var(--text); }
+  .btn.main { background: var(--yes); border-color: var(--yes); color: var(--bg); }
+
+  footer { margin-top: 72px; padding: 24px 0 40px; border-top: 1px solid var(--line); color: var(--dim); font-size: 14px; text-align: center; }
+
+  @media (max-width: 560px) {
+    .screen { height: 300px; font-size: 12.5px; padding: 14px 12px 4px; }
+    .flow .arrow { display: none; }
+    .get { flex-direction: column; } .get button { padding: 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .glow { animation: none; } html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="glow" aria-hidden="true"></div>
+
+<header class="wrap">
+<pre class="banner" aria-hidden="true">   ____
+  / ___| __ _ _ __   __ ___      ____ _ _   _
+ | |  _ / _` | '_ \ / _` \ \ /\ / / _` | | | |
+ | |_| | (_| | | | | (_| |\ V  V / (_| | |_| |
+  \____|\__,_|_| |_|\__, | \_/\_/ \__,_|\__, |
+                    |___/               |___/</pre>
+  <h1>Nothing runs without a <span class="y">yes</span>.</h1>
+  <p class="lead">Temporary remote access for AI. The AI asks to run a command on your machine. <b>You see the exact line and press <code>y</code> or <code>n</code>.</b></p>
+
+  <div class="term" role="group" aria-label="A Gangway session you can try">
+    <div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>build-box: gangway</span></div>
+    <div class="screen" id="screen" aria-live="polite"></div>
+    <div class="ask">
+      <p id="hint">The AI is asking. You are the gate.</p>
+      <button class="key y" id="yes" type="button" aria-label="Press y: run it">y &nbsp;yes</button>
+      <button class="key n" id="no" type="button" aria-label="Press n: refuse">n &nbsp;no</button>
+    </div>
+  </div>
+  <p class="tally" id="tally">Try it: press <b>y</b> or <b>n</b> on your keyboard.</p>
+</header>
+
+<main class="wrap">
+  <section>
+    <h2>Why it is safe to hand over</h2>
+    <div class="grid">
+      <div class="card"><span class="tag">the gate</span><h3>On the host, never in the AI</h3><p>The thing being checked is not the checker. A controller that is taken over can only ask.</p></div>
+      <div class="card"><span class="tag">the line</span><h3>You approve what runs</h3><p>The prompt shows the exact command. A request with a hidden or control character is refused before it reaches you.</p></div>
+      <div class="card"><span class="tag">the clock</span><h3>Access ends by itself</h3><p>A session lasts 30 minutes. Only the person at the terminal can extend it, and no answer means no.</p></div>
+      <div class="card"><span class="tag">the network</span><h3>The host is never open</h3><p>It dials out over Tailscale, which is built into the program. No root, nothing to install.</p></div>
+      <div class="card"><span class="tag">the key</span><h3>One key, one AI</h3><p>The session key works for the first AI that uses it. A copy is of no use to a second caller.</p></div>
+      <div class="card"><span class="tag">the log</span><h3>Every session is written down</h3><p>Each request, your answer and the output go to a file on the host that only you can read.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <div class="flow">
+      <div class="box"><b>AI tool</b><span>Has the skill. Asks with the session key.</span></div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="box"><b>Controller</b><span>Passes each request to the host, and the answer back.</span></div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="box gate"><b>You: y or n</b><span>The cli-tool on the host shows the command and runs it on yes. One file, plain user.</span></div>
+    </div>
+  </section>
+
+  <section id="get">
+    <h2>Get it</h2>
+    <div class="get">
+      <code id="cmd">curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/kdop/gangway/main/install.sh | sh</code>
+      <button id="copy" type="button">Copy</button>
+    </div>
+    <p class="small">Puts one file at <code>~/.local/bin/gangway</code> on a Linux host. No root. You also need a Tailscale network and a machine for the controller: the README has the steps, and the build from the source.</p>
+    <div class="links">
+      <a class="btn main" href="https://github.com/kdop/gangway">The code on GitHub</a>
+      <a class="btn" href="https://github.com/kdop/gangway/releases">Releases</a>
+      <a class="btn" href="https://github.com/kdop/gangway#readme">README</a>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">Gangway is early: one user, Linux hosts. MIT license.</footer>
+
+<script>
+(function () {
+  var screen = document.getElementById('screen');
+  var hint = document.getElementById('hint');
+  var tally = document.getElementById('tally');
+  var yes = document.getElementById('yes');
+  var no = document.getElementById('no');
+  var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var requests = [
+    { cmd: 'grep ERROR app.log | tail -n 20',
+      out: ['14:02:11 ERROR disk full', '14:02:15 ERROR disk full'] },
+    { cmd: 'df -h /var',
+      out: ['Filesystem  Size  Used Avail Use% Mounted on', '/dev/sda2    40G   40G     0 100% /var'] },
+    { cmd: 'du -sh /var/log/* | sort -h | tail -n 3',
+      out: ['1.1G  /var/log/journal', '2.4G  /var/log/nginx', ' 35G  /var/log/app'] },
+    { cmd: 'rm -rf /var/log/app', out: [], risky: true },
+    { cmd: 'ls -lh /var/log/app | head -n 3',
+      out: ['total 35G', '-rw-r--r-- 1 app app  35G Nov 24 14:02 debug.log', '-rw-r--r-- 1 app app 1.2M Nov 24 14:02 app.log'] },
+    { cmd: 'truncate -s 0 /var/log/app/debug.log && df -h /var | tail -n 1',
+      out: ['/dev/sda2    40G  5.0G   35G  13% /var'] }
+  ];
+
+  var number = 0, left = 29, ran = 0, refused = 0;
+  var asking = false, shownAt = 0;
+  var MIN_SHOW = 500; // a key does not count in the first half second
+
+  function add(text, cls) {
+    var line = document.createElement('div');
+    if (cls) line.className = cls;
+    line.textContent = text || ' ';
+    screen.appendChild(line);
+    screen.scrollTop = screen.scrollHeight;
+    return line;
+  }
+  function rule(label, right) {
+    var fill = Math.max(4, 40 - label.length);
+    add('── ' + label + ' ' + new Array(fill).join('─') + '  ' + right, 'dim');
+  }
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, still ? 0 : ms); }); }
+
+  function ask() {
+    var r = requests[number % requests.length];
+    number++;
+    add('');
+    rule('request ' + number, left + ' min left');
+    add('');
+    add('  > ' + r.cmd, 'cmd');
+    add('');
+    add('  run it?   y yes   n no', 'dim');
+    hint.textContent = r.risky ? 'Read it first. This is why the gate is yours.' : 'The AI is asking. You are the gate.';
+    asking = true; shownAt = Date.now();
+    yes.disabled = no.disabled = false;
+  }
+
+  function answer(key) {
+    if (!asking || Date.now() - shownAt < MIN_SHOW) return;
+    asking = false;
+    yes.disabled = no.disabled = true;
+    var button = key === 'y' ? yes : no;
+    button.classList.add('hit');
+    setTimeout(function () { button.classList.remove('hit'); }, 160);
+    var r = requests[(number - 1) % requests.length];
+    (key === 'y' ? run(r) : refuse()).then(function () {
+      left = Math.max(1, left - 2);
+      tally.textContent = ran + ' run, ' + refused + ' refused. The AI got only what you let through.';
+      return wait(900);
+    }).then(ask);
+  }
+
+  function run(r) {
+    ran++;
+    hint.textContent = 'Running. The AI gets the same output.';
+    add('');
+    rule('request ' + number + ' ── running', 'Ctrl+C stops it');
+    add('');
+    var chain = wait(250);
+    r.out.forEach(function (text) {
+      chain = chain.then(function () {
+        var line = add('', '');
+        line.textContent = '';
+        var mark = document.createElement('span'); mark.className = 'mark'; mark.textContent = '  │ ';
+        line.appendChild(mark); line.appendChild(document.createTextNode(text));
+        return wait(260);
+      });
+    });
+    return chain.then(function () {
+      add('');
+      var n = r.out.length;
+      add('  ✓ ended, exit 0, ' + n + (n === 1 ? ' line' : ' lines') + ' sent to the AI', 'ok');
+    });
+  }
+
+  function refuse() {
+    refused++;
+    hint.textContent = 'Refused. The AI is told no.';
+    add('');
+    add('  ✗ refused, nothing ran', 'bad');
+    return wait(200);
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+    // Lower-case y or n only, as in the real tool.
+    if (e.key === 'y' || e.key === 'n') answer(e.key);
+  });
+  yes.addEventListener('click', function () { answer('y'); });
+  no.addEventListener('click', function () { answer('n'); });
+
+  document.getElementById('copy').addEventListener('click', function () {
+    var text = document.getElementById('cmd').textContent;
+    var button = this;
+    function done() { button.textContent = 'Copied'; setTimeout(function () { button.textContent = 'Copy'; }, 1400); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () {});
+    } else {
+      var range = document.createRange(); range.selectNodeContents(document.getElementById('cmd'));
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+      try { document.execCommand('copy'); done(); } catch (err) {}
+    }
+  });
+
+  add('$ gangway', 'dim');
+  add('');
+  add('  host      build-box');
+  add('  session   30 min, then you are asked to extend');
+  add('  network   connected over Tailscale');
+  yes.disabled = no.disabled = true;
+  wait(700).then(ask);
+})();
+</script>
+</body>
+</html>
