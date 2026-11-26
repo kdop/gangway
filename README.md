@@ -193,8 +193,6 @@ Until pairing is built, any device that your Tailscale rules let reach the contr
 
 This software is provided "as is", with absolutely no guarantees of any kind. It runs commands on your machines. You use it at your own risk. The [license](LICENSE) has the full text.
 
-## More
+## License
 
-- [`DEVELOPMENT.md`](DEVELOPMENT.md): how to build it, try it on one machine, and run the tests
-- [`docs/blueprint.md`](docs/blueprint.md): the design
-- License: [MIT](LICENSE)
+[MIT](LICENSE)
