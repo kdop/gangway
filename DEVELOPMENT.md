@@ -61,7 +61,7 @@ sha256sum --check --ignore-missing SHA256SUMS
 cd cli && go test ./...
 ```
 
-The same goes for each folder that holds Go code. The tests also run on GitHub for every pull request.
+The same goes for each folder that holds Go code. On GitHub, a pull request runs only the tests of the folders it changes: a change in `shared/` runs them all, a change in `cli/` runs `cli` and `acceptance`, and a change to the docs that tests read runs one short check. A change to other docs runs none. A push to `main` and a release run them all.
 
 To see how many lines of each package its tests run, add `-cover`: `go test -cover ./...`. On GitHub the same numbers are in the summary of each run. There is no pass mark: the check that every requirement has a test is the guard.
 
