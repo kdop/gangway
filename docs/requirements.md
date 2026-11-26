@@ -1,6 +1,6 @@
 # Gangway requirements and acceptance tests
 
-The hard requirements of the first version, each with the acceptance tests that check it. A requirement is a single sentence. Its tests sit right under it. The design and the reasons are in `blueprint.md` and `../CLAUDE.md`.
+The hard requirements, each with the acceptance tests that check it. A requirement is a single sentence. Its tests sit right under it. The design and the reasons are in `blueprint.md` and `../CLAUDE.md`.
 
 ## Rules
 
@@ -8,7 +8,7 @@ The hard requirements of the first version, each with the acceptance tests that 
 - Each requirement has at least one acceptance test, and as many as it needs. A test's ID is the requirement's ID, a dot, and a number: `GATE-01.2` is the second test of `GATE-01`.
 - Each acceptance test becomes a Go test that carries the ID in its name, for example `TestGATE01_2_NoKeyNoRun`.
 - One Go test lists every test ID in this file that has no Go test. An empty list means everything here is tested.
-- "Step" names the step of `plan.md` that delivers the requirement. A step is done when the tests of its requirements pass.
+- "Step" names the step of `plan.md` that delivers the requirement. The table under "What is built" says which requirements are built.
 - A requirement and its tests are written here before the code.
 
 ## How to read a test
@@ -25,23 +25,27 @@ Where a test says a time "passes", the test sets that setting to a short value f
 
 Where a test says the user presses a key at a prompt, `PROMPT_MIN_SHOW` has passed since the prompt was shown, unless the test says otherwise.
 
-## The MVP
+## What is built
 
-The MVP is set in `plan.md`. It delivers these 52 requirements:
+These requirements are built. Each of their tests has a Go test in `acceptance/`, or is named in that folder with the reason why not. A Go test fails when one is missing.
 
 | Group | Requirements |
 |---|---|
 | GATE | 01, 02, 03, 04, 05, 06, 07, 08, 10, 11, 12, 13, 14, 15, 16, 17, 18 |
 | SHOW | 01, 02, 03, 04, 05, 06 |
-| SES | 01, 02, 03, 05, 06, 07 |
-| KEY | 01, 02, 03, 04, 09 |
+| SES | 01, 02, 03, 05, 06, 07, 08 |
+| KEY | 01, 02, 03, 04, 05, 09, 10 |
+| LEN | 01, 02, 03, 04, 05, 06, 07, 08, 09 |
 | LIM | 01, 02, 03, 04, 06, 07, 08, 09, 10, 11, 12, 13 |
-| HOST | 01, 02, 07 |
-| CTL | 01, 02, 11 |
+| HOST | 01, 02, 03, 04, 05, 06, 07, 08, 09 |
+| CTL | 01, 02, 10, 11, 12 |
+| SET | 01, 02, 03, 04, 05 |
+| LOG | 01, 02, 03, 04, 05, 06 |
+| INS | 01, 02, 03, 04, 05, 06, 07 |
 
-Two of them are delivered in part:
+Two of them are built in part:
 
-- `SES-05`: there is no reconnect in the MVP, so a lost connection ends the session at once and stops the running command.
+- `SES-05`: there is no reconnect yet, so a lost connection ends the session at once and stops the running command.
 - `LIM-06`: `COMMAND_TIME_LIMIT`, `QUESTION_WAIT` and `KILL_WAIT` only. `OUTPUT_SIZE_LIMIT` comes with the size cut.
 
 ## GATE: approval

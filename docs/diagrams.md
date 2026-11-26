@@ -1,6 +1,6 @@
 # Gangway diagrams
 
-These show the first version as `blueprint.md` describes it. The MVP is the same flow on one machine, with no Tailscale yet.
+These show the design as `blueprint.md` describes it. The one-machine mode is the same flow with no Tailscale.
 
 ## 1. Parts
 

@@ -68,7 +68,7 @@ To see how many lines of each package its tests run, add `-cover`: `go test -cov
 ## Read next
 
 - `docs/blueprint.md`: what it is and how the parts fit
-- `docs/plan.md`: the steps, the MVP, and how each step is checked
+- `docs/plan.md`: the steps, the state of each, and how each is checked
 - `docs/requirements.md`: the hard requirements, each with its acceptance tests
 - `docs/architecture.md`: the API, the messages, and the pieces of each program
 - `docs/design.md`: the inside of each piece, with its unit tests

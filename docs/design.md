@@ -169,7 +169,7 @@ The cost: an emoji built from joined parts, such as a family, holds an invisible
 - **The text is never changed.** `checks` says yes or no. It does not clean a request and pass it on, because the user must approve what the AI sent, not a repaired form of it.
 - **The refused text never reaches the screen.** `checks` gives back the reason only.
 
-File reads and the protected files are not in the MVP. They add a second check here when they are built.
+File reads and the protected files are not built. They add a second check here when they are built.
 
 ### Unit tests
 
@@ -679,7 +679,7 @@ Tests 10 to 26 are for the clock: a session with a clock the test moves, fake ti
 
 The `connection` holds the websocket to the controller. It turns the cli-tool's answers into messages, and the controller's messages into events for the loop. It decides nothing about a request.
 
-There is no reconnect in the MVP. A lost connection is told once, and that is the end. Reconnect adds states here when it is built.
+There is no reconnect yet. A lost connection is told once, and that is the end. Reconnect adds states here when it is built.
 
 It knows no address and no road of its own: `network` gives it what opens a connection, and the controller's address on that road. It hands the API address of `session_ok` back as it came; `session` checks it.
 
@@ -810,7 +810,7 @@ SESSION_MAX = 2h
 - The folder and the file must be owned by root, and nobody but root may be able to write them. The folder must be a real folder, not a link, and the file must be a plain file.
 - A length above `SESSION_MAX` is cut to it, and `settings` tells that it was cut, so the screen can say so. A length at or below it is left alone. (`SET-01`, `SET-04`)
 
-### The settings of the MVP
+### The settings
 
 | Name | Kind | Must be |
 |---|---|---|
