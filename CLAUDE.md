@@ -30,7 +30,7 @@ says what it is. This file says how it is built and why.
 | `docs/design.md` | The inside of each piece that has states, with its unit tests. A piece is added just before it is built |
 | `docs/diagrams.md` | The design as Mermaid diagrams: parts, session, gate, failures, trust, pairing |
 | `docs/ux.md` | How the tool looks and feels: prompts, messages, small touches |
-| `.claude/` | Rules (`rules/`, with the voice in `rules/voice.md`) and skills (`skills/`) |
+| `.claude/` | Rules (`rules/`, with the voice in `rules/voice.md`) and skills (`skills/`). Not in git: it lives on the work machine only |
 
 ### Decisions and why
 
