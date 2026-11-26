@@ -139,7 +139,7 @@ func TestSES05_1_TwoCtrlCStopTheCommand(t *testing.T) {
 	w.gone(pid)
 }
 
-// The MVP has no reconnect: a lost connection ends the session at once.
+// There is no reconnect yet: a lost connection ends the session at once.
 func TestSES05_2_ALostConnectionStopsTheCommand(t *testing.T) {
 	w := newWorld(t)
 	_, pid := w.runsLong()

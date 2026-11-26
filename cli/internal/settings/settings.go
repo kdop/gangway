@@ -17,7 +17,7 @@ import (
 	"github.com/kdop/gangway/shared/messages"
 )
 
-// Settings are the values of the MVP.
+// Settings are the values a host can set.
 type Settings struct {
 	ControllerName     string        // CONTROLLER_TAILSCALE_NAME
 	JoinTimeout        time.Duration // JOIN_TIMEOUT

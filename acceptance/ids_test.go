@@ -10,16 +10,6 @@ import (
 	"testing"
 )
 
-// stepsBuilt holds the steps of docs/plan.md that are built, beside the MVP.
-var stepsBuilt = map[string]bool{"2": true, "4": true, "7": true, "11": true}
-
-// builtOfAStepInWork holds the requirements that are built while the rest
-// of their step is not. When the whole step is built, the step goes into
-// stepsBuilt and its requirements come off this list.
-var builtOfAStepInWork = map[string]bool{
-	"LEN-08": true, // step 6, built with the session's clock of step 4
-}
-
 // noGoTest holds the tests of a built requirement that have no Go test,
 // each with the reason.
 var noGoTest = map[string]string{
@@ -31,8 +21,8 @@ var noGoTest = map[string]string{
 }
 
 // TestEveryTestThatIsDueHasAGoTest fails when a Go test here carries an ID
-// that docs/requirements.md does not have, and when a test of the MVP or of a
-// built step has no Go test.
+// that docs/requirements.md does not have, and when a test of a built
+// requirement has no Go test.
 func TestEveryTestThatIsDueHasAGoTest(t *testing.T) {
 	b, err := os.ReadFile(filepath.Join("..", "docs", "requirements.md"))
 	if err != nil {
@@ -72,32 +62,35 @@ func TestEveryTestThatIsDueHasAGoTest(t *testing.T) {
 		}
 	}
 
-	// The MVP's requirements, from the table under "The MVP".
+	// The versions that are built or released, from the table in
+	// docs/releases.md.
+	r, err := os.ReadFile(filepath.Join("..", "docs", "releases.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	built := map[string]bool{}
+	for _, m := range regexp.MustCompile(`(?m)^\| (\d+\.\d+) \| (Built|Released) \|`).FindAllStringSubmatch(string(r), -1) {
+		built[m[1]] = true
+	}
+	if len(built) == 0 {
+		t.Fatal("found no built version in docs/releases.md")
+	}
+
+	// Each requirement ends with its version, with "No version yet" or
+	// with "Dropped".
 	due := map[string]bool{}
-	for _, row := range regexp.MustCompile(`(?m)^\| ([A-Z]+) \| ([\d, ]+) \|`).FindAllStringSubmatch(requirements, -1) {
-		for _, n := range strings.Split(row[2], ",") {
-			due[row[1]+"-"+strings.TrimSpace(n)] = true
+	for _, m := range regexp.MustCompile(`(?m)^### ([A-Z]+-\d+)\n\n(.*)$`).FindAllStringSubmatch(requirements, -1) {
+		end := regexp.MustCompile(` (?:Version (\d+\.\d+)\.|No version yet\.|Dropped: .*\.)$`).FindStringSubmatch(m[2])
+		if end == nil {
+			t.Errorf("%s does not end with its version, with \"No version yet.\" or with \"Dropped: …\"", m[1])
+			continue
+		}
+		if built[end[1]] {
+			due[m[1]] = true
 		}
 	}
 	if len(due) == 0 {
-		t.Fatal("found no MVP table in docs/requirements.md")
-	}
-	// The requirements of a built step: each says its step at its end.
-	ofAStep := 0
-	for _, m := range regexp.MustCompile(`(?m)^### ([A-Z]+-\d+)\n\n.* Step (\d+)\.$`).FindAllStringSubmatch(requirements, -1) {
-		if stepsBuilt[m[2]] {
-			due[m[1]] = true
-			ofAStep++
-		}
-	}
-	if ofAStep == 0 {
-		t.Fatal("found no requirement of a built step in docs/requirements.md")
-	}
-	for id := range builtOfAStepInWork {
-		if !inFile[id+".1"] {
-			t.Errorf("%s is on the list builtOfAStepInWork but is not in docs/requirements.md", id)
-		}
-		due[id] = true
+		t.Fatal("found no requirement of a built version in docs/requirements.md")
 	}
 
 	var missing []string

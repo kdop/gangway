@@ -604,8 +604,8 @@ func TestAPI24_SessionEndFromTheHost(t *testing.T) {
 	}
 }
 
-// The MVP has no reconnect: a lost connection ends the session at once.
-func TestMVP_ALostConnectionEndsTheSession(t *testing.T) {
+// There is no reconnect yet: a lost connection ends the session at once.
+func TestALostConnectionEndsTheSession(t *testing.T) {
 	w := newWorld(t)
 	h := w.startSession(keyK, "web-3")
 	_, done := w.ask(h, keyK, "echo hi")

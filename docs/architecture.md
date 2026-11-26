@@ -26,6 +26,8 @@ The API is what the AI calls on the controller. It is the only way the AI reache
 | `POST /v1/requests/{id}/wait` | Answers "wait more" for a command that is still running. Stays open like the call above |
 | `POST /v1/requests/{id}/stop` | Answers "stop" for a command that is still running |
 
+Known limit: `stop` works only after the AI was told "still running". To stop a command earlier, the AI hangs up.
+
 ### `POST /v1/hello`
 
 Sends nothing but the key. Gives back the caller token and the state of the session:
@@ -296,7 +298,7 @@ After either one, the connection is closed and the session key is dead (`KEY-03`
 
 ### Pairing
 
-Pairing happens before a host has a token, so it cannot use this connection. It has a short exchange of its own, which is written out with step 13.
+Pairing happens before a host has a token, so it cannot use this connection. It has a short exchange of its own, which is written out when pairing is built.
 
 ### When the connection is lost
 

@@ -1,6 +1,6 @@
 # Gangway UX
 
-How the tool looks and feels to the user. The design is in `blueprint.md`. The steps are in `plan.md`.
+How the tool looks and feels to the user. The design is in `blueprint.md`. The versions are in `releases.md`.
 
 ## cli-tool
 
