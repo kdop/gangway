@@ -19,7 +19,3 @@ func Load(path string) (string, error) { return authkey.Load(path, program) }
 
 // Remove takes the key file away. A file that is not there is no error.
 func Remove(path string) error { return authkey.Remove(path) }
-
-// Protected tells whether path leads to the auth key file, also through a
-// link or through "..".
-func Protected(file, path string) bool { return authkey.Protected(file, path) }

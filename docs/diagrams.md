@@ -55,7 +55,7 @@ sequenceDiagram
   K->>A: paste the line
 
   loop each request
-    A->>S: run a command or read a file, with the key
+    A->>S: run a command, with the key
     S->>S: check the key
     S->>C: the request
     C-->>K: show the exact request

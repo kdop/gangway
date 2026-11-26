@@ -27,9 +27,6 @@ func TestTheCliToolsOwnFileAndLogin(t *testing.T) {
 	if got, err := Load(path); err != nil || got != key {
 		t.Fatalf("Load gave %q, %v", got, err)
 	}
-	if !Protected(path, filepath.Join(filepath.Dir(path), "..", "gangway", "tailscale-auth-key")) {
-		t.Fatal("a path to the file through .. is not protected")
-	}
 	if err := Remove(path); err != nil {
 		t.Fatal(err)
 	}

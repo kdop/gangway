@@ -169,8 +169,6 @@ The cost: an emoji built from joined parts, such as a family, holds an invisible
 - **The text is never changed.** `checks` says yes or no. It does not clean a request and pass it on, because the user must approve what the AI sent, not a repaired form of it.
 - **The refused text never reaches the screen.** `checks` gives back the reason only.
 
-File reads and the protected files are not built. They add a second check here when they are built.
-
 ### Unit tests
 
 | Test | Requirement | Start | Action | Expect |
@@ -763,7 +761,7 @@ Each test runs the real `connection` against a controller inside the test: a sma
 | UNIT-CONNECTION-12 | `SES-05`, `SES-07` | Live | The controller drops the connection. Then the cli-tool sends more, and closes | One lost event and no other. The sends and the close come back at once and nothing breaks |
 | UNIT-CONNECTION-13 | `SES-02` | Live, with messages sent just before | Close with the reason `user`. Then send more | The controller gets the earlier messages, then `session_end` with `user` as the last one, then sees a proper close of the websocket, not a cut. The close comes back within a second. The loop gets no lost event |
 | UNIT-CONNECTION-14 | `SES-03` | Live | The controller sends `session_end` with a reason, then a `request` | One event: the controller ends the session, with that reason. No request event and no lost event. The controller sees the connection close |
-| UNIT-CONNECTION-15 | `GATE-01` | Live | The controller sends a `request` of the kind `read`, one with no kind, and one with no `id` | No event. The controller gets `refused` with `unknown_kind` for the first two, and nothing for the third |
+| UNIT-CONNECTION-15 | `GATE-01` | Live | The controller sends a `request` of a kind that is not known, one with no kind, and one with no `id` | No event. The controller gets `refused` with `unknown_kind` for the first two, and nothing for the third |
 | UNIT-CONNECTION-16 | `GATE-07` | Live | The controller sends text that is not JSON, a JSON list, and a message that is not text. Then a `request` | No event for the first three. The connection lives: the request event comes |
 | UNIT-CONNECTION-17 | `LIM-10` | Live, a controller that reads nothing, the limit of waiting bytes set low | Send output until the limit is passed | Every send comes back at once. Then one lost event, which says the controller does not take what is sent |
 | UNIT-CONNECTION-18 | `SES-05` | Live | The controller sends a message larger than 1 MB | One lost event |
@@ -1136,7 +1134,6 @@ A session, in order:
 | `save`, with a key | Makes the folder if it is not there, with rights for the owner only. Writes the key to a new file with rights for the owner only, then puts that file in the place of the old one | An error, or nothing |
 | `load` | Reads the key | The key, or an error that says to run `login` |
 | `remove` | Takes the file away. `login` uses it when Tailscale refuses a new key | An error, or nothing |
-| `protected`, with a path | Tells whether the path is the auth key file | Yes or no |
 
 ### Rules the code must keep
 
@@ -1144,7 +1141,6 @@ A session, in order:
 - **A file that others can read is refused.** `load` gives an error when the group or anyone else can read or write the file, and says how to fix it. (`HOST-05`)
 - **The key never reaches the screen or a message.** `secrets` gives the key to `network` and to nothing else. An error names the file, never the key.
 - **A key that cannot be one is refused at `save`.** It must start with `tskey-auth-` and hold no space and no control character. A paste of the wrong thing is caught before it is stored.
-- **`protected` follows links.** A path that leads to the file through a link or through `..` is the file. The check of file reads uses it when file reads are built. (`KEY-08`)
 
 ### Unit tests
 
@@ -1156,7 +1152,6 @@ A session, in order:
 | UNIT-SECRETS-04 | `HOST-05` | A file that the group can read. Again one that anyone can read | `load` | An error each time that names the file and the fix. No key is given |
 | UNIT-SECRETS-05 | `HOST-05` | Nothing | `save`, one by one: an empty key, a key with a space, one with a control character, one that does not start with `tskey-auth-` | An error each time. No file is made |
 | UNIT-SECRETS-06 | `HOST-05` | A file with a key | `load` fails, and `save` fails on a folder that cannot be written | Neither error holds the key |
-| UNIT-SECRETS-07 | `KEY-08` | A file with a key | `protected` with: the file's path, a path to it through `..`, a link to it, another file in the same folder | Yes, yes, yes, no |
 | UNIT-SECRETS-08 | `HOST-06` | A text with a cursor code, a line break and a letter that is not plain; a text of 500 letters | `plain` | Each of the three is replaced by `?`. The long text is cut to 200 with `...` at the end |
 
 ## `network`
@@ -1489,7 +1484,7 @@ Start: the API over a store with one live session of key K. The test plays the h
 | UNIT-API-01 | `KEY-02`, `SES-01` | A live session | Each of the five calls with: no header, a made-up key, K with one letter cut off, K with no `Bearer`, K in a query string | 401 each time, with the same body. Nothing was sent to the host |
 | UNIT-API-02 | `KEY-03` | A live session | The session is removed. Each of the five calls with K | 401 each time |
 | UNIT-API-03 | `GATE-07` | A live session | Calls with K to `/v1/requests/x/approve`, `/v1/session/extend`, `/v1/settings`, `/` and `GET /v1/requests` | 404 or 405. Nothing was sent to the host |
-| UNIT-API-04 | `CTL-11` | A live session | `POST /v1/requests` with: text that is not JSON, an empty body, no command, an empty command, the kind `read`, a made-up kind, a body larger than the limit | 400 each time. Nothing was sent to the host |
+| UNIT-API-04 | `CTL-11` | A live session | `POST /v1/requests` with: text that is not JSON, an empty body, no command, an empty command, a made-up kind, a body larger than the limit | 400 each time. Nothing was sent to the host |
 | UNIT-API-05 | `GATE-07`, `GATE-05` | A live session | `POST /v1/requests` with a command and the extra fields `"approved": true` and `"id": "mine"` | The host gets one `request` with the command letter for letter, an `id` of the controller's own, and no other field |
 | UNIT-API-06 | `GATE-02` | A request is open | The host answers `refused` with `user` | 200, with `state` `refused` and `reason` `user`, and no other field |
 | UNIT-API-07 | `GATE-01` | A request is open | The host sends `output` and `ended` with `exit` and code 0 | 200, with `state` `ended`, `how` `exit`, `exit_code` 0, the output, and `cut` and `bytes_replaced` false |

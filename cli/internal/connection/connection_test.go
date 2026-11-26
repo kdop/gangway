@@ -488,7 +488,7 @@ func TestUNITCONNECTION14_TheControllerEndsTheSession(t *testing.T) {
 // UNIT-CONNECTION-15. Requirement: GATE-01.
 func TestUNITCONNECTION15_ARequestOfAnUnknownKind(t *testing.T) {
 	_, ws, rec := live(t)
-	write(t, ws, `{"type":"request","id":"r1","kind":"read","path":"/etc/passwd","command":"ls"}`)
+	write(t, ws, `{"type":"request","id":"r1","kind":"other","command":"ls"}`)
 	write(t, ws, `{"type":"request","id":"r2","command":"ls"}`)
 	write(t, ws, `{"type":"request","kind":"command","command":"ls"}`)
 	for _, id := range []string{"r1", "r2"} {
@@ -500,7 +500,7 @@ func TestUNITCONNECTION15_ARequestOfAnUnknownKind(t *testing.T) {
 	rec.none(t)
 	// Nothing was sent for the request with no id: the next message the
 	// controller gets is the one sent now.
-	write(t, ws, `{"type":"request","id":"r4","kind":"read"}`)
+	write(t, ws, `{"type":"request","id":"r4","kind":"other"}`)
 	if m := read(t, ws); m.ID != "r4" {
 		t.Fatalf("the controller got an answer for %q, want r4", m.ID)
 	}

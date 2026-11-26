@@ -22,7 +22,7 @@ The API is what the AI calls on the controller. It is the only way the AI reache
 |---|---|
 | `POST /v1/hello` | The first call with a new key. It makes the caller the owner of the key and gives back the caller token |
 | `GET /v1/session` | Tells how the session is doing: the time left, the limits, the requests that wait or run |
-| `POST /v1/requests` | Asks to run a command or read a file. The call stays open until there is something to tell |
+| `POST /v1/requests` | Asks to run a command. The call stays open until there is something to tell |
 | `POST /v1/requests/{id}/wait` | Answers "wait more" for a command that is still running. Stays open like the call above |
 | `POST /v1/requests/{id}/stop` | Answers "stop" for a command that is still running |
 
@@ -96,7 +96,6 @@ The call stays open while the request waits in line, while the prompt waits, and
 | `control_character` | The request holds a control character, an invisible character, or one that changes the reading order. No prompt was shown | `GATE-10`, `GATE-16` |
 | `line_full` | Too many requests already wait. No prompt was shown | `GATE-13` |
 | `unknown_kind` | The cli-tool does not know this kind of request. No prompt was shown | `GATE-01` |
-| `protected_file` | The path is the auth key file or the host token file. No prompt was shown | `KEY-08` |
 | `time_up` | The session's time is up | `LEN-06`, `LEN-07` |
 | `host_away` | The connection to the host is lost for the moment. Ask again shortly | `SES-10` |
 | `session_ended` | The session ended while the request was open | `KEY-03` |
@@ -121,7 +120,6 @@ The call stays open while the request waits in line, while the prompt waits, and
 | `killed_by_ai` | The AI answered "stop" | `LIM-02` |
 | `killed_no_answer` | The AI gave no answer to "wait or stop" in time | `LIM-03` |
 | `killed_time_up` | The session's time was up and the command reached its time limit | `LEN-08` |
-| `read` | A file read. `output` is the file | `GATE-09` |
 | `start_failed` | The command could not be started. `output` says why. Nothing ran | `GATE-11` |
 | `killed_session_ended` | The session ended while the command ran | `SES-05` |
 
@@ -202,7 +200,6 @@ These run the real controller. The test plays both other sides: it calls the API
 | API-17 | State after API-10, no call open | Wait a while | The host gets no `cancel` |
 | API-18 | State after API-01 | Calls with no key, with a wrong key, and with the key of an ended session | 401 each time, with the same body. No host gets a message |
 | API-19 | State after API-01 | One more wrong key than `WRONG_KEY_LIMIT` from one address, then the right key | 429 for the right key. After `WRONG_KEY_BLOCK` it is let in again |
-| API-20 | State after API-01 | `POST /v1/requests` with a file read. The host sends `ended` with `read` | The host gets a `request` of kind `read`. The call ends with `ended`, `read`, and the file as `output` |
 | API-21 | Two requests are open at once | The host answers the second one first | Each call gets its own answer |
 | API-22 | State after API-01 | The host's connection is cut. `POST /v1/requests`. Then the host sends `session_back` with the right hash, and the call is made again | First `refused` with `host_away`. Then the request reaches the host |
 | API-23 | A request is open | Calls to made-up paths such as `/v1/requests/{id}/approve` and `/v1/session/extend` | 404. The host gets no message |
@@ -237,7 +234,7 @@ The first three ask or narrow. The address gives a controller that was taken ove
 | Check | Done by | Why there |
 |---|---|---|
 | The session key, the caller token, the block on wrong keys | The controller | They guard the API, before anything reaches a host |
-| Control characters, the protected files, the full line | The cli-tool | They guard the host, and the host does not trust the controller to have checked |
+| Control characters, the full line | The cli-tool | They guard the host, and the host does not trust the controller to have checked |
 | The `y`/`n` | The cli-tool | The gate lives on the host |
 | The command time limit, the output size limit, the answer time | The cli-tool | It holds the running command, and it must act even when the controller is gone |
 | The session's time and its extension | The cli-tool | Only the person at the terminal may extend |
@@ -327,7 +324,6 @@ These run the real cli-tool, with its keyboard, screen and clock in the test's h
 | CON-05 | Live session | Send a `request`. The test presses `n` | One `refused` with `user`. No `started` |
 | CON-06 | Live session | Send a `request` that holds a carriage return | One `refused` with `control_character`. The screen shows no prompt |
 | CON-07 | Live session | Send one more `request` than `MAX_WAITING_REQUESTS`, with no key pressed | The last one gets `refused` with `line_full` at once. The others still wait |
-| CON-08 | Live session | Send a `request` to read the auth key file | One `refused` with `protected_file`. The screen shows no prompt |
 | CON-09 | An approved command that runs long | Wait `COMMAND_TIME_LIMIT`. Send `wait`. Wait again. Send `stop` | `still_running`, then `still_running` again, then `ended` with `killed_by_ai` |
 | CON-10 | State after the first `still_running` | Send nothing for `QUESTION_WAIT` | `ended` with `killed_no_answer`, without being asked |
 | CON-11 | A prompt waits | Send `cancel` for it | The prompt is gone from the screen. One `refused` with `ai_gone`. A `y` now does nothing |
@@ -356,14 +352,14 @@ Each program is made of a few pieces. A piece has one job, and the table names t
 | `start` | Checks that it is not root and has a terminal. Picks between `login` and a session, and between Tailscale and the one-machine mode | `HOST-01`, `HOST-02`, `HOST-04`, `HOST-08` |
 | `login` | Takes the Tailscale auth key once, stores it, and tries it | `HOST-04`, `HOST-05` |
 | `settings` | Reads the three layers and lets each only narrow the one above. Says so when it cuts a value. Refuses an admin file that cannot be trusted | `SET-01` to `SET-05`, `LIM-06` |
-| `secrets` | Keeps the auth key file and the host token file, readable by the owner only. Knows which paths are never read out | `HOST-05`, `PAIR-06`, `KEY-08` |
+| `secrets` | Keeps the auth key file and the host token file, readable by the owner only | `HOST-05`, `PAIR-06` |
 | `network` | The road to the controller. Joins Tailscale from inside the program as a new device, and leaves it at the end. In the one-machine mode: localhost | `HOST-03`, `HOST-06`, `HOST-08`, `HOST-09`, `SES-08` |
 | `connection` | Holds the connection to the controller. Turns answers into messages and messages into events. Notices when it is lost, connects again, and holds what could not be sent | `GATE-07`, `SES-04`, `SES-09`, `SES-10`, `SES-11` |
 | `session` | Makes the key and the paste line. Runs the session's clock: time up, the question to extend, the maximum | `KEY-01`, `KEY-04`, `SES-02`, `SES-03`, `SES-12`, `LEN-01` to `LEN-09` |
 | `line` | Holds the requests that wait, in order, up to the limit | `GATE-06`, `GATE-13` |
-| `checks` | Refuses a request before any prompt: control characters, invisible characters, protected files | `GATE-10`, `GATE-16`, `KEY-08` |
+| `checks` | Refuses a request before any prompt: control characters, invisible characters | `GATE-10`, `GATE-16` |
 | `gate` | Shows one request and takes the `y` or `n`. Nothing else can say yes | `GATE-01` to `GATE-05`, `GATE-07`, `GATE-12`, `GATE-14`, `GATE-15`, `LIM-09` |
-| `runner` | Runs an approved command through the shell as the plain user, or reads a file. Counts the time, cuts the output, kills when told | `GATE-08`, `GATE-09`, `GATE-11`, `GATE-15`, `GATE-17`, `GATE-18`, `LIM-01` to `LIM-05`, `LIM-07`, `LIM-08`, `LIM-11` to `LIM-13`, `SES-05`, `SHOW-03` |
+| `runner` | Runs an approved command through the shell as the plain user. Counts the time, cuts the output, kills when told | `GATE-08`, `GATE-11`, `GATE-15`, `GATE-17`, `GATE-18`, `LIM-01` to `LIM-05`, `LIM-07`, `LIM-08`, `LIM-11` to `LIM-13`, `SES-05`, `SHOW-03` |
 | `terminal` | The only piece that writes to the screen and reads keys. Cleans what it shows. Picks the look: signs, colors, the banner. Tells one Ctrl+C from two | `SHOW-01` to `SHOW-06`, `GATE-03`, `GATE-04`, `GATE-05`, `KEY-04`, `LIM-09`, `LIM-10`, `HOST-02`, `HOST-07` |
 | `loop` | Takes every event in turn and passes it to the piece it belongs to. Ends the session, and waits until no command runs | `SES-02`, `SES-05`, `LIM-08`, `LIM-09` |
 | `log` | Makes the log of the session, in a folder of its own under the temp folder. Writes each request, answer and output to it, and starts a new file at the size limit | `LOG-01` to `LOG-06` |
