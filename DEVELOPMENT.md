@@ -31,6 +31,10 @@ The cli-tool prints a line that starts with `/gangway`. Paste it to an AI that h
 
 `./build.sh` builds both programs into `build/`: `build/gangway` and `build/gangway-controller`. Each is one file that can be copied to another Linux machine as it is.
 
+## Put the controller on a server
+
+No script for it is in this repo. The one in use is in the `vps-automation` repo, on branch `gangway`: it builds the controller from the newest `main`, copies it over, runs it as a service of a plain user on localhost, and sets up nginx. This is for now.
+
 ## Make a release
 
 A release is made on GitHub from a tag that starts with `v`:

@@ -57,4 +57,4 @@ Always allow: for the exact command, for a program, or for a list of safe read-o
 
 ## Later, not planned yet
 
-A fresh Tailscale auth key per session, folder grants (the cli-tool names the folders the AI may read), sudo, approving from the dashboard or another device, dashboard history in SQLite, a second user.
+A fresh Tailscale auth key per session, folder grants (the cli-tool names the folders the AI may read), sudo, approving from the dashboard or another device, dashboard history in SQLite, a second user, showing file changes as a diff.

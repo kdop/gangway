@@ -5,11 +5,8 @@ Git work: the `git` skill.
 
 Talk to the user in laconic caveman English.
 
-## Notes
-
-Continuity between sessions comes from the project notes: `notes/<yyyy-mm>.md`, one file
-per month, appended at the bottom. If it is not in the notes or the docs, it is gone
-next session.
+Continuity between sessions comes from the docs. If it is not in the docs or the code, it
+is gone next session. There is no diary.
 
 ## Project context
 
@@ -33,7 +30,6 @@ says what it is. This file says how it is built and why.
 | `docs/design.md` | The inside of each piece that has states, with its unit tests. A piece is added just before it is built |
 | `docs/diagrams.md` | The design as Mermaid diagrams: parts, session, gate, failures, trust, pairing |
 | `docs/ux.md` | How the tool looks and feels: prompts, messages, small touches |
-| `notes/<yyyy-mm>.md` | The timeline, one file per month |
 | `.claude/` | Rules (`rules/`, with the voice in `rules/voice.md`) and skills (`skills/`) |
 
 ### Decisions and why
@@ -112,22 +108,18 @@ led to it.
 - **The cli-tool makes the key, and the key is tied to the first AI that uses it.** A copied key is then of no use to a second caller. The cost, known and accepted: one session cannot be shared between two AI windows.
 - **No end-to-end signing of commands.** With the gate on the host it adds little, and it costs code.
 - **Plain user only, never root.** It limits the harm of a wrong yes.
+- **No backup of the files a command touches.** The cli-tool cannot know what a command touches.
 
-### Docs vs. notes
+### Where a thing is written
 
-- **Docs** = durable truth: "the cli-tool only dials out *because*…" → this file
-- **Notes** = the timeline: "moved the relay to websockets on 2026-11-20" → `notes/<yyyy-mm>.md`
-
-When an architectural decision is made: document it in the docs, log when it was
-implemented in the notes.
+A decision and its reason go into this file. The design goes into `docs/`. When a thing
+was done is in git. Nothing is written as a timeline.
 
 ## Operational rules
 
-1. **Check the notes first** — read the last two monthly files in `notes/` before starting work
-2. **Log when a decision settles** — in this month's notes file, under the rules in `.claude/rules/notes.md`
-3. **Push back only on a bad decision** — name the fact or the risk behind it. With none, do what he asks. No opinion for its own sake
-4. **Push back on architecture** — when something is wrong, say so and say why
-5. **Tag everything** — a `*tags: …*` line under each note heading makes `grep` land
-6. **Search before asking** — `grep -rn` the notes and the code first
-7. **Cite the source before concluding** — on any security or architecture call, read the code or the doc and cite the line. Notes and summaries are not sources
-8. **Security is the product risk** — this tool is remote execution by design. Any change that widens what a session can do needs Kostas's go
+1. **Write a decision down when it settles** — in the doc it belongs to, under the rules in `.claude/rules/notes.md`
+2. **Push back only on a bad decision** — name the fact or the risk behind it. With none, do what he asks. No opinion for its own sake
+3. **Push back on architecture** — when something is wrong, say so and say why
+4. **Search before asking** — `grep -rn` the docs and the code first
+5. **Cite the source before concluding** — on any security or architecture call, read the code or the doc and cite the line. Summaries are not sources
+6. **Security is the product risk** — this tool is remote execution by design. Any change that widens what a session can do needs Kostas's go

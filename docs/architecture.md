@@ -26,6 +26,8 @@ The API is what the AI calls on the controller. It is the only way the AI reache
 | `POST /v1/requests/{id}/wait` | Answers "wait more" for a command that is still running. Stays open like the call above |
 | `POST /v1/requests/{id}/stop` | Answers "stop" for a command that is still running |
 
+Known limit: `stop` works only after the AI was told "still running". To stop a command earlier, the AI hangs up.
+
 ### `POST /v1/hello`
 
 Sends nothing but the key. Gives back the caller token and the state of the session:

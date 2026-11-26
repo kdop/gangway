@@ -103,6 +103,7 @@ Every session is new. A session that has ended is never resumed, and nothing of 
 - The key is ephemeral: Tailscale removes the host from the network after it goes offline.
 - Each start joins as a new device, kept in memory only. The key must be the reusable kind.
 - The controller joins the same way, from inside the program, with its own key and its own `login`. Its device is kept, so its name stays. The hosts dial that name, `gangway-controller`.
+- The controller's key must be the reusable kind too. A one-time key was refused at every start, with "invalid key: unable to validate API key". Why it failed at its first use is not known.
 - A host or a controller machine that already has Tailscale installed keeps it. The device inside the program is a second, separate one.
 - Each program can be started in a one-machine mode with no Tailscale, on localhost only.
 - The key carries a tag. The Tailscale rules let that tag reach the controller and nothing else.
