@@ -98,7 +98,7 @@ Every session is new. A session that has ended is never resumed, and nothing of 
 - The cli-tool is written in Go and uses `tsnet`, Tailscale's library that puts Tailscale inside a Go program. It needs no root and no system service.
 - It joins with a Tailscale auth key, not a browser login. The key is made in the Tailscale admin page.
 - The user runs `login` once after install and pastes the key. After that, starting a session asks for nothing. The key lasts 90 days at most, then `login` is run again.
-- The key is kept in a file in the home folder that only its owner can read. The exact place follows the usual practice for such files and is picked when it is built.
+- The key is kept in a file of its own in `~/.config/gangway/`, which only its owner can read.
 - The cli-tool never gives that file to the AI. The ban is fixed in the code, not a setting. Limit: this is sure for file reads. An approved command could still print the file, so the user must refuse such a command.
 - The key is ephemeral: Tailscale removes the host from the network after it goes offline.
 - Each start joins as a new device, kept in memory only. The key must be the reusable kind.

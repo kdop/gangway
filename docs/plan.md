@@ -6,7 +6,7 @@ Rule for all steps: the gate exists before the first command runs. No step ships
 
 ## Before the first step
 
-Nothing blocks step 1. The language is Go, for the cli-tool and the controller. Where the controller listens is a setting; the default is localhost.
+The language is Go, for the cli-tool and the controller. Where the controller listens is a setting; the default is localhost.
 
 ## The MVP
 

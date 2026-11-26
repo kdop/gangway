@@ -22,6 +22,10 @@ says what it is. This file says how it is built and why.
 |---|---|
 | `README.md` | The front page: what Gangway is, what it looks like, how it works, what keeps it safe, how to start, the status and the known limits |
 | `DEVELOPMENT.md` | For work on the code: the folders, the one-machine trial, the build, how to make a release, the tests, and the list of design files |
+| `SECURITY.md` | How to report a hole |
+| `LICENSE` | The MIT license |
+| `install.sh` | Puts the cli-tool into `~/.local/bin` on a host |
+| `build.sh` | Builds both programs into `build/` |
 | `docs/blueprint.md` | The design: parts, session flow, gate, key, security, open questions |
 | `docs/plan.md` | The steps, in order, each with its check |
 | `docs/requirements.md` | The hard requirements, each with its acceptance tests. The IDs are carried by the Go tests |
