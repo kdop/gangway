@@ -13,8 +13,8 @@ import (
 // noGoTest holds the tests of a built requirement that have no Go test,
 // each with the reason.
 var noGoTest = map[string]string{
-	"GATE-10.5": "file reads are not built",
-	"SHOW-03.3": "file reads are not built",
+	"GATE-10.5": "file reads are dropped",
+	"SHOW-03.3": "file reads are dropped",
 	"LOG-03.2":  "the size cut is not built",
 	"CTL-02.2":  "the login of the controller's API is not built",
 	"HOST-06.2": "it needs a machine with Tailscale installed and running, and root to check that it was not changed",

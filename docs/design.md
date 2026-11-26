@@ -169,8 +169,6 @@ The cost: an emoji built from joined parts, such as a family, holds an invisible
 - **The text is never changed.** `checks` says yes or no. It does not clean a request and pass it on, because the user must approve what the AI sent, not a repaired form of it.
 - **The refused text never reaches the screen.** `checks` gives back the reason only.
 
-File reads and the protected files are not built. They add a second check here when they are built.
-
 ### Unit tests
 
 | Test | Requirement | Start | Action | Expect |
@@ -1144,7 +1142,7 @@ A session, in order:
 - **A file that others can read is refused.** `load` gives an error when the group or anyone else can read or write the file, and says how to fix it. (`HOST-05`)
 - **The key never reaches the screen or a message.** `secrets` gives the key to `network` and to nothing else. An error names the file, never the key.
 - **A key that cannot be one is refused at `save`.** It must start with `tskey-auth-` and hold no space and no control character. A paste of the wrong thing is caught before it is stored.
-- **`protected` follows links.** A path that leads to the file through a link or through `..` is the file. The check of file reads uses it when file reads are built. (`KEY-08`)
+- **`protected` follows links.** A path that leads to the file through a link or through `..` is the file. Nothing calls it: file reads, which it was made for, are dropped. (`KEY-08`)
 
 ### Unit tests
 

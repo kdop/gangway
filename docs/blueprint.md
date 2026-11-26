@@ -76,7 +76,7 @@ A quiet session is not ended for being quiet. It lives until its time is up, whe
 1. The user starts the cli-tool on the host. It joins the Tailscale network by itself and connects to the controller. It shows the controller the host token it got at pairing, so the controller knows which user this host belongs to.
 2. The cli-tool makes a session key: a long random secret that works for this session only. It then prints one line of text with the skill's name, the controller's address and that key. The exact form is in `ux.md`. That line is all the AI needs to send requests to this host.
 3. The user pastes the line to the AI. The skill knows what to do with it. Nothing is pasted to the controller: the cli-tool has already sent it the key over their connection.
-4. The AI asks to run a command or read a file. The controller passes the request to the cli-tool.
+4. The AI asks to run a command. The controller passes the request to the cli-tool.
 5. The cli-tool shows the request in its terminal. The user presses `y` (yes) or `n` (no).
 6. On yes, the cli-tool runs it as the plain user and sends back the result. On no, the AI is told it was refused.
 7. The session ends on Ctrl+C, or when its time is up and the user does not extend it. The key is dead after that, and the host drops off the Tailscale network.
@@ -87,7 +87,7 @@ Every session is new. A session that has ended is never resumed, and nothing of 
 
 - A web app with two faces: a REST API for the AI, and a dashboard for the user.
 - The dashboard shows the live sessions and the log of requests and answers, and has a button to end a session.
-- The dashboard does not approve commands in the first version. Approval stays on the host.
+- The dashboard does not approve commands in version 0.1. Approval stays on the host.
 - Where it listens is a setting, not a design matter. By default it answers on localhost only. It can be set to answer on Tailscale or on a public address.
 - It has a login. The dashboard asks for the login. The API asks for the session key. See "Login and users".
 - Until the login is built, it must not be set to answer on a public address.
@@ -99,7 +99,7 @@ Every session is new. A session that has ended is never resumed, and nothing of 
 - It joins with a Tailscale auth key, not a browser login. The key is made in the Tailscale admin page.
 - The user runs `login` once after install and pastes the key. After that, starting a session asks for nothing. The key lasts 90 days at most, then `login` is run again.
 - The key is kept in a file of its own in `~/.config/gangway/`, which only its owner can read.
-- The cli-tool never gives that file to the AI. The ban is fixed in the code, not a setting. Limit: this is sure for file reads. An approved command could still print the file, so the user must refuse such a command.
+- The cli-tool does not guard that file from a command. An approved command could print it, so the user must refuse such a command. The tag on the key limits what a stolen key can reach to the controller.
 - The key is ephemeral: Tailscale removes the host from the network after it goes offline.
 - Each start joins as a new device, kept in memory only. The key must be the reusable kind.
 - The controller joins the same way, from inside the program, with its own key and its own `login`. Its device is kept, so its name stays. The hosts dial that name, `gangway-controller`.
@@ -121,8 +121,8 @@ Sources: https://tailscale.com/kb/1244/tsnet, https://pkg.go.dev/tailscale.com/t
 - For the same reason, the output shown on the terminal is cleaned of control characters. The AI still gets the output unchanged.
 - Every line of output is shown with a mark in front. A command cannot print something that passes for a prompt of the cli-tool.
 - A request that holds an invisible character, or one that changes the reading order of the text, is refused the same way. The prompt would show a line that differs from the line that runs.
-- In the first version every request is asked, each time. "Always allow" comes in the second stage.
-- The gate is never in the AI, and in the first version never in the controller. If the yes came from the controller, the cli-tool could not tell a real yes from a fake one.
+- In version 0.1 every request is asked, each time. "Always allow" has no version yet.
+- The gate is never in the AI, and in version 0.1 never in the controller. If the yes came from the controller, the cli-tool could not tell a real yes from a fake one.
 - Later, as a choice switched on per session: approve from the dashboard. Good for many hosts or a phone. It means trusting the controller. The cli-tool keeps its hard limits either way.
 
 ## Limits on a command
@@ -146,7 +146,7 @@ Gangway is for an AI to look into a small problem on a host. It is not for movin
 
 ## Folder grants (later stage)
 
-Not in the first version. Until then every file read is asked like a command.
+Not in version 0.1. Until then every file read is asked like a command.
 
 - On start, the user names the folders the AI may read, for example `--allow /var/log --allow ~/app`.
 - A file inside a granted folder is read without a prompt. Naming the folder was the yes.
@@ -154,9 +154,9 @@ Not in the first version. Until then every file read is asked like a command.
 - The cli-tool checks the real path, so a link that points outside a granted folder is refused.
 - Limit: this holds for file reads only. A command can touch any path the plain user can. Commands are still approved one by one, and they start in a granted folder. Locking a command inside a folder needs a sandbox, which comes later still.
 
-## Always allow (second stage)
+## Always allow (no version yet)
 
-Not in the first version. Ideas so far, nothing fixed:
+Not in version 0.1. Ideas so far, nothing fixed:
 
 - The prompt gets more answers: yes, no, always allow.
 - Always allow for the exact command is weak: the AI may never ask the same command again.
@@ -188,7 +188,7 @@ Settings on the host come in three layers. Each layer can only narrow the one ab
 
 ## What is stored
 
-No database in the first version. Plain files only.
+No database in version 0.1. Plain files only.
 
 On the host:
 
@@ -199,7 +199,7 @@ On the host:
 | Tailscale auth key from `login` | Same folder, own file, readable by its owner only |
 | Host token from pairing | Same folder, own file, readable by its owner only |
 | Log of requests, answers and output, one for each session. A new file is started at a set size, and only the last few are kept | A new folder with a random name under the temp folder, `/tmp` |
-| Saved allow rules (second stage) | `~/.config/gangway/` |
+| Saved allow rules (no version yet) | `~/.config/gangway/` |
 
 On the controller:
 
@@ -261,11 +261,11 @@ This is remote command running by design. The aim is a door that is narrow, in p
 
 Every request and its answer is written to the log of the session on the host, with the output that was sent to the AI. Each session has a log of its own, in a new folder under the temp folder. Only the user can read it. The cli-tool says where it is at the start and at the end of the session.
 
-## Not in the first version
+## Not in version 0.1
 
 - Resuming a session
 - sudo
-- A second user. The design is ready for one; the first version has one account on the list
+- A second user. The design is ready for one; version 0.1 has one account on the list
 - Approving from the dashboard or another device
 - Dashboard history that survives a restart
 - Always allow, and lists of safe commands
@@ -274,4 +274,4 @@ Every request and its answer is written to the log of the session on the host, w
 
 ## Open questions
 
-None right now.
+How wide an allow rule reaches: the exact command, a program, or a list of safe commands; one session or saved.
