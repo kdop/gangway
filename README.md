@@ -82,18 +82,6 @@ Three parts:
 - **The controller** is what the AI calls. It passes each request to the host and the answer back.
 - **The skill** teaches the AI how to ask.
 
-## What keeps it safe
-
-- **The gate is on the host, never in the AI.** The thing being checked is not the checker. A controller that is taken over can only ask.
-- **Every command is shown, and needs a `y`.** You approve the exact line that runs.
-- **The prompt shows what runs.** A request with a control character or an invisible character is refused before it reaches you.
-- **The host is never open to the internet.** It dials out to the controller over Tailscale, which is built into the program: no root, nothing to install.
-- **The session key works for the first AI only.** A copy of the key is of no use to a second caller.
-- **Access ends by itself.** A session lasts 30 minutes. Only the person at the terminal can extend it, and no answer means no.
-- **An admin can cap it.** Root sets the longest a session may last, in `/etc/gangway/settings`. Nothing below root can raise it.
-- **Every session is logged on the host.** Each request, your answer and the output go to a text file that only you can read. No log, no session.
-- **Plain user only.** The cli-tool refuses to run as root.
-
 ## Quick start
 
 You need a Tailscale network, a machine for the controller, and Go to build the two programs.
@@ -152,4 +140,5 @@ This software is provided "as is", with absolutely no guarantees of any kind. It
 
 - [`DEVELOPMENT.md`](DEVELOPMENT.md): how to build it, try it on one machine, and run the tests
 - [`docs/blueprint.md`](docs/blueprint.md): the design
+- [`SECURITY.md`](SECURITY.md): what keeps it safe, and how to report a hole
 - License: [MIT](LICENSE)
