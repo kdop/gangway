@@ -82,6 +82,82 @@ Three parts:
 - **The controller** is what the AI calls. It passes each request to the host and the answer back.
 - **The skill** teaches the AI how to ask.
 
+## Installation
+
+### System requirements
+
+A host runs **Linux**, on x86_64 or aarch64. You need no root. You also need a Tailscale network, and one machine for the controller.
+
+### Install Gangway
+
+On the host, run:
+
+```
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/kdop/gangway/main/install.sh | sh
+```
+
+This puts one file at `~/.local/bin/gangway`, checked against the checksums of its release. It changes nothing else.
+
+### Install Gangway (advanced)
+
+> You can skip this if the latest release is all you want.
+
+To read the script before it runs:
+
+```
+curl --proto '=https' --tlsv1.2 -fsSL -o install.sh https://raw.githubusercontent.com/kdop/gangway/main/install.sh
+less install.sh
+sh install.sh
+```
+
+To install a set version:
+
+```
+sh install.sh v0.1.0
+```
+
+To build from the source, with Go:
+
+```
+./build.sh
+```
+
+This puts `gangway` and `gangway-controller` into `build/`. Each is one file that can be copied to another Linux machine as it is.
+
+> The checksum shows the download is whole. It is not a signature: whoever can change a release can change both. The build from the source needs no trust in a release.
+
+### Add Gangway to your PATH
+
+If your shell does not find `gangway`, add `~/.local/bin` to your `PATH`:
+
+```
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+### Install the controller
+
+On the controller machine, download the one file from the [releases page](https://github.com/kdop/gangway/releases):
+
+```
+curl --proto '=https' --tlsv1.2 -fsSL -o gangway-controller https://github.com/kdop/gangway/releases/latest/download/gangway-controller-linux-amd64
+chmod +x gangway-controller
+```
+
+On aarch64, take `gangway-controller-linux-arm64`.
+
+### Update Gangway
+
+Run the install command again. It replaces the program.
+
+### Uninstall Gangway
+
+```
+rm ~/.local/bin/gangway
+rm -r ~/.config/gangway
+```
+
+The second line removes the stored key and the settings.
+
 ## Quick start
 
 1. In the Tailscale admin page, make two auth keys. The one for the controller: reusable and not ephemeral. The one for the hosts: reusable and ephemeral, with a tag that your Tailscale rules let reach the controller and nothing else.
