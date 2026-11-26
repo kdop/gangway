@@ -122,4 +122,4 @@ was done is in git. Nothing is written as a timeline.
 3. **Push back on architecture** — when something is wrong, say so and say why
 4. **Search before asking** — `grep -rn` the docs and the code first
 5. **Cite the source before concluding** — on any security or architecture call, read the code or the doc and cite the line. Summaries are not sources
-6. **Security is the product risk** — this tool is remote execution by design. Any change that widens what a session can do needs Kostas's go
+6. **Security is the product risk** — this tool is remote execution by design. Any change that widens what a session can do needs the owner's go

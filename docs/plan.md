@@ -1,6 +1,6 @@
 # Gangway plan
 
-Small steps. Each step is delivered alone, tried by Kostas, then the next one starts. The design is in `blueprint.md`.
+Small steps. Each step is delivered alone, tried by hand, then the next one starts. The design is in `blueprint.md`.
 
 Rule for all steps: the gate exists before the first command runs. No step ships a way to run something without a yes.
 
