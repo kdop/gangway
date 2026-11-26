@@ -10,13 +10,57 @@ permissions:
   contents: read
 
 jobs:
+  # A pull request runs only the tests of the folders it changes. A push to
+  # main and a release run them all.
+  changes:
+    name: What changed
+    runs-on: ubuntu-latest
+    outputs:
+      folders: ${{ steps.pick.outputs.folders }}
+      any: ${{ steps.pick.outputs.any }}
+      docs: ${{ steps.pick.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # On a pull request the commit is the merge into main, and its
+          # first parent is main.
+          fetch-depth: 2
+      - id: pick
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            git diff --name-only HEAD^1 HEAD | .github/scripts/what-to-test.sh | tee -a "$GITHUB_OUTPUT"
+          else
+            .github/scripts/what-to-test.sh all | tee -a "$GITHUB_OUTPUT"
+          fi
+
+  docs:
+    name: docs
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache: false
+      - name: The docs and the Go tests match
+        shell: bash
+        run: |
+          (cd cli && go test -count=1 -run 'TestDesignAndGoTestsMatch|TestUNITSETTINGS01' ./...)
+          (cd controller && go test -count=1 -run 'TestDesignAndGoTestsMatch' ./...)
+          (cd acceptance && go test -count=1 -run 'TestEveryTestThatIsDueHasAGoTest' .)
+
   go:
     name: ${{ matrix.folder }}
+    needs: changes
+    if: needs.changes.outputs.any == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        folder: [acceptance, cli, controller, shared]
+        folder: ${{ fromJSON(needs.changes.outputs.folders) }}
     defaults:
       run:
         working-directory: ${{ matrix.folder }}
@@ -32,7 +76,7 @@ jobs:
         run: go vet ./...
       - name: Check the install script
         if: matrix.folder == 'acceptance'
-        run: shellcheck ../install.sh
+        run: shellcheck ../install.sh ../.github/scripts/what-to-test.sh
       - name: Test
         shell: bash
         run: go test -count=1 -cover ./... | tee test.out
