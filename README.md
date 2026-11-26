@@ -185,12 +185,6 @@ The log of a session is a text file in a new folder under the temp folder. The t
 
 Until pairing is built, any device that your Tailscale rules let reach the controller can start a session of its own. The rules are the guard.
 
-## Status
-
-It works end to end, and it has run on a real Tailscale network, with the controller on a server on the internet.
-
-It is early. It is made for one user, and hosts are Linux only. Not built yet: the dashboard, the login, pairing a host to a user, and "always allow" rules.
-
 ## Known limits
 
 - **Chat windows on the web probably cannot use it as it is.** The AI must be able to send a POST request with the key in a header. A tool with a shell can, such as Claude Code. A chat on the web usually can only read a web address.
