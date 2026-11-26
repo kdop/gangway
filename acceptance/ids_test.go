@@ -13,8 +13,6 @@ import (
 // noGoTest holds the tests of a built requirement that have no Go test,
 // each with the reason.
 var noGoTest = map[string]string{
-	"GATE-10.5": "file reads are dropped",
-	"SHOW-03.3": "file reads are dropped",
 	"LOG-03.2":  "the size cut is not built",
 	"CTL-02.2":  "the login of the controller's API is not built",
 	"HOST-06.2": "it needs a machine with Tailscale installed and running, and root to check that it was not changed",
@@ -76,13 +74,12 @@ func TestEveryTestThatIsDueHasAGoTest(t *testing.T) {
 		t.Fatal("found no built version in docs/releases.md")
 	}
 
-	// Each requirement ends with its version, with "No version yet" or
-	// with "Dropped".
+	// Each requirement ends with its version or with "No version yet".
 	due := map[string]bool{}
 	for _, m := range regexp.MustCompile(`(?m)^### ([A-Z]+-\d+)\n\n(.*)$`).FindAllStringSubmatch(requirements, -1) {
-		end := regexp.MustCompile(` (?:Version (\d+\.\d+)\.|No version yet\.|Dropped: .*\.)$`).FindStringSubmatch(m[2])
+		end := regexp.MustCompile(` (?:Version (\d+\.\d+)\.|No version yet\.)$`).FindStringSubmatch(m[2])
 		if end == nil {
-			t.Errorf("%s does not end with its version, with \"No version yet.\" or with \"Dropped: …\"", m[1])
+			t.Errorf("%s does not end with its version or with \"No version yet.\"", m[1])
 			continue
 		}
 		if built[end[1]] {

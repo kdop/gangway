@@ -104,33 +104,6 @@ func Remove(path string) error {
 	return err
 }
 
-// Protected tells whether path leads to the auth key file, also through a
-// link or through "..".
-func Protected(file, path string) bool {
-	if a, errA := os.Stat(file); errA == nil {
-		if b, errB := os.Stat(path); errB == nil {
-			return os.SameFile(a, b)
-		}
-	}
-	return plain(file) == plain(path)
-}
-
-// plain gives the path with its links and its ".." worked out, as far as
-// the path exists.
-func plain(path string) string {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return filepath.Clean(path)
-	}
-	if real, err := filepath.EvalSymlinks(abs); err == nil {
-		return real
-	}
-	if dir, err := filepath.EvalSymlinks(filepath.Dir(abs)); err == nil {
-		return filepath.Join(dir, filepath.Base(abs))
-	}
-	return abs
-}
-
 // ErrStopped says the user pressed Ctrl+C while the key was asked for.
 var ErrStopped = errors.New("stopped: no key was stored")
 

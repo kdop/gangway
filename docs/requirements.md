@@ -4,7 +4,7 @@ The hard requirements, each with the acceptance tests that check it. A requireme
 
 ## Rules
 
-- Each requirement has an ID. An ID is never reused and never renumbered. A dropped requirement keeps its line, marked "dropped".
+- Each requirement has an ID. An ID is never reused and never renumbered. A dropped requirement is taken out, and its ID stays unused.
 - Each requirement has at least one acceptance test, and as many as it needs. A test's ID is the requirement's ID, a dot, and a number: `GATE-01.2` is the second test of `GATE-01`.
 - Each acceptance test becomes a Go test that carries the ID in its name, for example `TestGATE01_2_NoKeyNoRun`.
 - One Go test lists every test ID in this file that has no Go test. An empty list means everything here is tested.
@@ -108,16 +108,6 @@ An approved command must run as the plain user who started the cli-tool. Version
 |---|---|---|---|
 | GATE-08.1 | Live session, the cli-tool started by user U | The AI asks who the current user is. The user presses `y` | The answer is U |
 
-### GATE-09
-
-A file read must pass the same prompt as a command. Dropped: `cat` through the gate reads a file.
-
-| Test | Start | Action | Expect |
-|---|---|---|---|
-| GATE-09.1 | Live session | The AI asks to read a file. The user presses `y` | The AI gets the file's contents |
-| GATE-09.2 | Live session | The AI asks to read a file. The user presses `n` | The AI gets "refused" and no part of the file |
-| GATE-09.3 | Live session | The AI asks to read a file. Nobody presses a key | The prompt waits. The AI has no part of the file |
-
 ### GATE-10
 
 A request that holds a control character other than a line break or a tab must be refused before any prompt. Version 0.1.
@@ -128,7 +118,6 @@ A request that holds a control character other than a line break or a tab must b
 | GATE-10.2 | Live session | The AI asks, one by one, for commands that hold: a backspace, an Escape, a colour code, a cursor code, a bell, a zero byte | Each is refused the same way |
 | GATE-10.3 | Live session | The AI asks for a command that holds line breaks and tabs | The prompt is shown as usual, with real line breaks and tabs |
 | GATE-10.4 | Live session | The AI asks for a command that holds a cursor code | The terminal shows that a request was refused. The cursor code itself never reaches the terminal |
-| GATE-10.5 | Live session | The AI asks to read a file whose path holds an Escape | Refused the same way. The file is not read |
 | GATE-10.6 | Live session | The AI asks for a command that holds the written form of a code, such as `\033[31m` or `\n`, made of visible characters only | The prompt is shown as usual, letter for letter |
 
 ### GATE-11
@@ -243,7 +232,6 @@ Output shown on the cli-tool's terminal must hold no control character other tha
 |---|---|---|---|
 | SHOW-03.1 | Live session | An approved command prints a cursor code and a colour code | Those codes never reach the terminal. The AI gets the output byte for byte |
 | SHOW-03.2 | Live session | An approved command prints line breaks and tabs | The terminal shows them as they are |
-| SHOW-03.3 | Live session | An approved file read returns a file that holds an Escape | No raw Escape reaches the terminal. The AI gets the file unchanged |
 | SHOW-03.4 | Live session | An approved command prints bytes that are not text, such as the start of a picture file | The AI gets text in which each such byte is replaced by a mark. The answer says that bytes were replaced. The text around them is unchanged |
 | SHOW-03.5 | Live session | An approved command prints the same bytes through `base64` | The AI gets the coded text unchanged. The answer does not say that bytes were replaced |
 
@@ -459,17 +447,6 @@ More than `WRONG_KEY_LIMIT` wrong keys from one address within `WRONG_KEY_WINDOW
 | KEY-07.2 | State after KEY-07.1 | `WRONG_KEY_BLOCK` passes. The address sends the right key | Accepted |
 | KEY-07.3 | Live session | One address sends the same number of wrong keys, spread over more than `WRONG_KEY_WINDOW`. Then the right key | Accepted. The address was never blocked |
 | KEY-07.4 | One address is blocked | Another address sends the right key | Accepted |
-
-### KEY-08
-
-A file read must never return the Tailscale auth key file or the host token file. No setting must be able to switch this off. Dropped: `cat` through the gate reads a file.
-
-| Test | Start | Action | Expect |
-|---|---|---|---|
-| KEY-08.1 | Live session | The AI asks to read the auth key file | Refused with no prompt. No part of the file is returned |
-| KEY-08.2 | Live session | The AI asks to read the host token file | The same |
-| KEY-08.3 | Live session | The AI asks for either file by another road: through a link that points at it, and through a path with `..` in it | Both refused the same way |
-| KEY-08.4 | Every setting and start option set to its widest | The AI asks to read the auth key file | Still refused |
 
 ### KEY-09
 

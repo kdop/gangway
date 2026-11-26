@@ -49,7 +49,7 @@ A fresh Tailscale auth key per session, folder grants (the cli-tool names the fo
 
 ## Dropped
 
-- **Read a file**, as a second kind of request: `cat` through the gate reads a file. `GATE-09`, `KEY-08`.
+- **Read a file**, as a second kind of request: `cat` through the gate reads a file.
 
 ## Tests
 

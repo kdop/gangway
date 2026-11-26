@@ -135,33 +135,6 @@ func TestUNITSECRETS06_NoErrorHoldsTheKey(t *testing.T) {
 	}
 }
 
-// UNIT-SECRETS-07. Requirement: KEY-08.
-func TestUNITSECRETS07_ProtectedFollowsLinks(t *testing.T) {
-	path := place(t)
-	if err := Save(path, goodKey); err != nil {
-		t.Fatal(err)
-	}
-	dir := filepath.Dir(path)
-	link := filepath.Join(t.TempDir(), "innocent.txt")
-	if err := os.Symlink(path, link); err != nil {
-		t.Fatal(err)
-	}
-	other := filepath.Join(dir, "settings")
-	os.WriteFile(other, []byte("x"), 0o600)
-
-	for candidate, want := range map[string]bool{
-		path: true,
-		filepath.Join(dir, "..", "gangway", "tailscale-auth-key"): true,
-		link:                            true,
-		other:                           false,
-		filepath.Join(dir, "not-there"): false,
-	} {
-		if got := Protected(path, candidate); got != want {
-			t.Fatalf("Protected(%s) is %v, want %v", candidate, got, want)
-		}
-	}
-}
-
 func TestTheFileAndTheLoginBelongToTheProgram(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "/somewhere")
 	for _, program := range []string{"gangway", "gangway-controller"} {
