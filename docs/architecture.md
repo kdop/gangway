@@ -298,7 +298,7 @@ After either one, the connection is closed and the session key is dead (`KEY-03`
 
 ### Pairing
 
-Pairing happens before a host has a token, so it cannot use this connection. It has a short exchange of its own, which is written out with step 13.
+Pairing happens before a host has a token, so it cannot use this connection. It has a short exchange of its own, which is written out when pairing is built.
 
 ### When the connection is lost
 

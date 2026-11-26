@@ -62,15 +62,35 @@ func TestEveryTestThatIsDueHasAGoTest(t *testing.T) {
 		}
 	}
 
-	// The built requirements, from the table under "What is built".
+	// The versions that are built or released, from the table in
+	// docs/releases.md.
+	r, err := os.ReadFile(filepath.Join("..", "docs", "releases.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	built := map[string]bool{}
+	for _, m := range regexp.MustCompile(`(?m)^\| (\d+\.\d+) \| (Built|Released) \|`).FindAllStringSubmatch(string(r), -1) {
+		built[m[1]] = true
+	}
+	if len(built) == 0 {
+		t.Fatal("found no built version in docs/releases.md")
+	}
+
+	// Each requirement ends with its version, with "No version yet" or
+	// with "Dropped".
 	due := map[string]bool{}
-	for _, row := range regexp.MustCompile(`(?m)^\| ([A-Z]+) \| ([\d, ]+) \|`).FindAllStringSubmatch(requirements, -1) {
-		for _, n := range strings.Split(row[2], ",") {
-			due[row[1]+"-"+strings.TrimSpace(n)] = true
+	for _, m := range regexp.MustCompile(`(?m)^### ([A-Z]+-\d+)\n\n(.*)$`).FindAllStringSubmatch(requirements, -1) {
+		end := regexp.MustCompile(` (?:Version (\d+\.\d+)\.|No version yet\.|Dropped: .*\.)$`).FindStringSubmatch(m[2])
+		if end == nil {
+			t.Errorf("%s does not end with its version, with \"No version yet.\" or with \"Dropped: …\"", m[1])
+			continue
+		}
+		if built[end[1]] {
+			due[m[1]] = true
 		}
 	}
 	if len(due) == 0 {
-		t.Fatal("found no table of built requirements in docs/requirements.md")
+		t.Fatal("found no requirement of a built version in docs/requirements.md")
 	}
 
 	var missing []string

@@ -8,7 +8,7 @@ The hard requirements, each with the acceptance tests that check it. A requireme
 - Each requirement has at least one acceptance test, and as many as it needs. A test's ID is the requirement's ID, a dot, and a number: `GATE-01.2` is the second test of `GATE-01`.
 - Each acceptance test becomes a Go test that carries the ID in its name, for example `TestGATE01_2_NoKeyNoRun`.
 - One Go test lists every test ID in this file that has no Go test. An empty list means everything here is tested.
-- "Step" names the step of `plan.md` that delivers the requirement. The table under "What is built" says which requirements are built.
+- Each requirement ends with its version: the version of `releases.md` that delivers it. "No version yet" means it is written and not built.
 - A requirement and its tests are written here before the code.
 
 ## How to read a test
@@ -25,34 +25,11 @@ Where a test says a time "passes", the test sets that setting to a short value f
 
 Where a test says the user presses a key at a prompt, `PROMPT_MIN_SHOW` has passed since the prompt was shown, unless the test says otherwise.
 
-## What is built
-
-These requirements are built. Each of their tests has a Go test in `acceptance/`, or is named in that folder with the reason why not. A Go test fails when one is missing.
-
-| Group | Requirements |
-|---|---|
-| GATE | 01, 02, 03, 04, 05, 06, 07, 08, 10, 11, 12, 13, 14, 15, 16, 17, 18 |
-| SHOW | 01, 02, 03, 04, 05, 06 |
-| SES | 01, 02, 03, 05, 06, 07, 08 |
-| KEY | 01, 02, 03, 04, 05, 09, 10 |
-| LEN | 01, 02, 03, 04, 05, 06, 07, 08, 09 |
-| LIM | 01, 02, 03, 04, 06, 07, 08, 09, 10, 11, 12, 13 |
-| HOST | 01, 02, 03, 04, 05, 06, 07, 08, 09 |
-| CTL | 01, 02, 10, 11, 12 |
-| SET | 01, 02, 03, 04, 05 |
-| LOG | 01, 02, 03, 04, 05, 06 |
-| INS | 01, 02, 03, 04, 05, 06, 07 |
-
-Two of them are built in part:
-
-- `SES-05`: there is no reconnect yet, so a lost connection ends the session at once and stops the running command.
-- `LIM-06`: `COMMAND_TIME_LIMIT`, `QUESTION_WAIT` and `KILL_WAIT` only. `OUTPUT_SIZE_LIMIT` comes with the size cut.
-
 ## GATE: approval
 
 ### GATE-01
 
-A request must not run unless the user presses `y` at the cli-tool's prompt for that request. Step 1.
+A request must not run unless the user presses `y` at the cli-tool's prompt for that request. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -63,7 +40,7 @@ A request must not run unless the user presses `y` at the cli-tool's prompt for 
 
 ### GATE-02
 
-On `n`, nothing must run, and the AI must get "refused". Step 1.
+On `n`, nothing must run, and the AI must get "refused". Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -72,7 +49,7 @@ On `n`, nothing must run, and the AI must get "refused". Step 1.
 
 ### GATE-03
 
-The prompt must be answered by one key press, with no Enter: lower-case `y` or lower-case `n`. Every other key must be ignored. Step 1.
+The prompt must be answered by one key press, with no Enter: lower-case `y` or lower-case `n`. Every other key must be ignored. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -84,7 +61,7 @@ The prompt must be answered by one key press, with no Enter: lower-case `y` or l
 
 ### GATE-04
 
-A key pressed before the prompt is shown must not answer it. Step 1.
+A key pressed before the prompt is shown must not answer it. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -94,7 +71,7 @@ A key pressed before the prompt is shown must not answer it. Step 1.
 
 ### GATE-05
 
-The prompt must show the exact request, and what runs on `y` must be exactly what was shown. Step 1.
+The prompt must show the exact request, and what runs on `y` must be exactly what was shown. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -105,7 +82,7 @@ The prompt must show the exact request, and what runs on `y` must be exactly wha
 
 ### GATE-06
 
-Requests that arrive while another is in front must wait and be asked one at a time, in the order they came. Step 1.
+Requests that arrive while another is in front must wait and be asked one at a time, in the order they came. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -115,7 +92,7 @@ Requests that arrive while another is in front must wait and be asked one at a t
 
 ### GATE-07
 
-No message from the controller or the AI must count as a yes. Step 1.
+No message from the controller or the AI must count as a yes. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -125,7 +102,7 @@ No message from the controller or the AI must count as a yes. Step 1.
 
 ### GATE-08
 
-An approved command must run as the plain user who started the cli-tool. Step 1.
+An approved command must run as the plain user who started the cli-tool. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -133,7 +110,7 @@ An approved command must run as the plain user who started the cli-tool. Step 1.
 
 ### GATE-09
 
-A file read must pass the same prompt as a command. Step 5.
+A file read must pass the same prompt as a command. Dropped: `cat` through the gate reads a file.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -143,7 +120,7 @@ A file read must pass the same prompt as a command. Step 5.
 
 ### GATE-10
 
-A request that holds a control character other than a line break or a tab must be refused before any prompt. Step 1.
+A request that holds a control character other than a line break or a tab must be refused before any prompt. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -156,7 +133,7 @@ A request that holds a control character other than a line break or a tab must b
 
 ### GATE-11
 
-An approved command must run through the shell named by `COMMAND_SHELL`, so that pipes and redirection work. Step 1.
+An approved command must run through the shell named by `COMMAND_SHELL`, so that pipes and redirection work. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -168,7 +145,7 @@ An approved command must run through the shell named by `COMMAND_SHELL`, so that
 
 ### GATE-12
 
-If the AI hangs up while a prompt waits, the prompt must be removed and nothing must run. Step 1.
+If the AI hangs up while a prompt waits, the prompt must be removed and nothing must run. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -178,7 +155,7 @@ If the AI hangs up while a prompt waits, the prompt must be removed and nothing 
 
 ### GATE-13
 
-No more than `MAX_WAITING_REQUESTS` requests must wait in line. A request past that must be refused at once. Step 1.
+No more than `MAX_WAITING_REQUESTS` requests must wait in line. A request past that must be refused at once. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -188,7 +165,7 @@ No more than `MAX_WAITING_REQUESTS` requests must wait in line. A request past t
 
 ### GATE-14
 
-A key pressed within `PROMPT_MIN_SHOW` after a prompt is shown must not answer it. Step 1.
+A key pressed within `PROMPT_MIN_SHOW` after a prompt is shown must not answer it. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -200,7 +177,7 @@ A key pressed within `PROMPT_MIN_SHOW` after a prompt is shown must not answer i
 
 ### GATE-15
 
-One `y` must run its request once, and never a second time. Step 1.
+One `y` must run its request once, and never a second time. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -210,7 +187,7 @@ One `y` must run its request once, and never a second time. Step 1.
 
 ### GATE-16
 
-A request that holds an invisible character, or a character that changes the reading order of the text, must be refused before any prompt. Step 1.
+A request that holds an invisible character, or a character that changes the reading order of the text, must be refused before any prompt. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -221,7 +198,7 @@ A request that holds an invisible character, or a character that changes the rea
 
 ### GATE-17
 
-An approved command must get no keyboard input: when it reads its input, it must find the end at once. Step 1.
+An approved command must get no keyboard input: when it reads its input, it must find the end at once. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -230,7 +207,7 @@ An approved command must get no keyboard input: when it reads its input, it must
 
 ### GATE-18
 
-An approved command must run with `PAGER` set to `cat` and `TERM` set to `dumb`. Step 1.
+An approved command must run with `PAGER` set to `cat` and `TERM` set to `dumb`. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -240,7 +217,7 @@ An approved command must run with `PAGER` set to `cat` and `TERM` set to `dumb`.
 
 ### SHOW-01
 
-The cli-tool's terminal must show each request and the answer given to it. Step 1.
+The cli-tool's terminal must show each request and the answer given to it. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -250,7 +227,7 @@ The cli-tool's terminal must show each request and the answer given to it. Step 
 
 ### SHOW-02
 
-The cli-tool's terminal must show the output that is sent back, and must say how each command ended. For a command that ends by itself it must show the exit code. When a command is killed or cannot be started, it must say so, and why. Step 1.
+The cli-tool's terminal must show the output that is sent back, and must say how each command ended. For a command that ends by itself it must show the exit code. When a command is killed or cannot be started, it must say so, and why. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -260,7 +237,7 @@ The cli-tool's terminal must show the output that is sent back, and must say how
 
 ### SHOW-03
 
-Output shown on the cli-tool's terminal must hold no control character other than a line break or a tab. The AI must still get the output unchanged, except that bytes that are not text are replaced by a mark, and the answer says so. Step 1.
+Output shown on the cli-tool's terminal must hold no control character other than a line break or a tab. The AI must still get the output unchanged, except that bytes that are not text are replaced by a mark, and the answer says so. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -272,7 +249,7 @@ Output shown on the cli-tool's terminal must hold no control character other tha
 
 ### SHOW-04
 
-Every line of output shown on the cli-tool's terminal must start with a mark that no line of the cli-tool itself starts with. Every line of the command in a prompt must start with a mark of its own, under the same rule. Step 1.
+Every line of output shown on the cli-tool's terminal must start with a mark that no line of the cli-tool itself starts with. Every line of the command in a prompt must start with a mark of its own, under the same rule. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -283,7 +260,7 @@ Every line of output shown on the cli-tool's terminal must start with a mark tha
 
 ### SHOW-05
 
-Output shown on the cli-tool's terminal must hold no invisible character and no character that changes the reading order. Step 1.
+Output shown on the cli-tool's terminal must hold no invisible character and no character that changes the reading order. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -291,7 +268,7 @@ Output shown on the cli-tool's terminal must hold no invisible character and no 
 
 ### SHOW-06
 
-The signs and colors of the cli-tool's terminal must carry no meaning of their own: every line must say the same with them and without them. The only codes the cli-tool itself may write are codes that set a color or a weight. It must never move the cursor or clear what is on screen. Where the terminal cannot show colors or signs, it must write none: no code when `NO_COLOR` is set, and plain ASCII with no code when `TERM` is `dumb` or the locale is not UTF-8. Step 1.
+The signs and colors of the cli-tool's terminal must carry no meaning of their own: every line must say the same with them and without them. The only codes the cli-tool itself may write are codes that set a color or a weight. It must never move the cursor or clear what is on screen. Where the terminal cannot show colors or signs, it must write none: no code when `NO_COLOR` is set, and plain ASCII with no code when `TERM` is `dumb` or the locale is not UTF-8. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -304,7 +281,7 @@ The signs and colors of the cli-tool's terminal must carry no meaning of their o
 
 ### SES-01
 
-A request must be refused when no live session has its key, and nothing must reach a host. Step 3.
+A request must be refused when no live session has its key, and nothing must reach a host. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -313,7 +290,7 @@ A request must be refused when no live session has its key, and nothing must rea
 
 ### SES-02
 
-A Ctrl+C with nothing in front must end the session. Step 3.
+A Ctrl+C with nothing in front must end the session. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -321,7 +298,7 @@ A Ctrl+C with nothing in front must end the session. Step 3.
 
 ### SES-03
 
-A session that has ended must never accept a request again. A new start must make a new session with a new key. Step 3.
+A session that has ended must never accept a request again. A new start must make a new session with a new key. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -331,7 +308,7 @@ A session that has ended must never accept a request again. A new start must mak
 
 ### SES-04
 
-When the connection between the cli-tool and the controller is lost, the cli-tool must try to connect again for `RECONNECT_WINDOW`. After it connects again in that time, the session must carry on with the same key. Step 3.
+When the connection between the cli-tool and the controller is lost, the cli-tool must try to connect again for `RECONNECT_WINDOW`. After it connects again in that time, the session must carry on with the same key. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -341,7 +318,7 @@ When the connection between the cli-tool and the controller is lost, the cli-too
 
 ### SES-05
 
-When a session ends by Ctrl+C, or because the connection did not come back in time, a running command must be stopped. Step 3.
+When a session ends by Ctrl+C, or because the connection did not come back in time, a running command must be stopped. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -350,7 +327,7 @@ When a session ends by Ctrl+C, or because the connection did not come back in ti
 
 ### SES-06
 
-Neither the cli-tool nor the controller must write a session or its key to disk. Step 3.
+Neither the cli-tool nor the controller must write a session or its key to disk. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -359,7 +336,7 @@ Neither the cli-tool nor the controller must write a session or its key to disk.
 
 ### SES-07
 
-After a restart, the controller must have no live session. Step 3.
+After a restart, the controller must have no live session. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -368,7 +345,7 @@ After a restart, the controller must have no live session. Step 3.
 
 ### SES-08
 
-When a session ends, the host must leave the Tailscale network. Step 2.
+When a session ends, the host must leave the Tailscale network. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -376,7 +353,7 @@ When a session ends, the host must leave the Tailscale network. Step 2.
 
 ### SES-09
 
-When the connection has not come back within `RECONNECT_WINDOW`, the session must end and its key must die. Step 3.
+When the connection has not come back within `RECONNECT_WINDOW`, the session must end and its key must die. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -385,7 +362,7 @@ When the connection has not come back within `RECONNECT_WINDOW`, the session mus
 
 ### SES-10
 
-While the connection is lost, a new request must be refused with the reason `host_away`, and what is already on the host must carry on. Step 3.
+While the connection is lost, a new request must be refused with the reason `host_away`, and what is already on the host must carry on. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -396,7 +373,7 @@ While the connection is lost, a new request must be refused with the reason `hos
 
 ### SES-11
 
-The controller must take a connection back into a session only when it shows the host token of that host and the hash of that session's key. Step 3.
+The controller must take a connection back into a session only when it shows the host token of that host and the hash of that session's key. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -406,7 +383,7 @@ The controller must take a connection back into a session only when it shows the
 
 ### SES-12
 
-A session must never end because it is quiet. With no request at all, it must stay live until its time is up. Step 3.
+A session must never end because it is quiet. With no request at all, it must stay live until its time is up. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -417,7 +394,7 @@ A session must never end because it is quiet. With no request at all, it must st
 
 ### KEY-01
 
-The cli-tool must make a new random session key of `SESSION_KEY_BITS` bits for every session. Step 3.
+The cli-tool must make a new random session key of `SESSION_KEY_BITS` bits for every session. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -426,7 +403,7 @@ The cli-tool must make a new random session key of `SESSION_KEY_BITS` bits for e
 
 ### KEY-02
 
-An API call with no key or a wrong key must be refused. Step 3.
+An API call with no key or a wrong key must be refused. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -436,7 +413,7 @@ An API call with no key or a wrong key must be refused. Step 3.
 
 ### KEY-03
 
-The key must stop working the moment its session ends. Step 3.
+The key must stop working the moment its session ends. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -444,7 +421,7 @@ The key must stop working the moment its session ends. Step 3.
 
 ### KEY-04
 
-The paste line must hold the skill's name, the controller's address and the key, in the form set in `ux.md`. Step 3.
+The paste line must hold the skill's name, the controller's address and the key, in the form set in `ux.md`. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -453,7 +430,7 @@ The paste line must hold the skill's name, the controller's address and the key,
 
 ### KEY-05
 
-On the first call with a key, the controller must hand the caller a token of its own. A later call with the key and without that token must be refused. Step 4.
+On the first call with a key, the controller must hand the caller a token of its own. A later call with the key and without that token must be refused. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -464,7 +441,7 @@ On the first call with a key, the controller must hand the caller a token of its
 
 ### KEY-06
 
-Off localhost, the API must answer over HTTPS only. Step 12.
+Off localhost, the API must answer over HTTPS only. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -474,7 +451,7 @@ Off localhost, the API must answer over HTTPS only. Step 12.
 
 ### KEY-07
 
-More than `WRONG_KEY_LIMIT` wrong keys from one address within `WRONG_KEY_WINDOW` must get that address blocked for `WRONG_KEY_BLOCK`. Step 12.
+More than `WRONG_KEY_LIMIT` wrong keys from one address within `WRONG_KEY_WINDOW` must get that address blocked for `WRONG_KEY_BLOCK`. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -485,7 +462,7 @@ More than `WRONG_KEY_LIMIT` wrong keys from one address within `WRONG_KEY_WINDOW
 
 ### KEY-08
 
-A file read must never return the Tailscale auth key file or the host token file. No setting must be able to switch this off. Step 5.
+A file read must never return the Tailscale auth key file or the host token file. No setting must be able to switch this off. Dropped: `cat` through the gate reads a file.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -496,7 +473,7 @@ A file read must never return the Tailscale auth key file or the host token file
 
 ### KEY-09
 
-The controller must refuse to start a session whose key hash a live session already has. Step 3.
+The controller must refuse to start a session whose key hash a live session already has. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -505,7 +482,7 @@ The controller must refuse to start a session whose key hash a live session alre
 
 ### KEY-10
 
-The address in the paste line must be the API address the controller gave at the start of the session. The cli-tool must show it only when it is a plain web address. Step 2.
+The address in the paste line must be the API address the controller gave at the start of the session. The cli-tool must show it only when it is a plain web address. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -517,7 +494,7 @@ The address in the paste line must be the API address the controller gave at the
 
 ### LEN-01
 
-A session must last `SESSION_LENGTH` when no other length is set. Step 4.
+A session must last `SESSION_LENGTH` when no other length is set. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -526,7 +503,7 @@ A session must last `SESSION_LENGTH` when no other length is set. Step 4.
 
 ### LEN-02
 
-The user must be able to set another length at start. Step 4.
+The user must be able to set another length at start. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -535,7 +512,7 @@ The user must be able to set another length at start. Step 4.
 
 ### LEN-03
 
-When the time is up, the cli-tool must ask at its terminal whether to extend, and `y` must give the session another stretch of the same length it started with. Step 4.
+When the time is up, the cli-tool must ask at its terminal whether to extend, and `y` must give the session another stretch of the same length it started with. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -546,7 +523,7 @@ When the time is up, the cli-tool must ask at its terminal whether to extend, an
 
 ### LEN-04
 
-No answer to the extend question within `EXTEND_WAIT` must end the session. Step 4.
+No answer to the extend question within `EXTEND_WAIT` must end the session. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -555,7 +532,7 @@ No answer to the extend question within `EXTEND_WAIT` must end the session. Step
 
 ### LEN-05
 
-The whole session, extensions included, must never pass `SESSION_MAX`. At that point the session must end with no question. Step 4.
+The whole session, extensions included, must never pass `SESSION_MAX`. At that point the session must end with no question. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -564,7 +541,7 @@ The whole session, extensions included, must never pass `SESSION_MAX`. At that p
 
 ### LEN-06
 
-From the moment the time is up, new requests must be refused. Step 4.
+From the moment the time is up, new requests must be refused. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -572,7 +549,7 @@ From the moment the time is up, new requests must be refused. Step 4.
 
 ### LEN-07
 
-A prompt that waits when the time is up must be refused, and nothing must run. Step 4.
+A prompt that waits when the time is up must be refused, and nothing must run. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -580,7 +557,7 @@ A prompt that waits when the time is up must be refused, and nothing must run. S
 
 ### LEN-08
 
-A command that runs when the time is up must not be killed at that moment. It must get no more "wait more" and must be killed at its next time limit. Step 6.
+A command that runs when the time is up must not be killed at that moment. It must get no more "wait more" and must be killed at its next time limit. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -590,7 +567,7 @@ A command that runs when the time is up must not be killed at that moment. It mu
 
 ### LEN-09
 
-No message from the AI or the controller must make a session longer. Step 4.
+No message from the AI or the controller must make a session longer. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -602,7 +579,7 @@ No message from the AI or the controller must make a session longer. Step 4.
 
 ### LIM-01
 
-When a command has run for `COMMAND_TIME_LIMIT`, the AI must be told it is still running and asked to wait or stop. Step 6.
+When a command has run for `COMMAND_TIME_LIMIT`, the AI must be told it is still running and asked to wait or stop. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -611,7 +588,7 @@ When a command has run for `COMMAND_TIME_LIMIT`, the AI must be told it is still
 
 ### LIM-02
 
-On "stop" the command must be killed. On "wait" it must run on for another `COMMAND_TIME_LIMIT`. Step 6.
+On "stop" the command must be killed. On "wait" it must run on for another `COMMAND_TIME_LIMIT`. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -621,7 +598,7 @@ On "stop" the command must be killed. On "wait" it must run on for another `COMM
 
 ### LIM-03
 
-With no answer within `QUESTION_WAIT` and the command still running, the command must be killed. Step 6.
+With no answer within `QUESTION_WAIT` and the command still running, the command must be killed. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -629,7 +606,7 @@ With no answer within `QUESTION_WAIT` and the command still running, the command
 
 ### LIM-04
 
-A command that ends by itself while the question waits must have its result sent as usual. Step 6.
+A command that ends by itself while the question waits must have its result sent as usual. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -637,7 +614,7 @@ A command that ends by itself while the question waits must have its result sent
 
 ### LIM-05
 
-When the output passes `OUTPUT_SIZE_LIMIT`, the cli-tool must stop sending output, must not kill the command, and must end what it sends with a note that the output was cut. No question must be asked. Step 6.
+When the output passes `OUTPUT_SIZE_LIMIT`, the cli-tool must stop sending output, must not kill the command, and must end what it sends with a note that the output was cut. No question must be asked. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -648,7 +625,7 @@ When the output passes `OUTPUT_SIZE_LIMIT`, the cli-tool must stop sending outpu
 
 ### LIM-06
 
-`COMMAND_TIME_LIMIT`, `OUTPUT_SIZE_LIMIT` and `QUESTION_WAIT` must each be a setting, with the starting value in the "Settings" table. Step 6.
+`COMMAND_TIME_LIMIT`, `OUTPUT_SIZE_LIMIT` and `QUESTION_WAIT` must each be a setting, with the starting value in the "Settings" table. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -657,7 +634,7 @@ When the output passes `OUTPUT_SIZE_LIMIT`, the cli-tool must stop sending outpu
 
 ### LIM-07
 
-If the AI hangs up while a command runs, the command must be killed. Step 6.
+If the AI hangs up while a command runs, the command must be killed. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -665,7 +642,7 @@ If the AI hangs up while a command runs, the command must be killed. Step 6.
 
 ### LIM-08
 
-One Ctrl+C while a command runs must kill the command and keep the session. Step 6.
+One Ctrl+C while a command runs must kill the command and keep the session. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -674,7 +651,7 @@ One Ctrl+C while a command runs must kill the command and keep the session. Step
 
 ### LIM-09
 
-One Ctrl+C at a waiting prompt must refuse that request and keep the session. Step 1.
+One Ctrl+C at a waiting prompt must refuse that request and keep the session. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -683,7 +660,7 @@ One Ctrl+C at a waiting prompt must refuse that request and keep the session. St
 
 ### LIM-10
 
-Two Ctrl+C within `DOUBLE_CTRL_C_WINDOW` must end the cli-tool from any state. Step 1.
+Two Ctrl+C within `DOUBLE_CTRL_C_WINDOW` must end the cli-tool from any state. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -694,7 +671,7 @@ Two Ctrl+C within `DOUBLE_CTRL_C_WINDOW` must end the cli-tool from any state. S
 
 ### LIM-11
 
-When a command is killed, every program it started must be killed with it. Step 6.
+When a command is killed, every program it started must be killed with it. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -703,7 +680,7 @@ When a command is killed, every program it started must be killed with it. Step 
 
 ### LIM-12
 
-A command must count as over when its shell ends. A program it left running in the background must not be killed. Step 6.
+A command must count as over when its shell ends. A program it left running in the background must not be killed. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -712,7 +689,7 @@ A command must count as over when its shell ends. A program it left running in t
 
 ### LIM-13
 
-A command that is killed must first be asked to stop. If it still runs after `KILL_WAIT`, it must be killed by force. Step 6.
+A command that is killed must first be asked to stop. If it still runs after `KILL_WAIT`, it must be killed by force. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -723,7 +700,7 @@ A command that is killed must first be asked to stop. If it still runs after `KI
 
 ### HOST-01
 
-The cli-tool must refuse to start as root, and say why. Step 9.
+The cli-tool must refuse to start as root, and say why. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -732,7 +709,7 @@ The cli-tool must refuse to start as root, and say why. Step 9.
 
 ### HOST-02
 
-The cli-tool must refuse to start without a terminal. Step 9.
+The cli-tool must refuse to start without a terminal. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -741,7 +718,7 @@ The cli-tool must refuse to start without a terminal. Step 9.
 
 ### HOST-03
 
-The cli-tool must accept no connection from outside. Step 2.
+The cli-tool must accept no connection from outside. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -750,7 +727,7 @@ The cli-tool must accept no connection from outside. Step 2.
 
 ### HOST-04
 
-After `login`, a start must ask the user for nothing. Step 2.
+After `login`, a start must ask the user for nothing. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -759,7 +736,7 @@ After `login`, a start must ask the user for nothing. Step 2.
 
 ### HOST-05
 
-The Tailscale auth key file must be readable by its owner only. Step 2.
+The Tailscale auth key file must be readable by its owner only. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -767,7 +744,7 @@ The Tailscale auth key file must be readable by its owner only. Step 2.
 
 ### HOST-06
 
-The cli-tool must join Tailscale with no Tailscale install on the host and no root. Step 2.
+The cli-tool must join Tailscale with no Tailscale install on the host and no root. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -778,7 +755,7 @@ The cli-tool must join Tailscale with no Tailscale install on the host and no ro
 
 ### HOST-07
 
-When the cli-tool ends, it must leave the terminal as it found it. Step 1.
+When the cli-tool ends, it must leave the terminal as it found it. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -787,7 +764,7 @@ When the cli-tool ends, it must leave the terminal as it found it. Step 1.
 
 ### HOST-08
 
-The cli-tool must reach the controller over Tailscale, unless it was started in the one-machine mode. In that mode it must dial localhost only, and must not join Tailscale. Step 2.
+The cli-tool must reach the controller over Tailscale, unless it was started in the one-machine mode. In that mode it must dial localhost only, and must not join Tailscale. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -797,7 +774,7 @@ The cli-tool must reach the controller over Tailscale, unless it was started in 
 
 ### HOST-09
 
-The cli-tool must join Tailscale as a new device at every start, and must keep nothing of that device on disk. Step 2.
+The cli-tool must join Tailscale as a new device at every start, and must keep nothing of that device on disk. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -808,7 +785,7 @@ The cli-tool must join Tailscale as a new device at every start, and must keep n
 
 ### PAIR-01
 
-The controller must refuse a host that shows no valid host token, except for a pairing request. Step 13.
+The controller must refuse a host that shows no valid host token, except for a pairing request. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -818,7 +795,7 @@ The controller must refuse a host that shows no valid host token, except for a p
 
 ### PAIR-02
 
-A pairing code must work once. Step 13.
+A pairing code must work once. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -826,7 +803,7 @@ A pairing code must work once. Step 13.
 
 ### PAIR-03
 
-A pairing code must stop working after `PAIRING_CODE_LIFE`. Step 13.
+A pairing code must stop working after `PAIRING_CODE_LIFE`. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -835,7 +812,7 @@ A pairing code must stop working after `PAIRING_CODE_LIFE`. Step 13.
 
 ### PAIR-04
 
-Before it accepts a pairing, the cli-tool must show the account that claimed the host and ask `y`/`n`. Step 13.
+Before it accepts a pairing, the cli-tool must show the account that claimed the host and ask `y`/`n`. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -844,7 +821,7 @@ Before it accepts a pairing, the cli-tool must show the account that claimed the
 
 ### PAIR-05
 
-On `n`, the host must stay unpaired and the code must be dead. Step 13.
+On `n`, the host must stay unpaired and the code must be dead. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -853,7 +830,7 @@ On `n`, the host must stay unpaired and the code must be dead. Step 13.
 
 ### PAIR-06
 
-The host token file must be readable by its owner only. Step 13.
+The host token file must be readable by its owner only. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -861,7 +838,7 @@ The host token file must be readable by its owner only. Step 13.
 
 ### PAIR-07
 
-The controller must store only a hash of a host token. Step 13.
+The controller must store only a hash of a host token. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -869,7 +846,7 @@ The controller must store only a hash of a host token. Step 13.
 
 ### PAIR-08
 
-After a host is removed in the dashboard, its token must be refused. Step 13.
+After a host is removed in the dashboard, its token must be refused. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -877,7 +854,7 @@ After a host is removed in the dashboard, its token must be refused. Step 13.
 
 ### PAIR-09
 
-A session must belong to the user the host is paired to. Step 13.
+A session must belong to the user the host is paired to. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -885,7 +862,7 @@ A session must belong to the user the host is paired to. Step 13.
 
 ### PAIR-10
 
-With no answer to the pairing question by the time `PAIRING_CODE_LIFE` has passed, the host must stay unpaired and the code must be dead. Step 13.
+With no answer to the pairing question by the time `PAIRING_CODE_LIFE` has passed, the host must stay unpaired and the code must be dead. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -895,7 +872,7 @@ With no answer to the pairing question by the time `PAIRING_CODE_LIFE` has passe
 
 ### PAIR-11
 
-When a host is removed in the dashboard, its live session must end at once. Step 13.
+When a host is removed in the dashboard, its live session must end at once. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -907,7 +884,7 @@ When a host is removed in the dashboard, its live session must end at once. Step
 
 ### CTL-01
 
-With no setting, the controller must answer on localhost only. Step 1.
+With no setting, the controller must answer on localhost only. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -916,7 +893,7 @@ With no setting, the controller must answer on localhost only. Step 1.
 
 ### CTL-02
 
-The controller must refuse to answer on a public address when no login is set up. Step 12.
+The controller must refuse to answer on a public address when no login is set up. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -925,7 +902,7 @@ The controller must refuse to answer on a public address when no login is set up
 
 ### CTL-03
 
-The dashboard must show nothing to a visitor who is not signed in. Step 12.
+The dashboard must show nothing to a visitor who is not signed in. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -934,7 +911,7 @@ The dashboard must show nothing to a visitor who is not signed in. Step 12.
 
 ### CTL-04
 
-An account that is not on the list must be refused, even when the provider accepts it. Step 12.
+An account that is not on the list must be refused, even when the provider accepts it. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -943,7 +920,7 @@ An account that is not on the list must be refused, even when the provider accep
 
 ### CTL-05
 
-The controller must store no password. Step 12.
+The controller must store no password. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -951,7 +928,7 @@ The controller must store no password. Step 12.
 
 ### CTL-06
 
-A user must see and end only their own sessions. Step 13.
+A user must see and end only their own sessions. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -960,7 +937,7 @@ A user must see and end only their own sessions. Step 13.
 
 ### CTL-07
 
-The dashboard must list the live sessions and their requests and answers as they happen. Step 8.
+The dashboard must list the live sessions and their requests and answers as they happen. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -969,7 +946,7 @@ The dashboard must list the live sessions and their requests and answers as they
 
 ### CTL-08
 
-The end button in the dashboard must end the session. Step 8.
+The end button in the dashboard must end the session. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -977,7 +954,7 @@ The end button in the dashboard must end the session. Step 8.
 
 ### CTL-09
 
-The dashboard must offer no way to approve a request. Step 8.
+The dashboard must offer no way to approve a request. No version yet.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -985,7 +962,7 @@ The dashboard must offer no way to approve a request. Step 8.
 
 ### CTL-10
 
-A host must reach the controller over Tailscale only, unless the controller was started in the one-machine mode. In that mode a host must reach it over localhost only, and the controller must say at start that the mode is on. Step 2.
+A host must reach the controller over Tailscale only, unless the controller was started in the one-machine mode. In that mode a host must reach it over localhost only, and the controller must say at start that the mode is on. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -996,7 +973,7 @@ A host must reach the controller over Tailscale only, unless the controller was 
 
 ### CTL-11
 
-The API must turn away a request it cannot read, and nothing must reach a host. Step 1.
+The API must turn away a request it cannot read, and nothing must reach a host. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1005,7 +982,7 @@ The API must turn away a request it cannot read, and nothing must reach a host. 
 
 ### CTL-12
 
-The controller must join Tailscale from inside the program, with an auth key given once at its own `login`. The key file and the folder that holds the controller's Tailscale identity must be readable by their owner only. Step 2.
+The controller must join Tailscale from inside the program, with an auth key given once at its own `login`. The key file and the folder that holds the controller's Tailscale identity must be readable by their owner only. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1018,7 +995,7 @@ The controller must join Tailscale from inside the program, with an auth key giv
 
 ### SET-01
 
-A value from the user layer or a start option must never widen a bound set in `/etc/gangway/`. Step 4.
+A value from the user layer or a start option must never widen a bound set in `/etc/gangway/`. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1028,7 +1005,7 @@ A value from the user layer or a start option must never widen a bound set in `/
 
 ### SET-02
 
-The cli-tool must only read `/etc/gangway/`, never write it. Step 4.
+The cli-tool must only read `/etc/gangway/`, never write it. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1036,7 +1013,7 @@ The cli-tool must only read `/etc/gangway/`, never write it. Step 4.
 
 ### SET-03
 
-With no admin file, the user layer must be the top. Step 4.
+With no admin file, the user layer must be the top. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1044,7 +1021,7 @@ With no admin file, the user layer must be the top. Step 4.
 
 ### SET-04
 
-When a value asked for is wider than an admin bound, the cli-tool must start with the bound and tell the user. Step 4.
+When a value asked for is wider than an admin bound, the cli-tool must start with the bound and tell the user. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1054,7 +1031,7 @@ When a value asked for is wider than an admin bound, the cli-tool must start wit
 
 ### SET-05
 
-The cli-tool must refuse to start a session when the admin file cannot be trusted or read: when `/etc/gangway/` or the file in it is not owned by root, can be written by anyone but root, cannot be read, or holds a mistake. It must not go on as if there were no bound. Step 4.
+The cli-tool must refuse to start a session when the admin file cannot be trusted or read: when `/etc/gangway/` or the file in it is not owned by root, can be written by anyone but root, cannot be read, or holds a mistake. It must not go on as if there were no bound. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1066,7 +1043,7 @@ The cli-tool must refuse to start a session when the admin file cannot be truste
 
 ### LOG-01
 
-Every request and its answer must be written to the log on the host, with the time. Step 7.
+Every request and its answer must be written to the log on the host, with the time. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1075,7 +1052,7 @@ Every request and its answer must be written to the log on the host, with the ti
 
 ### LOG-02
 
-Each session must have a log of its own: one log file in a new folder under the temp folder of the host. The name of the folder must be random and must tell nothing of the session key. The cli-tool must show the path of the log file when the session starts and when it ends, and must not delete the log. Step 7.
+Each session must have a log of its own: one log file in a new folder under the temp folder of the host. The name of the folder must be random and must tell nothing of the session key. The cli-tool must show the path of the log file when the session starts and when it ends, and must not delete the log. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1085,7 +1062,7 @@ Each session must have a log of its own: one log file in a new folder under the 
 
 ### LOG-03
 
-The log must hold the output of each command, as it was sent to the AI. A character that the terminal would not show is replaced in the log too. Step 7.
+The log must hold the output of each command, as it was sent to the AI. A character that the terminal would not show is replaced in the log too. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1095,7 +1072,7 @@ The log must hold the output of each command, as it was sent to the AI. A charac
 
 ### LOG-04
 
-The log must be readable by its owner only: the folder and every file in it. Step 7.
+The log must be readable by its owner only: the folder and every file in it. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1103,7 +1080,7 @@ The log must be readable by its owner only: the folder and every file in it. Ste
 
 ### LOG-05
 
-When one more entry would take the log file past `LOG_FILE_SIZE`, the cli-tool must start a new log file in the same folder, and must keep no more than `LOG_FILES_KEPT` old ones, deleting the oldest first. No entry may be larger than `LOG_FILE_SIZE`: a larger one is cut in the log, with a note. So the log of one session never takes more than `LOG_FILE_SIZE` times `LOG_FILES_KEPT` plus one. Step 7.
+When one more entry would take the log file past `LOG_FILE_SIZE`, the cli-tool must start a new log file in the same folder, and must keep no more than `LOG_FILES_KEPT` old ones, deleting the oldest first. No entry may be larger than `LOG_FILE_SIZE`: a larger one is cut in the log, with a note. So the log of one session never takes more than `LOG_FILE_SIZE` times `LOG_FILES_KEPT` plus one. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1115,7 +1092,7 @@ When one more entry would take the log file past `LOG_FILE_SIZE`, the cli-tool m
 
 ### LOG-06
 
-No session must start without a log, and a session whose log can no longer be written must end. A request that cannot be logged must not reach the prompt. Step 7.
+No session must start without a log, and a session whose log can no longer be written must end. A request that cannot be logged must not reach the prompt. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1128,7 +1105,7 @@ The install is the script `install.sh`. A user runs it on a host. "The release" 
 
 ### INS-01
 
-The install must put the cli-tool for this kind of machine at `~/.local/bin/gangway`, as a file the user can run, and must then say where it is and that `gangway login` is the next step. Step 11.
+The install must put the cli-tool for this kind of machine at `~/.local/bin/gangway`, as a file the user can run, and must then say where it is and that `gangway login` is the next step. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1138,7 +1115,7 @@ The install must put the cli-tool for this kind of machine at `~/.local/bin/gang
 
 ### INS-02
 
-The install must check the downloaded file against the `SHA256SUMS` of the same release before it puts it in place. When the check fails, or a download fails, it must stop, say why, and leave the home folder as it was. Step 11.
+The install must check the downloaded file against the `SHA256SUMS` of the same release before it puts it in place. When the check fails, or a download fails, it must stop, say why, and leave the home folder as it was. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1150,7 +1127,7 @@ The install must check the downloaded file against the `SHA256SUMS` of the same 
 
 ### INS-03
 
-Running the install again must replace the cli-tool with the one of the release asked for. Step 11.
+Running the install again must replace the cli-tool with the one of the release asked for. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1159,7 +1136,7 @@ Running the install again must replace the cli-tool with the one of the release 
 
 ### INS-04
 
-The install must refuse to run as root, on a system that is not Linux, and on a kind of machine there is no cli-tool for. Each time it must say why and install nothing. Step 11.
+The install must refuse to run as root, on a system that is not Linux, and on a kind of machine there is no cli-tool for. Each time it must say why and install nothing. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1169,7 +1146,7 @@ The install must refuse to run as root, on a system that is not Linux, and on a 
 
 ### INS-05
 
-The install must write nothing but `~/.local/bin/gangway`. It must not change the start files of the shell, the settings in `~/.config/gangway/`, or anything outside the home folder. Step 11.
+The install must write nothing but `~/.local/bin/gangway`. It must not change the start files of the shell, the settings in `~/.config/gangway/`, or anything outside the home folder. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1179,7 +1156,7 @@ The install must write nothing but `~/.local/bin/gangway`. It must not change th
 
 ### INS-06
 
-The install must download over HTTPS only, and only from the release it was asked for. Another place to download from must be refused unless it is HTTPS or on this machine, and a version that holds more than letters, digits, dots, `-` and `_` must be refused. Step 11.
+The install must download over HTTPS only, and only from the release it was asked for. Another place to download from must be refused unless it is HTTPS or on this machine, and a version that holds more than letters, digits, dots, `-` and `_` must be refused. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1189,7 +1166,7 @@ The install must download over HTTPS only, and only from the release it was aske
 
 ### INS-07
 
-A copy of the install script that was cut off at any point must install nothing and download nothing. Step 11.
+A copy of the install script that was cut off at any point must install nothing and download nothing. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|

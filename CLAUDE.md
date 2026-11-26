@@ -24,7 +24,7 @@ says what it is. This file says how it is built and why.
 | `install.sh` | Puts the cli-tool into `~/.local/bin` on a host |
 | `build.sh` | Builds both programs into `build/` |
 | `docs/blueprint.md` | The design: parts, session flow, gate, key, security, open questions |
-| `docs/plan.md` | The steps, in order, each with its check |
+| `docs/releases.md` | The versions: what each adds, its state, and what has no version yet |
 | `docs/requirements.md` | The hard requirements, each with its acceptance tests. The IDs are carried by the Go tests |
 | `docs/architecture.md` | How the parts are built to meet the requirements: the API, the messages, the pieces |
 | `docs/design.md` | The inside of each piece that has states, with its unit tests. A piece is added just before it is built |
