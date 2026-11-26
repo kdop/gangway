@@ -94,15 +94,88 @@ Three parts:
 - **Every session is logged on the host.** Each request, your answer and the output go to a text file that only you can read. No log, no session.
 - **Plain user only.** The cli-tool refuses to run as root.
 
+## Installation
+
+### System requirements
+
+A host runs **Linux**, on x86_64 or aarch64. You need no root. You also need a Tailscale network, and one machine for the controller.
+
+### Install Gangway
+
+On the host, run:
+
+```
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/kdop/gangway/main/install.sh | sh
+```
+
+This puts one file at `~/.local/bin/gangway`, checked against the checksums of its release. It changes nothing else.
+
+### Install Gangway (advanced)
+
+> You can skip this if the latest release is all you want.
+
+To read the script before it runs:
+
+```
+curl --proto '=https' --tlsv1.2 -fsSL -o install.sh https://raw.githubusercontent.com/kdop/gangway/main/install.sh
+less install.sh
+sh install.sh
+```
+
+To install a set version:
+
+```
+sh install.sh v0.1.0
+```
+
+To build from the source, with Go:
+
+```
+./build.sh
+```
+
+This puts `gangway` and `gangway-controller` into `build/`. Each is one file that can be copied to another Linux machine as it is.
+
+> The checksum shows the download is whole. It is not a signature: whoever can change a release can change both. The build from the source needs no trust in a release.
+
+### Add Gangway to your PATH
+
+If your shell does not find `gangway`, add `~/.local/bin` to your `PATH`:
+
+```
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+### Install the controller
+
+On the controller machine, download the one file from the [releases page](https://github.com/kdop/gangway/releases):
+
+```
+curl --proto '=https' --tlsv1.2 -fsSL -o gangway-controller https://github.com/kdop/gangway/releases/latest/download/gangway-controller-linux-amd64
+chmod +x gangway-controller
+```
+
+On aarch64, take `gangway-controller-linux-arm64`.
+
+### Update Gangway
+
+Run the install command again. It replaces the program.
+
+### Uninstall Gangway
+
+```
+rm ~/.local/bin/gangway
+rm -r ~/.config/gangway
+```
+
+The second line removes the stored key and the settings.
+
 ## Quick start
 
-You need a Tailscale network, a machine for the controller, and Go to build the two programs.
-
-1. Build: `./build.sh` puts `gangway` and `gangway-controller` into `build/`. Each is one file that can be copied to another Linux machine as it is.
-2. In the Tailscale admin page, make two auth keys. The one for the controller: reusable and not ephemeral. The one for the hosts: reusable and ephemeral, with a tag that your Tailscale rules let reach the controller and nothing else.
-3. On the controller machine, once: `gangway-controller login`, and paste the controller's key. Then start it: `gangway-controller`. Add `-public-address https://…` when the AI reaches it at another address than the one it listens on.
-4. On a host, once: `gangway login`, and paste the hosts' key. Then start a session: `gangway`. For another length than 30 minutes: `gangway --length 45m`.
-5. Paste the line it prints to an AI that has the skill in `skill/gangway/`. In Claude Code, copy that folder to `~/.claude/skills/`.
+1. In the Tailscale admin page, make two auth keys. The one for the controller: reusable and not ephemeral. The one for the hosts: reusable and ephemeral, with a tag that your Tailscale rules let reach the controller and nothing else.
+2. On the controller machine, once: `gangway-controller login`, and paste the controller's key. Then start it: `gangway-controller`. Add `-public-address https://…` when the AI reaches it at another address than the one it listens on.
+3. On a host, once: `gangway login`, and paste the hosts' key. Then start a session: `gangway`. For another length than 30 minutes: `gangway --length 45m`.
+4. Paste the line it prints to an AI that has the skill in `skill/gangway/`. In Claude Code, copy that folder to `~/.claude/skills/`.
 
 The controller and each host join your Tailscale network from inside the program. A Tailscale that is already on the machine is left alone.
 
@@ -112,34 +185,6 @@ The log of a session is a text file in a new folder under the temp folder. The t
 
 Until pairing is built, any device that your Tailscale rules let reach the controller can start a session of its own. The rules are the guard.
 
-### A second way to get the cli-tool on a host
-
-The build from the source, above, is the main way: you run what you can read. For a host with no Go there is a second way. It needs a release on the [releases page](https://github.com/kdop/gangway/releases); with none, it stops and says so.
-
-One command puts the cli-tool at `~/.local/bin/gangway`. It needs no root, and it changes nothing else:
-
-```
-curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/kdop/gangway/main/install.sh | sh
-```
-
-The careful way does the same, and lets you read the script before it runs:
-
-```
-curl --proto '=https' --tlsv1.2 -fsSL -o install.sh https://raw.githubusercontent.com/kdop/gangway/main/install.sh
-less install.sh
-sh install.sh
-```
-
-`sh install.sh v0.1.0` takes that release and not the latest. Running the script again replaces the program, so that is also how to update. The controller is not installed this way.
-
-The script checks the file against the checksums of its release before it puts it in place. That shows the download is whole and is the file of that release. It is not a signature: whoever can change a release can change both.
-
-## Status
-
-It works end to end, and it has run on a real Tailscale network, with the controller on a server on the internet.
-
-It is early. It is made for one user, and hosts are Linux only. Not built yet: the dashboard, the login, pairing a host to a user, and "always allow" rules.
-
 ## Known limits
 
 - **Chat windows on the web probably cannot use it as it is.** The AI must be able to send a POST request with the key in a header. A tool with a shell can, such as Claude Code. A chat on the web usually can only read a web address.
@@ -148,8 +193,6 @@ It is early. It is made for one user, and hosts are Linux only. Not built yet: t
 
 This software is provided "as is", with absolutely no guarantees of any kind. It runs commands on your machines. You use it at your own risk. The [license](LICENSE) has the full text.
 
-## More
+## License
 
-- [`DEVELOPMENT.md`](DEVELOPMENT.md): how to build it, try it on one machine, and run the tests
-- [`docs/blueprint.md`](docs/blueprint.md): the design
-- License: [MIT](LICENSE)
+[MIT](LICENSE)
