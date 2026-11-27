@@ -1,12 +1,12 @@
 # Gangway
 
+![Test coverage of cli, controller and shared](https://kdop.github.io/gangway/coverage.svg)
+
 Temporary remote access for AI, with just-in-time approval of commands.
 
 An AI tool such as Claude Code asks to run a command on a remote machine. A person at that machine sees the exact command and presses `y` or `n`. Nothing runs without a yes.
 
 It exists because SSH gives an AI a full shell with no say over the commands.
-
-![Test coverage of cli, controller and shared](https://kdop.github.io/gangway/coverage.svg)
 
 To run the tests yourself, or to work on the code, see [DEVELOPMENT.md](DEVELOPMENT.md).
 
