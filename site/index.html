@@ -105,15 +105,22 @@
   @keyframes flicker { 0%, 47%, 50%, 100% { opacity: 1; } 48%, 49% { opacity: .35; } }
 
 
-  section { padding: 64px 0 0; }
+  section { padding: 48px 0 0; }
   h2 { margin: 0 0 22px; font-size: clamp(22px, 3.6vw, 30px); letter-spacing: -0.02em; }
-  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
-  .card h3 { margin: 0 0 6px; font-size: 16px; }
-  .card p { margin: 0; color: var(--dim); font-size: 15px; }
-  .card .tag { display: inline-block; margin-bottom: 10px; font: 700 12px var(--mono); color: var(--bg); background: var(--yes); border-radius: 6px; padding: 2px 8px; }
-  .card:nth-child(3n+2) .tag { background: var(--blue); }
-  .card:nth-child(3n) .tag { background: var(--hot); }
+  /* "Safety first": a work-site sign with hazard tape, and three stamped plates. */
+  .hazard { display: inline-block; margin: 0 0 26px; padding: 9px 0; transform: rotate(-2deg);
+    background: repeating-linear-gradient(-45deg, #111 0 14px, var(--hot) 14px 28px); border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  .hazard span { display: block; padding: 8px 26px; background: var(--hot); color: #111; font: 800 clamp(20px, 3.4vw, 28px) var(--mono); text-transform: uppercase; letter-spacing: .08em; }
+  .plates { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .plate { position: relative; padding: 20px 20px 18px; border: 2px solid var(--hot); border-radius: 8px; color: var(--dim); font-size: 15px;
+    background:
+      radial-gradient(circle at 10px 10px, var(--hot) 0 2.5px, transparent 3px),
+      radial-gradient(circle at calc(100% - 10px) 10px, var(--hot) 0 2.5px, transparent 3px),
+      radial-gradient(circle at 10px calc(100% - 10px), var(--hot) 0 2.5px, transparent 3px),
+      radial-gradient(circle at calc(100% - 10px) calc(100% - 10px), var(--hot) 0 2.5px, transparent 3px),
+      var(--panel); }
+  .plate:nth-child(odd) { transform: rotate(-.6deg); } .plate:nth-child(even) { transform: rotate(.7deg); }
+  .plate b { display: block; margin-bottom: 6px; color: var(--hot); font: 800 17px var(--mono); text-transform: uppercase; letter-spacing: .06em; }
 
   .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; font-family: var(--mono); }
   .flow .box { flex: 1 1 180px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
@@ -132,8 +139,10 @@
   .steps { margin: 0; padding-left: 22px; }
   .steps li { margin: 0 0 16px; color: var(--dim); }
   .steps li b { color: var(--text); }
-  .steps .get { margin-top: 8px; }
-  .steps li > code, .how code { font-family: var(--mono); color: var(--text); }
+  .steps .note { display: block; margin-top: 10px; font-size: 14px; color: var(--dim); }
+  .steps .get { margin: 5px 0 10px; }
+  .steps .keys { margin: 6px 0 0; padding-left: 20px; } .steps .keys li { margin: 2px 0; }
+  .steps li > code, .steps .note code, .how code { font-family: var(--mono); color: var(--text); }
   .small { color: var(--dim); font-size: 14px; margin: 12px 0 0; }
   .links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
   .btn { display: inline-block; padding: 11px 18px; border-radius: 10px; font-weight: 600; text-decoration: none; border: 1.5px solid var(--line); color: var(--text); }
@@ -190,61 +199,80 @@
   </section>
 
   <section>
-    <h2>Why it is safe to hand over</h2>
-    <div class="grid">
-      <div class="card"><span class="tag">the gate</span><h3>On the host, never in the AI</h3><p>The thing being checked is not the checker. A controller that is taken over can only ask.</p></div>
-      <div class="card"><span class="tag">the line</span><h3>You approve what runs</h3><p>The prompt shows the exact command. A request with a hidden or control character is refused before it reaches you.</p></div>
-      <div class="card"><span class="tag">the clock</span><h3>Access ends by itself</h3><p>A session lasts 30 minutes. Only the person at the terminal can extend it, and no answer means no.</p></div>
-      <div class="card"><span class="tag">the network</span><h3>The host is never open</h3><p>It dials out over Tailscale, which is built into the program. No root, nothing to install.</p></div>
-      <div class="card"><span class="tag">the key</span><h3>One key, one AI</h3><p>The session key works for the first AI that uses it. A copy is of no use to a second caller.</p></div>
-      <div class="card"><span class="tag">the log</span><h3>Every session is written down</h3><p>Each request, your answer and the output go to a file on the host that only you can read.</p></div>
+    <h2 class="hazard"><span>Safety first</span></h2>
+    <div class="plates">
+      <div class="plate"><b>No open port</b><span>The host dials out over Tailscale. Nothing on it listens to the internet.</span></div>
+      <div class="plate"><b>Time-limited</b><span>A session ends by itself, after 30 minutes by default. Only the person at the terminal can extend it.</span></div>
+      <div class="plate"><b>Never root</b><span>The cli-tool refuses to run as root.</span></div>
     </div>
+    <p class="small">Read more in <a href="https://github.com/kdop/gangway/blob/main/SECURITY.md">SECURITY.md</a>.</p>
   </section>
 
   <section id="get">
-    <h2>Get it</h2>
+    <h2>Get started</h2>
     <div class="tabs" role="tablist" aria-label="Two ways to install">
-      <button class="tab" role="tab" id="tab-local" aria-controls="panel-local" aria-selected="true" type="button">On one machine</button>
-      <button class="tab" role="tab" id="tab-ts" aria-controls="panel-ts" aria-selected="false" tabindex="-1" type="button">With Tailscale</button>
+      <button class="tab" role="tab" id="tab-ts" aria-controls="panel-ts" aria-selected="true" type="button">With Tailscale</button>
+      <button class="tab" role="tab" id="tab-local" aria-controls="panel-local" aria-selected="false" tabindex="-1" type="button">Try without Tailscale</button>
     </div>
 
-    <div class="panel" role="tabpanel" id="panel-local" aria-labelledby="tab-local">
-      <p class="how">Both programs run on the same machine and talk over localhost. Nothing leaves the machine. No Tailscale, no keys.</p>
+    <div class="panel" role="tabpanel" id="panel-local" aria-labelledby="tab-local" hidden>
+      <p class="how">You can try out Gangway without Tailscale by running both the controller and the CLI on your local machine. It is then reachable only from within that machine.</p>
       <ol class="steps">
         <li><b>Install both programs</b>
+          <span class="note">Puts both programs in <code>~/.local/bin</code></span>
           <div class="get"><code>curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/kdop/gangway/main/install.sh | sh -s -- all</code><button type="button">Copy</button></div></li>
         <li><b>Start the controller</b>, in terminal 1
+          <span class="note">It listens on this machine only</span>
           <div class="get"><code>gangway-controller -local</code><button type="button">Copy</button></div></li>
         <li><b>Start a session</b>, in terminal 2
+          <span class="note">It prints one line with the address and the key</span>
           <div class="get"><code>gangway --local</code><button type="button">Copy</button></div></li>
-        <li><b>Send a command.</b> Paste the line it prints to an AI that has the skill. Or send one by hand with <code>curl</code>: <a href="https://github.com/kdop/gangway/blob/main/README.md#try-it-on-one-machine">the README shows how</a>.</li>
+        <li><b>Send a command with <code>curl</code></b>, from a third terminal
+          <span class="note">Take the address and the key from the printed line</span>
+          <div class="get"><code>GW=http://127.0.0.1:8642; KEY=gw_…</code></div>
+          <span class="note">Say hello, once. The answer holds a <code>caller_token</code></span>
+          <div class="get"><code>curl -sS -X POST "$GW/v1/hello" -H "Authorization: Bearer $KEY"</code><button type="button">Copy</button></div>
+          <span class="note">Keep the caller token</span>
+          <div class="get"><code>CALLER=gwc_…</code></div>
+          <span class="note">Ask for a command</span>
+          <div class="get"><code>curl -sS -X POST "$GW/v1/requests" -H "Authorization: Bearer $KEY" -H "Gangway-Caller: $CALLER" -H "Content-Type: application/json" -d '{"kind":"command","command":"uname -a"}'</code><button type="button">Copy</button></div>
+          <span class="note">The prompt shows in terminal 2. Press <code>y</code>, and the <code>curl</code> gets the output.</span></li>
       </ol>
     </div>
 
-    <div class="panel" role="tabpanel" id="panel-ts" aria-labelledby="tab-ts" hidden>
-      <p class="how">The host is never open to the internet. Tailscale is bundled in both the controller and the CLI: no Tailscale installation needed.</p>
+    <div class="panel" role="tabpanel" id="panel-ts" aria-labelledby="tab-ts">
       <ol class="steps">
-        <li><b>Make two auth keys</b> in the Tailscale admin page. For the controller: reusable, not ephemeral. For the hosts: reusable, ephemeral, with a tag that may reach the controller and nothing else.</li>
-        <li><b>On the controller machine</b>, install it, store its key, start it
+        <li><b>Make two auth keys</b> in the <a href="https://login.tailscale.com/admin/settings/keys">Tailscale</a> admin page:
+          <ul class="keys">
+            <li>For the controller: reusable, not ephemeral.</li>
+            <li>For the hosts: reusable, ephemeral.</li>
+          </ul></li>
+        <li><b>On the controller machine:</b>
+          <span class="note">Install the controller</span>
           <div class="get"><code>curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/kdop/gangway/main/install.sh | sh -s -- controller</code><button type="button">Copy</button></div>
+          <span class="note">Paste the controller's key, once</span>
           <div class="get"><code>gangway-controller login</code><button type="button">Copy</button></div>
+          <span class="note">Start the controller</span>
           <div class="get"><code>gangway-controller</code><button type="button">Copy</button></div></li>
-        <li><b>On each host</b>, install the cli-tool, store the hosts' key, start a session
+        <li><b>On each host:</b>
+          <span class="note">Install the cli-tool</span>
           <div class="get"><code>curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/kdop/gangway/main/install.sh | sh</code><button type="button">Copy</button></div>
+          <span class="note">Paste the hosts' key, once</span>
           <div class="get"><code>gangway login</code><button type="button">Copy</button></div>
+          <span class="note">Start a session. It prints one line for the AI</span>
           <div class="get"><code>gangway</code><button type="button">Copy</button></div></li>
-        <li><b>Paste the line it prints</b> to an AI that has the skill.</li>
+        <li><b><a href="https://github.com/kdop/gangway/blob/main/skill/gangway/SKILL.md">Give the AI the skill</a></b></li>
+        <li><b>Paste the line it prints</b> to the AI.</li>
       </ol>
     </div>
 
-    <p class="small">Linux, x86_64 or aarch64. No root. Each program is one file in <code>~/.local/bin</code>.</p>
     <div class="links">
       <a class="btn main" href="https://github.com/kdop/gangway">Source</a>
       <a class="btn" href="https://github.com/kdop/gangway/releases">Releases</a>
     </div>
   </section>
 </main>
-<footer class="wrap">Gangway is early: one user, Linux hosts. MIT license.</footer>
+<footer class="wrap">Gangway is an experimental tool. This software exists "as is", with absolutely no guarantees of any kind. It runs commands on your machines. You use it at your own risk. The <a href="https://github.com/kdop/gangway/blob/main/LICENSE">MIT license</a> has the full text.</footer>
 
 <script>
 (function () {
