@@ -21,8 +21,9 @@ says what it is. This file says how it is built and why.
 | `DEVELOPMENT.md` | For work on the code: the folders, the one-machine trial, the build, how to make a release, the tests, and the list of design files |
 | `SECURITY.md` | What keeps it safe, and how to report a hole |
 | `LICENSE` | The MIT license |
-| `install.sh` | Puts the cli-tool into `~/.local/bin` on a host |
+| `install.sh` | Puts the cli-tool, the controller or both into `~/.local/bin` |
 | `build.sh` | Builds both programs into `build/` |
+| `site/index.html` | The web page that shows Gangway off. GitHub Pages serves it |
 | `docs/blueprint.md` | The design: parts, session flow, gate, key, security, open questions |
 | `docs/releases.md` | The versions: what each adds, its state, and what has no version yet |
 | `docs/requirements.md` | The hard requirements, each with its acceptance tests. The IDs are carried by the Go tests |
@@ -39,7 +40,7 @@ Each line is a decision and its reason. No dates, no names, no account of the ta
 led to it.
 
 - **No SSH for the AI.** SSH hands over a shell with no say over the commands. That say is the whole point of Gangway.
-- **Not a product.** No sign-up and no web page for strangers.
+- **Not a product.** No sign-up. One page shows it off, at https://kdop.github.io/gangway/; it collects nothing and sells nothing.
 - **One user now, built for more later.** Every host and every session belongs to a user, so a second user needs no redesign.
 - **Three parts: cli-tool, controller, skill.** The host has no AI, so something must sit on the host, something must reach it, and the AI must know how to ask.
 - **One repo holds all three parts.** The parts change together, and the skill sits next to the API it calls.

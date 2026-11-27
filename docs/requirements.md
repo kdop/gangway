@@ -1078,7 +1078,7 @@ No session must start without a log, and a session whose log can no longer be wr
 
 ## INS: the install
 
-The install is the script `install.sh`. A user runs it on a host. "The release" is the GitHub release the user asked for: the latest one, or the version given to the script. In the tests a web server of the test stands in for GitHub, and a small file stands in for the cli-tool.
+The install is the script `install.sh`. A user runs it on a host, or on the controller machine. "The release" is the GitHub release the user asked for: the latest one, or the version given to the script. In the tests a web server of the test stands in for GitHub, and a small file stands in for the cli-tool.
 
 ### INS-01
 
@@ -1123,7 +1123,7 @@ The install must refuse to run as root, on a system that is not Linux, and on a 
 
 ### INS-05
 
-The install must write nothing but `~/.local/bin/gangway`. It must not change the start files of the shell, the settings in `~/.config/gangway/`, or anything outside the home folder. Version 0.1.
+The install must write nothing but the programs it was asked for, in `~/.local/bin`. It must not change the start files of the shell, the settings in `~/.config/gangway/`, or anything outside the home folder. Version 0.1.
 
 | Test | Start | Action | Expect |
 |---|---|---|---|
@@ -1148,6 +1148,19 @@ A copy of the install script that was cut off at any point must install nothing 
 | Test | Start | Action | Expect |
 |---|---|---|---|
 | INS-07.1 | The script cut after each of its lines, and after each character of its last lines | Run each cut copy | No copy downloads anything, and no copy writes anything to the home folder |
+
+### INS-08
+
+The install must put the controller at `~/.local/bin/gangway-controller` when it is run with the word `controller`, and both programs when it is run with the word `all`. With `all` it must install both or neither. With `cli` or with no word it must install the cli-tool only. Version 0.2.
+
+| Test | Start | Action | Expect |
+|---|---|---|---|
+| INS-08.1 | A home folder with no `.local`. An x86_64 machine | Run the install with `controller` | `~/.local/bin/gangway-controller` holds the release's file `gangway-controller-linux-amd64`, byte for byte, and can be run. There is no `~/.local/bin/gangway`. The screen names that path and `gangway-controller login` |
+| INS-08.2 | The same, on an aarch64 machine | Run the install with `all` | Both programs are installed, each from its file for aarch64. The screen names both paths, and the two lines that start them on one machine |
+| INS-08.3 | The release's file of the controller does not match its line in `SHA256SUMS` | Run the install with `all` | It stops and says the download does not match its checksum. Neither program is installed, and no file was left behind |
+| INS-08.4 | The latest release and `v0.1.0` hold different files | Run the install with `controller v0.1.0`, and with `v0.1.0 controller` | Both times `~/.local/bin/gangway-controller` holds the file of `v0.1.0`, and there is no `~/.local/bin/gangway` |
+| INS-08.5 | A live release | Run the install with `controller all` | It stops and says to name once what to install. Nothing was downloaded and nothing was written |
+| INS-08.6 | A home folder with no `.local` | Run the install with `cli` | `~/.local/bin/gangway` holds the release's file. There is no `~/.local/bin/gangway-controller` |
 
 ## Settings
 

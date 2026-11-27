@@ -15,6 +15,7 @@ The design is written down in three levels, each with its tests: the requirement
 | `shared/` | The Go code both programs use |
 | `acceptance/` | The acceptance tests of `docs/requirements.md`. They start both real programs. Go |
 | `skill/` | The skill that teaches the AI how to ask |
+| `site/` | The web page that shows Gangway off. A push to `main` puts it live |
 
 ## Try it on one machine
 
@@ -53,7 +54,7 @@ To check a downloaded file by hand, put it next to `SHA256SUMS` and run:
 sha256sum --check --ignore-missing SHA256SUMS
 ```
 
-`install.sh` reads the release: it takes `gangway-linux-amd64` or `gangway-linux-arm64` and checks it against `SHA256SUMS`. So the names of those files must stay as they are. The script is served from the `main` branch, not from a release, so a change to it is live once it is merged.
+`install.sh` reads the release: it takes `gangway-linux-amd64` or `gangway-linux-arm64`, and for the controller `gangway-controller-linux-amd64` or `gangway-controller-linux-arm64`, and checks each against `SHA256SUMS`. So the names of those files must stay as they are. The script is served from the `main` branch, not from a release, so a change to it is live once it is merged.
 
 ## Run the tests
 
