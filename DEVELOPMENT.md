@@ -71,6 +71,7 @@ To see how many lines of each package its tests run, add `-cover`: `go test -cov
 - `docs/releases.md`: the versions, the state of each, and what has no version yet
 - `docs/requirements.md`: the hard requirements, each with its acceptance tests
 - `docs/architecture.md`: the API, the messages, and the pieces of each program
+- `docs/api.md`: how to call the API by hand with `curl`
 - `docs/design.md`: the inside of each piece, with its unit tests
 - `docs/diagrams.md`: the design as diagrams
 - `docs/ux.md`: what the user sees
