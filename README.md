@@ -82,23 +82,126 @@ Three parts:
 - **The controller** is what the AI calls. It passes each request to the host and the answer back.
 - **The skill** teaches the AI how to ask.
 
-## Installation
+## Try it on one machine
 
-### System requirements
+Both programs run on the same machine and talk over localhost. Nothing leaves the machine. You need no Tailscale and no auth keys.
 
-A host runs **Linux**, on x86_64 or aarch64. You need no root. You also need a Tailscale network, and one machine for the controller.
+**1. Install both programs**
 
-### Install Gangway
+```
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/kdop/gangway/main/install.sh | sh -s -- all
+```
 
-On the host, run:
+**2. Start the controller**
+
+In terminal 1:
+
+```
+gangway-controller -local
+```
+
+**3. Start a session**
+
+In terminal 2:
+
+```
+gangway --local
+```
+
+It prints a line such as `/gangway http://127.0.0.1:8642 gw_4f9c…`.
+
+**4. Send a command**
+
+Paste the line to an AI that has the skill in `skill/gangway/`. Or send a command by hand, from a third terminal.
+
+Set the address and the key from the printed line:
+
+```
+GW=http://127.0.0.1:8642
+KEY=gw_4f9c…
+```
+
+Say hello, once. The answer holds a `caller_token`:
+
+```
+curl -sS -X POST "$GW/v1/hello" -H "Authorization: Bearer $KEY"
+CALLER=gwc_81b2…
+```
+
+Ask for a command:
+
+```
+curl -sS -X POST "$GW/v1/requests" \
+  -H "Authorization: Bearer $KEY" -H "Gangway-Caller: $CALLER" \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"command","command":"uname -a"}'
+```
+
+The prompt shows in terminal 2. Press `y`, and the `curl` gets the output.
+
+The whole API, for use by hand, is in [`docs/api.md`](docs/api.md).
+
+## Install with Tailscale
+
+The host is never open to the internet. Each program carries Tailscale inside it and joins your Tailscale network by itself, with no Tailscale install and no root. The host dials out to the controller by its Tailscale name, and the AI calls the controller's API.
+
+**1. Make two auth keys**
+
+In the Tailscale admin page, make two auth keys. The one for the controller: reusable and not ephemeral. The one for the hosts: reusable and ephemeral, with a tag that your Tailscale rules let reach the controller and nothing else.
+
+**2. Set up the controller**
+
+On the controller machine, install it:
+
+```
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/kdop/gangway/main/install.sh | sh -s -- controller
+```
+
+Store the controller's key, once. Then start it:
+
+```
+gangway-controller login
+gangway-controller
+```
+
+Add `-public-address https://…` when the AI reaches it at another address than the one it listens on.
+
+**3. Set up each host**
+
+On the host, install the cli-tool:
 
 ```
 curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/kdop/gangway/main/install.sh | sh
 ```
 
-This puts one file at `~/.local/bin/gangway`, checked against the checksums of its release. It changes nothing else.
+Store the hosts' key, once. Then start a session:
 
-### Install Gangway (advanced)
+```
+gangway login
+gangway
+```
+
+For another length than 30 minutes: `gangway --length 45m`.
+
+**4. Paste the line to the AI**
+
+Paste the line it prints to an AI that has the skill in `skill/gangway/`. In Claude Code, copy that folder to `~/.claude/skills/`.
+
+A Tailscale that is already on the machine is left alone.
+
+To cap how long a session on a host may last, extensions included: as root, write `SESSION_MAX = 2h` into `/etc/gangway/settings`. Root must own the folder and the file, and nobody else may be able to write them. With no such file there is no cap.
+
+The log of a session is a text file in a new folder under the temp folder. The terminal shows its path when the session starts and when it ends. The cli-tool does not delete it, but the system empties the temp folder, on many hosts at every start.
+
+Until pairing is built, any device that your Tailscale rules let reach the controller can start a session of its own. The rules are the guard.
+
+## More on installing
+
+### System requirements
+
+Both programs run on **Linux**, on x86_64 or aarch64. You need no root.
+
+### Read the script first, or install a set version
 
 > You can skip this if the latest release is all you want.
 
@@ -110,13 +213,18 @@ less install.sh
 sh install.sh
 ```
 
-To install a set version:
+To install a set version, of the cli-tool or of the controller:
 
 ```
 sh install.sh v0.1.0
+sh install.sh controller v0.1.0
 ```
 
-To build from the source, with Go:
+Each program is one file in `~/.local/bin`, checked against the checksums of its release. The script changes nothing else.
+
+### Build from the source
+
+With Go:
 
 ```
 ./build.sh
@@ -126,7 +234,7 @@ This puts `gangway` and `gangway-controller` into `build/`. Each is one file tha
 
 > The checksum shows the download is whole. It is not a signature: whoever can change a release can change both. The build from the source needs no trust in a release.
 
-### Add Gangway to your PATH
+### Add to your PATH
 
 If your shell does not find `gangway`, add `~/.local/bin` to your `PATH`:
 
@@ -134,44 +242,25 @@ If your shell does not find `gangway`, add `~/.local/bin` to your `PATH`:
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-### Install the controller
-
-On the controller machine, download the one file from the [releases page](https://github.com/kdop/gangway/releases):
-
-```
-curl --proto '=https' --tlsv1.2 -fsSL -o gangway-controller https://github.com/kdop/gangway/releases/latest/download/gangway-controller-linux-amd64
-chmod +x gangway-controller
-```
-
-On aarch64, take `gangway-controller-linux-arm64`.
-
-### Update Gangway
+### Update
 
 Run the install command again. It replaces the program.
 
-### Uninstall Gangway
+### Uninstall
+
+The cli-tool, with its stored key and settings:
 
 ```
 rm ~/.local/bin/gangway
 rm -r ~/.config/gangway
 ```
 
-The second line removes the stored key and the settings.
+The controller, with its stored key and its Tailscale identity:
 
-## Quick start
-
-1. In the Tailscale admin page, make two auth keys. The one for the controller: reusable and not ephemeral. The one for the hosts: reusable and ephemeral, with a tag that your Tailscale rules let reach the controller and nothing else.
-2. On the controller machine, once: `gangway-controller login`, and paste the controller's key. Then start it: `gangway-controller`. Add `-public-address https://…` when the AI reaches it at another address than the one it listens on.
-3. On a host, once: `gangway login`, and paste the hosts' key. Then start a session: `gangway`. For another length than 30 minutes: `gangway --length 45m`.
-4. Paste the line it prints to an AI that has the skill in `skill/gangway/`. In Claude Code, copy that folder to `~/.claude/skills/`.
-
-The controller and each host join your Tailscale network from inside the program. A Tailscale that is already on the machine is left alone.
-
-To cap how long a session on a host may last, extensions included: as root, write `SESSION_MAX = 2h` into `/etc/gangway/settings`. Root must own the folder and the file, and nobody else may be able to write them. With no such file there is no cap.
-
-The log of a session is a text file in a new folder under the temp folder. The terminal shows its path when the session starts and when it ends. The cli-tool does not delete it, but the system empties the temp folder, on many hosts at every start.
-
-Until pairing is built, any device that your Tailscale rules let reach the controller can start a session of its own. The rules are the guard.
+```
+rm ~/.local/bin/gangway-controller
+rm -r ~/.config/gangway-controller ~/.local/state/gangway-controller
+```
 
 ## Known limits
 
