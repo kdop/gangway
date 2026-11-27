@@ -41,6 +41,7 @@ led to it.
 
 - **No SSH for the AI.** SSH hands over a shell with no say over the commands. That say is the whole point of Gangway.
 - **Not a product.** No sign-up. One page shows it off, at https://kdop.github.io/gangway/; it collects nothing and sells nothing.
+- **The README shows how many lines the tests run, in a picture that the build draws and our own web page serves.** A badge from an outside service would send it our data, and a commit by the build into `main` would go around the pull request.
 - **One user now, built for more later.** Every host and every session belongs to a user, so a second user needs no redesign.
 - **Three parts: cli-tool, controller, skill.** The host has no AI, so something must sit on the host, something must reach it, and the AI must know how to ask.
 - **One repo holds all three parts.** The parts change together, and the skill sits next to the API it calls.

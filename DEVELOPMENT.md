@@ -64,7 +64,7 @@ cd cli && go test ./...
 
 The same goes for each folder that holds Go code. On GitHub, a pull request runs only the tests of the folders it changes: a change in `shared/` runs them all, a change in `cli/` runs `cli` and `acceptance`, and a change to the docs that tests read runs one short check. A change to other docs runs none. A push to `main` and a release run them all.
 
-To see how many lines of each package its tests run, add `-cover`: `go test -cover ./...`. On GitHub the same numbers are in the summary of each run. There is no pass mark: the check that every requirement has a test is the guard.
+To see how many lines of each package its tests run, add `-cover`: `go test -cover ./...`. On GitHub the same numbers are in the summary of each run. The README shows one number for each of `cli`, `controller` and `shared`: after every push to `main` the Pages job runs `.github/scripts/coverage-picture.sh`, which draws them into `coverage.svg` on the web page, and the README shows that picture. There is no pass mark: the check that every requirement has a test is the guard.
 
 ## Read next
 

@@ -76,7 +76,7 @@ jobs:
         run: go vet ./...
       - name: Check the install script
         if: matrix.folder == 'acceptance'
-        run: shellcheck ../install.sh ../.github/scripts/what-to-test.sh
+        run: shellcheck ../install.sh ../.github/scripts/what-to-test.sh ../.github/scripts/coverage-picture.sh
       - name: Test
         shell: bash
         run: go test -count=1 -cover ./... | tee test.out
