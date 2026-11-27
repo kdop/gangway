@@ -110,6 +110,8 @@
   .neon { display: inline-block; font: 700 20px var(--mono); letter-spacing: .08em; color: #ff5fd2; padding: 8px 16px; border: 2px solid #ff5fd2; border-radius: 10px;
     text-shadow: 0 0 5px rgba(255,95,210,.85), 0 0 14px rgba(255,43,189,.7); box-shadow: 0 0 10px #ff2bbd, inset 0 0 10px rgba(255,43,189,.5); animation: flicker 4s linear infinite; }
   .neon b { color: #6dffa8; text-shadow: 0 0 5px rgba(109,255,168,.85), 0 0 14px rgba(25,224,122,.7); }
+  .neon b.n { color: #ff6b6b; text-shadow: 0 0 5px rgba(255,107,107,.85), 0 0 14px rgba(255,60,60,.7); }
+  .neon b.n.dim { color: #4a2626; text-shadow: none; }
   .try { position: relative; display: inline-block; }
   .pigtail { position: absolute; left: calc(100% + 8px); bottom: -30px; width: 100px; height: 110px; fill: none; stroke: #ff5fd2; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 3px rgba(255,95,210,.8)) drop-shadow(0 0 7px rgba(255,43,189,.6)); animation: flicker 4s linear infinite; pointer-events: none; }
   @media (max-width: 700px) { .pigtail { display: none; } }
@@ -194,7 +196,7 @@
       <button class="key n" id="no" type="button" aria-label="Press n: refuse">n &nbsp;no</button>
     </div>
   </div>
-  <p class="tally" id="tally"><span class="try"><span class="neon">TRY IT &nbsp;·&nbsp; PRESS <b>y</b> OR <b>n</b></span><svg class="pigtail" viewBox="0 0 100 110" aria-hidden="true"><path d="M4,64 C24,98 80,92 84,8"/><path d="M75.3,22.6 L84,8 L91.3,23.4"/></svg></span></p>
+  <p class="tally" id="tally"><span class="try"><span class="neon">TRY IT &nbsp;·&nbsp; PRESS <b>y</b> OR <b class="n">n</b></span><svg class="pigtail" viewBox="0 0 100 110" aria-hidden="true"><path d="M4,64 C24,98 80,92 84,8"/><path d="M75.3,22.6 L84,8 L91.3,23.4"/></svg></span></p>
 </header>
 
 <main class="wrap">
@@ -293,6 +295,23 @@
   var yes = document.getElementById('yes');
   var no = document.getElementById('no');
   var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (!still) (function rest() {
+    setTimeout(function () {
+      var n = document.querySelector(".neon b.n");
+      if (!n) return;
+      var left = 2 + Math.floor(Math.random() * 5);
+      (function off() {
+        n.classList.add("dim");
+        var dark = left === 1 && Math.random() < .4 ? 600 + Math.random() * 1200 : 30 + Math.random() * 90;
+        setTimeout(function () {
+          n.classList.remove("dim");
+          left -= 1;
+          if (left > 0) setTimeout(off, 30 + Math.random() * 140); else rest();
+        }, dark);
+      })();
+    }, 2500 + Math.random() * 5500);
+  })();
 
   var requests = [
     { cmd: 'grep ERROR app.log | tail -n 20',
