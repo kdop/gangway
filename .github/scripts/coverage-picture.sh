@@ -9,7 +9,7 @@ out="$1"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-text="lines run by the tests"
+text="coverage"
 for folder in cli controller shared; do
 	(cd "$folder" && go test -count=1 -coverprofile="$work/$folder.out" ./... >&2)
 	share="$(cd "$folder" && go tool cover -func="$work/$folder.out" | awk '$1 == "total:" { print $NF }')"
