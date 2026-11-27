@@ -113,6 +113,15 @@
   .get { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; display: flex; gap: 6px; align-items: stretch; }
   .get code { flex: 1; min-width: 0; padding: 12px; font: 13px/1.5 var(--mono); color: var(--text); overflow-x: auto; white-space: nowrap; }
   .get button { font: 600 14px var(--sans); color: var(--bg); background: var(--yes); border: 0; border-radius: 8px; padding: 0 18px; cursor: pointer; }
+  .tabs { display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+  .tab { font: 600 15px var(--sans); color: var(--dim); background: transparent; border: 0; border-radius: 9px; padding: 9px 16px; cursor: pointer; }
+  .tab[aria-selected="true"] { color: var(--bg); background: var(--yes); }
+  .how { margin: 0 0 16px; color: var(--dim); max-width: 70ch; }
+  .steps { margin: 0; padding-left: 22px; }
+  .steps li { margin: 0 0 16px; color: var(--dim); }
+  .steps li b { color: var(--text); }
+  .steps .get { margin-top: 8px; }
+  .steps li > code, .how code { font-family: var(--mono); color: var(--text); }
   .small { color: var(--dim); font-size: 14px; margin: 12px 0 0; }
   .links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
   .btn { display: inline-block; padding: 11px 18px; border-radius: 10px; font-weight: 600; text-decoration: none; border: 1.5px solid var(--line); color: var(--text); }
@@ -181,11 +190,41 @@
 
   <section id="get">
     <h2>Get it</h2>
-    <div class="get">
-      <code id="cmd">curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/kdop/gangway/main/install.sh | sh</code>
-      <button id="copy" type="button">Copy</button>
+    <div class="tabs" role="tablist" aria-label="Two ways to install">
+      <button class="tab" role="tab" id="tab-local" aria-controls="panel-local" aria-selected="true" type="button">On one machine</button>
+      <button class="tab" role="tab" id="tab-ts" aria-controls="panel-ts" aria-selected="false" tabindex="-1" type="button">With Tailscale</button>
     </div>
-    <p class="small">Puts one file at <code>~/.local/bin/gangway</code> on a Linux host. No root. You also need a Tailscale network and a machine for the controller: the README has the steps, and the build from the source.</p>
+
+    <div class="panel" role="tabpanel" id="panel-local" aria-labelledby="tab-local">
+      <p class="how">Both programs run on the same machine and talk over localhost. Nothing leaves the machine. No Tailscale, no keys.</p>
+      <ol class="steps">
+        <li><b>Install both programs</b>
+          <div class="get"><code>curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/kdop/gangway/main/install.sh | sh -s -- all</code><button type="button">Copy</button></div></li>
+        <li><b>Start the controller</b>, in terminal 1
+          <div class="get"><code>gangway-controller -local</code><button type="button">Copy</button></div></li>
+        <li><b>Start a session</b>, in terminal 2
+          <div class="get"><code>gangway --local</code><button type="button">Copy</button></div></li>
+        <li><b>Send a command.</b> Paste the line it prints to an AI that has the skill. Or send one by hand with <code>curl</code>: <a href="https://github.com/kdop/gangway/blob/main/README.md#try-it-on-one-machine">the README shows how</a>.</li>
+      </ol>
+    </div>
+
+    <div class="panel" role="tabpanel" id="panel-ts" aria-labelledby="tab-ts" hidden>
+      <p class="how">The host is never open to the internet. Each program carries Tailscale inside it and joins your network by itself: no Tailscale install, no root. The host dials out to the controller, and the AI calls the controller.</p>
+      <ol class="steps">
+        <li><b>Make two auth keys</b> in the Tailscale admin page. For the controller: reusable, not ephemeral. For the hosts: reusable, ephemeral, with a tag that may reach the controller and nothing else.</li>
+        <li><b>On the controller machine</b>, install it, store its key, start it
+          <div class="get"><code>curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/kdop/gangway/main/install.sh | sh -s -- controller</code><button type="button">Copy</button></div>
+          <div class="get"><code>gangway-controller login</code><button type="button">Copy</button></div>
+          <div class="get"><code>gangway-controller</code><button type="button">Copy</button></div></li>
+        <li><b>On each host</b>, install the cli-tool, store the hosts' key, start a session
+          <div class="get"><code>curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/kdop/gangway/main/install.sh | sh</code><button type="button">Copy</button></div>
+          <div class="get"><code>gangway login</code><button type="button">Copy</button></div>
+          <div class="get"><code>gangway</code><button type="button">Copy</button></div></li>
+        <li><b>Paste the line it prints</b> to an AI that has the skill.</li>
+      </ol>
+    </div>
+
+    <p class="small">Linux, x86_64 or aarch64. No root. Each program is one file in <code>~/.local/bin</code>.</p>
     <div class="links">
       <a class="btn main" href="https://github.com/kdop/gangway">The code on GitHub</a>
       <a class="btn" href="https://github.com/kdop/gangway/releases">Releases</a>
@@ -305,17 +344,37 @@
   yes.addEventListener('click', function () { answer('y'); });
   no.addEventListener('click', function () { answer('n'); });
 
-  document.getElementById('copy').addEventListener('click', function () {
-    var text = document.getElementById('cmd').textContent;
-    var button = this;
-    function done() { button.textContent = 'Copied'; setTimeout(function () { button.textContent = 'Copy'; }, 1400); }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done, function () {});
-    } else {
-      var range = document.createRange(); range.selectNodeContents(document.getElementById('cmd'));
-      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
-      try { document.execCommand('copy'); done(); } catch (err) {}
-    }
+  var tabs = [].slice.call(document.querySelectorAll('.tab'));
+  function pick(tab, focus) {
+    tabs.forEach(function (t) {
+      var on = t === tab;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+    });
+    if (focus) tab.focus();
+  }
+  tabs.forEach(function (tab, i) {
+    tab.addEventListener('click', function () { pick(tab, false); });
+    tab.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        pick(tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length], true);
+      }
+    });
+  });
+
+  [].forEach.call(document.querySelectorAll('.get button'), function (button) {
+    button.addEventListener('click', function () {
+      var code = button.parentNode.querySelector('code');
+      function done() { button.textContent = 'Copied'; setTimeout(function () { button.textContent = 'Copy'; }, 1400); }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code.textContent).then(done, function () {});
+      } else {
+        var range = document.createRange(); range.selectNodeContents(code);
+        var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+        try { document.execCommand('copy'); done(); } catch (err) {}
+      }
+    });
   });
 
   add('$ gangway', 'dim');
