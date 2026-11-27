@@ -6,6 +6,8 @@ An AI tool such as Claude Code asks to run a command on a remote machine. A pers
 
 It exists because SSH gives an AI a full shell with no say over the commands.
 
+![The share of lines the tests run, for cli, controller and shared](https://kdop.github.io/gangway/coverage.svg)
+
 <!-- demo recording goes here -->
 
 ## What it looks like

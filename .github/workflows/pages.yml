@@ -1,17 +1,14 @@
 name: Pages
 
+# Every push to main, not only a change to the page: the picture with the
+# share of lines the tests run is drawn here, and any change can move it.
 on:
   push:
     branches: [main]
-    paths:
-      - "site/**"
-      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 # One deploy at a time. A deploy that runs is left to end.
 concurrency:
@@ -19,17 +16,32 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The tests run here, in a job that may only read the repo.
+  build:
+    name: Build the page
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache: false
+      - name: Draw the picture with the lines the tests run
+        run: .github/scripts/coverage-picture.sh site/coverage.svg
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
   deploy:
     name: Put the page live
+    needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v5
-        with:
-          path: site
       - id: deploy
         uses: actions/deploy-pages@v5
