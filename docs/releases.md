@@ -8,7 +8,8 @@ Rule for every version: the gate exists before the first command runs. No versio
 
 | Version | State | What it adds |
 |---|---|---|
-| 0.1 | Built | The first version: one host, one user, each command approved by hand |
+| 0.1 | Released | The first version: one host, one user, each command approved by hand |
+| 0.2 | Built | The install script also installs the controller |
 
 A state is one of three. "Planned": its requirements are written and not all are built. "Built": every requirement of it has its tests, and it is on `main`. "Released": it has a tag and its files are on the releases page.
 
@@ -28,6 +29,10 @@ Two requirements are in it in part:
 
 - `SES-05`: there is no reconnect yet, so a lost connection ends the session at once and stops the running command.
 - `LIM-06`: `COMMAND_TIME_LIMIT`, `QUESTION_WAIT` and `KILL_WAIT` only. `OUTPUT_SIZE_LIMIT` comes with the size cut.
+
+## 0.2
+
+- **The install script installs the controller too.** The word `controller` installs it, and `all` installs both programs. (`INS-08`)
 
 ## No version yet
 

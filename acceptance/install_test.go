@@ -21,8 +21,10 @@ import (
 // user and the kind of machine.
 
 const (
-	installAmd64 = "gangway-linux-amd64"
-	installArm64 = "gangway-linux-arm64"
+	installAmd64    = "gangway-linux-amd64"
+	installArm64    = "gangway-linux-arm64"
+	controllerAmd64 = "gangway-controller-linux-amd64"
+	controllerArm64 = "gangway-controller-linux-arm64"
 )
 
 // standInTool is what a release holds in the place of the cli-tool.
@@ -33,7 +35,7 @@ func standInTool(what string) []byte {
 // sums writes a SHA256SUMS for the files, the way sha256sum does.
 func sums(files map[string][]byte) []byte {
 	var b bytes.Buffer
-	for _, name := range []string{installAmd64, installArm64} {
+	for _, name := range []string{installAmd64, installArm64, controllerAmd64, controllerArm64} {
 		if content, ok := files[name]; ok {
 			fmt.Fprintf(&b, "%x  %s\n", sha256.Sum256(content), name)
 		}
@@ -104,12 +106,16 @@ func (r *releases) downloads() int {
 // files for both kinds of machine.
 func (r *releases) usual() {
 	r.release("", map[string][]byte{
-		installAmd64: standInTool("latest amd64"),
-		installArm64: standInTool("latest arm64"),
+		installAmd64:    standInTool("latest amd64"),
+		controllerAmd64: standInTool("latest controller amd64"),
+		controllerArm64: standInTool("latest controller arm64"),
+		installArm64:    standInTool("latest arm64"),
 	})
 	r.release("v0.1.0", map[string][]byte{
-		installAmd64: standInTool("v0.1.0 amd64"),
-		installArm64: standInTool("v0.1.0 arm64"),
+		installAmd64:    standInTool("v0.1.0 amd64"),
+		controllerAmd64: standInTool("v0.1.0 controller amd64"),
+		controllerArm64: standInTool("v0.1.0 controller arm64"),
+		installArm64:    standInTool("v0.1.0 arm64"),
 	})
 }
 
@@ -585,4 +591,114 @@ func TestINS07_1_ACutScriptRunsNothing(t *testing.T) {
 	}
 	h.installs()
 	h.holds(standInTool("latest amd64"))
+}
+
+// controllerTarget is where the install puts the controller.
+func (h *installHost) controllerTarget() string {
+	return filepath.Join(h.home, ".local", "bin", "gangway-controller")
+}
+
+// holdsAt fails the test unless the file at path is want, byte for byte,
+// with the rights of a program, and prints said when it is run.
+func (h *installHost) holdsAt(path string, want []byte, said string) {
+	h.t.Helper()
+	got, err := os.ReadFile(path)
+	if err != nil {
+		h.t.Fatalf("%s is not installed: %v", path, err)
+	}
+	if !bytes.Equal(got, want) {
+		h.t.Fatalf("%s holds %q, want %q", path, got, want)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o755 {
+		h.t.Fatalf("%s has the rights %o, want 755", path, info.Mode().Perm())
+	}
+	out, err := exec.Command(path).CombinedOutput()
+	if err != nil || !strings.Contains(string(out), said) {
+		h.t.Fatalf("%s printed %q, %v, want %q", path, out, err, said)
+	}
+}
+
+// absent fails the test unless there is no file at path.
+func (h *installHost) absent(path string) {
+	h.t.Helper()
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		h.t.Errorf("%s is there, or cannot be looked at: %v", path, err)
+	}
+}
+
+func TestINS08_1_TheWordControllerInstallsTheController(t *testing.T) {
+	r := newReleases(t)
+	r.usual()
+	h := newInstallHost(t, r)
+
+	out := h.installs("controller")
+	h.holdsAt(h.controllerTarget(), standInTool("latest controller amd64"), "latest controller amd64")
+	h.absent(h.target())
+	for _, want := range []string{h.controllerTarget(), "gangway-controller login"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the screen does not show %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestINS08_2_TheWordAllInstallsBoth(t *testing.T) {
+	r := newReleases(t)
+	r.usual()
+	h := newInstallHost(t, r)
+	h.machine = "aarch64"
+
+	out := h.installs("all")
+	h.holdsAt(h.target(), standInTool("latest arm64"), "latest arm64")
+	h.holdsAt(h.controllerTarget(), standInTool("latest controller arm64"), "latest controller arm64")
+	for _, want := range []string{h.target(), h.controllerTarget(), "gangway-controller -local", "gangway --local"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the screen does not show %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestINS08_3_WithAllAWrongChecksumInstallsNeither(t *testing.T) {
+	r := newReleases(t)
+	r.usual()
+	r.set("/latest/download/"+controllerAmd64, standInTool("not the file of the release"))
+	h := newInstallHost(t, r)
+	before := filesUnder(t, h.home)
+
+	h.stops("does not match its checksum", "all")
+	h.absent(h.target())
+	h.absent(h.controllerTarget())
+	h.unchanged(before, installedFolders...)
+}
+
+func TestINS08_4_AWordAndAVersionGoTogetherInAnyOrder(t *testing.T) {
+	for _, args := range [][]string{{"controller", "v0.1.0"}, {"v0.1.0", "controller"}} {
+		r := newReleases(t)
+		r.usual()
+		h := newInstallHost(t, r)
+
+		h.installs(args...)
+		h.holdsAt(h.controllerTarget(), standInTool("v0.1.0 controller amd64"), "v0.1.0 controller amd64")
+		h.absent(h.target())
+	}
+}
+
+func TestINS08_5_TwoWordsAreRefused(t *testing.T) {
+	r := newReleases(t)
+	r.usual()
+	h := newInstallHost(t, r)
+	refusesAtOnce(t, r, h, "say once what to install", "controller", "all")
+}
+
+func TestINS08_6_TheWordCliInstallsTheCliTool(t *testing.T) {
+	r := newReleases(t)
+	r.usual()
+	h := newInstallHost(t, r)
+
+	h.installs("cli")
+	h.holds(standInTool("latest amd64"))
+	h.absent(h.controllerTarget())
 }
