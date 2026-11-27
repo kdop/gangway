@@ -1,8 +1,12 @@
 #!/bin/sh
-# Puts the cli-tool `gangway` into ~/.local/bin, for the user who runs it.
+# Puts the cli-tool `gangway`, the controller `gangway-controller`, or both
+# into ~/.local/bin, for the user who runs it.
 #
-#   sh install.sh           the latest release
-#   sh install.sh v0.1.0    that release
+#   sh install.sh                      the cli-tool, of the latest release
+#   sh install.sh v0.1.0               the cli-tool, of that release
+#   sh install.sh controller           the controller
+#   sh install.sh all                  both
+#   sh install.sh controller v0.1.0    the controller, of that release
 #
 # Everything is inside functions and the last line starts them, so a copy of
 # this script that was cut off on its way runs nothing.
@@ -42,10 +46,31 @@ clean_up() {
 }
 
 main() {
-	if [ "$#" -gt 1 ]; then
-		stop "give one version at most, such as v0.1.0."
+	programs=""
+	version=""
+	for word in "$@"; do
+		case "$word" in
+		cli | controller | all)
+			if [ -n "$programs" ]; then
+				stop "say once what to install: cli, controller or all."
+			fi
+			case "$word" in
+			cli) programs="gangway" ;;
+			controller) programs="gangway-controller" ;;
+			all) programs="gangway gangway-controller" ;;
+			esac
+			;;
+		*)
+			if [ -n "$version" ]; then
+				stop "give one version at most, such as v0.1.0."
+			fi
+			version="$word"
+			;;
+		esac
+	done
+	if [ -z "$programs" ]; then
+		programs="gangway"
 	fi
-	version="${1:-}"
 	case "$version" in
 	*[!A-Za-z0-9._-]*)
 		stop "\"$version\" is not a version. Give one such as v0.1.0, or none for the latest."
@@ -87,7 +112,6 @@ main() {
 		stop "this needs the program sha256sum to check the download, and did not find it."
 	fi
 
-	name="gangway-linux-$kind"
 	if [ -n "$version" ]; then
 		release="$from/download/$version"
 		what="release $version"
@@ -97,10 +121,11 @@ main() {
 	fi
 
 	folder="$HOME/.local/bin"
-	target="$folder/gangway"
-	if [ -d "$target" ]; then
-		stop "$target is a folder, so the program cannot be put there. Nothing was installed."
-	fi
+	for program in $programs; do
+		if [ -d "$folder/$program" ]; then
+			stop "$folder/$program is a folder, so the program cannot be put there. Nothing was installed."
+		fi
+	done
 	mkdir -p "$folder"
 
 	# The download lands in a folder next to the target, so that the last
@@ -111,32 +136,45 @@ main() {
 	trap 'exit 1' HUP INT TERM
 	work="$(mktemp -d "$folder/.gangway-install.XXXXXX")"
 
-	say "Downloading $name of $what ..."
-	if ! fetch "$release/$name" "$work/gangway"; then
-		stop "could not download $release/$name. There may be no release yet, or no such version. The releases are at $RELEASES. Nothing was installed."
-	fi
+	# Every program is downloaded and checked before the first one is put
+	# in place: all of them are installed, or none.
+	for program in $programs; do
+		name="$program-linux-$kind"
+		say "Downloading $name of $what ..."
+		if ! fetch "$release/$name" "$work/$program"; then
+			stop "could not download $release/$name. There may be no release yet, or no such version. The releases are at $RELEASES. Nothing was installed."
+		fi
+	done
 	if ! fetch "$release/SHA256SUMS" "$work/sums"; then
 		stop "could not download $release/SHA256SUMS, so the download cannot be checked. Nothing was installed."
 	fi
 
-	want="$(awk -v name="$name" '$2 == name || $2 == "*" name { print $1 }' "$work/sums")"
-	case "$want" in
-	"") stop "SHA256SUMS of $what has no line for $name, so the download cannot be checked. Nothing was installed." ;;
-	*[!0-9a-f]*) stop "SHA256SUMS of $what has no single good line for $name. Nothing was installed." ;;
-	esac
-	if [ "${#want}" -ne 64 ]; then
-		stop "SHA256SUMS of $what has no single good line for $name. Nothing was installed."
-	fi
-	have="$(sha256sum <"$work/gangway" | awk '{ print $1 }')"
-	if [ "$have" != "$want" ]; then
-		stop "the download does not match its checksum in SHA256SUMS. Nothing was installed. Try again; if it happens again, do not use the file."
-	fi
+	for program in $programs; do
+		name="$program-linux-$kind"
+		want="$(awk -v name="$name" '$2 == name || $2 == "*" name { print $1 }' "$work/sums")"
+		case "$want" in
+		"") stop "SHA256SUMS of $what has no line for $name, so the download cannot be checked. Nothing was installed." ;;
+		*[!0-9a-f]*) stop "SHA256SUMS of $what has no single good line for $name. Nothing was installed." ;;
+		esac
+		if [ "${#want}" -ne 64 ]; then
+			stop "SHA256SUMS of $what has no single good line for $name. Nothing was installed."
+		fi
+		have="$(sha256sum <"$work/$program" | awk '{ print $1 }')"
+		if [ "$have" != "$want" ]; then
+			stop "the download does not match its checksum in SHA256SUMS. Nothing was installed. Try again; if it happens again, do not use the file."
+		fi
 
-	chmod 755 "$work/gangway"
-	mv -f "$work/gangway" "$target"
+		chmod 755 "$work/$program"
+	done
+
+	for program in $programs; do
+		mv -f "$work/$program" "$folder/$program"
+	done
 
 	say "The checksum matches."
-	say "gangway is installed at $target"
+	for program in $programs; do
+		say "$program is installed at $folder/$program"
+	done
 	case ":${PATH:-}:" in
 	*":$folder:"*) ;;
 	*)
@@ -144,7 +182,16 @@ main() {
 		say "  export PATH=\"\$HOME/.local/bin:\$PATH\""
 		;;
 	esac
-	say "Next: gangway login"
+	case "$programs" in
+	"gangway") say "Next: gangway login" ;;
+	"gangway-controller") say "Next: gangway-controller login" ;;
+	*)
+		say "Next, with Tailscale: gangway-controller login, and gangway login"
+		say "Or try both on this machine with no Tailscale, in two terminals:"
+		say "  gangway-controller -local"
+		say "  gangway --local"
+		;;
+	esac
 }
 
 # In braces, so that this line cut short is an error and not a start.

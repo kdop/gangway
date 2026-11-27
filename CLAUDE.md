@@ -21,7 +21,7 @@ says what it is. This file says how it is built and why.
 | `DEVELOPMENT.md` | For work on the code: the folders, the one-machine trial, the build, how to make a release, the tests, and the list of design files |
 | `SECURITY.md` | What keeps it safe, and how to report a hole |
 | `LICENSE` | The MIT license |
-| `install.sh` | Puts the cli-tool into `~/.local/bin` on a host |
+| `install.sh` | Puts the cli-tool, the controller or both into `~/.local/bin` |
 | `build.sh` | Builds both programs into `build/` |
 | `site/index.html` | The web page that shows Gangway off. GitHub Pages serves it |
 | `docs/blueprint.md` | The design: parts, session flow, gate, key, security, open questions |
