@@ -8,6 +8,8 @@ It exists because SSH gives an AI a full shell with no say over the commands.
 
 ![The share of lines the tests run, for cli, controller and shared](https://kdop.github.io/gangway/coverage.svg)
 
+To run the tests yourself, or to work on the code, see [DEVELOPMENT.md](DEVELOPMENT.md).
+
 <!-- demo recording goes here -->
 
 ## What it looks like
