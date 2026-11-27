@@ -15,6 +15,7 @@ The design is written down in three levels, each with its tests: the requirement
 | `shared/` | The Go code both programs use |
 | `acceptance/` | The acceptance tests of `docs/requirements.md`. They start both real programs. Go |
 | `skill/` | The skill that teaches the AI how to ask |
+| `site/` | The web page that shows Gangway off. A push to `main` puts it live |
 
 ## Try it on one machine
 
