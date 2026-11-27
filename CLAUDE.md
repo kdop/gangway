@@ -28,6 +28,7 @@ says what it is. This file says how it is built and why.
 | `docs/releases.md` | The versions: what each adds, its state, and what has no version yet |
 | `docs/requirements.md` | The hard requirements, each with its acceptance tests. The IDs are carried by the Go tests |
 | `docs/architecture.md` | How the parts are built to meet the requirements: the API, the messages, the pieces |
+| `docs/api.md` | How a person calls the API by hand with `curl`: each call, each answer, each error |
 | `docs/design.md` | The inside of each piece that has states, with its unit tests. A piece is added just before it is built |
 | `docs/diagrams.md` | The design as Mermaid diagrams: parts, session, gate, failures, trust, pairing |
 | `docs/ux.md` | How the tool looks and feels: prompts, messages, small touches |
